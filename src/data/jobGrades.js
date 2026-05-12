@@ -16,6 +16,17 @@ export const HQ_JG_LEVELS = [
   { value: 'Internship', label: 'Internship' },
 ]
 
+// ── Helper ────────────────────────────────────────────────────────────────────
+// คืน label เต็มของ JG เช่น 'JG7 — Senior Supervisor / Senior Specialist'
+// ลองหาจาก HQ ก่อน ถ้าไม่เจอลอง OPERATION ถ้าไม่เจออีกคืนค่าเดิม
+export function getJGLabel(jg) {
+  if (!jg) return ''
+  const found =
+    HQ_JG_LEVELS.find((l) => l.value === jg) ||
+    OPERATION_JG_LEVELS.find((l) => l.value === jg)
+  return found ? found.label : jg
+}
+
 // Operation Job Grade levels (from JG.xlsx — Operation track)
 export const OPERATION_JG_LEVELS = [
   { value: 'JG14', label: 'JG14 — CEO' },

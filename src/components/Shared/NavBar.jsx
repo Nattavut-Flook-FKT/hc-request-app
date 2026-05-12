@@ -1,3 +1,31 @@
+/**
+ * NavBar.jsx — Top Navigation Bar (Legacy Component)
+ * ─────────────────────────────────────────────────────────────────────────────
+ * ⚠️  NOTE: Component นี้ถูกแทนที่ด้วย Sidebar.jsx แล้ว
+ *     Layout.jsx ปัจจุบันใช้ Sidebar แทน NavBar นี้
+ *     เก็บไว้ในโค้ดเผื่อต้องการ rollback หรือใช้เป็น reference
+ *
+ * NavBar แบบ Sticky top bar สำหรับระบบ HC Request
+ * แสดงลิงก์ navigation ตาม role ของผู้ใช้
+ *
+ * Navigation Sets:
+ *   MANAGER_NAV — ยื่นคำขอ + คำขอของฉัน (2 รายการ)
+ *   TA_NAV      — Dashboard, All Requests, My Cases, JD Files, Audit Log (5 รายการ)
+ *   ADMIN_NAV   — ทุกอย่างของ TA + Positions, จัดการผู้ใช้, Admin Tools, Import (9 รายการ)
+ *
+ * Features:
+ *   - Active link highlighting (bg-[#008065] text-white)
+ *   - Dark mode toggle (Sun/Moon icon)
+ *   - User dropdown: แสดงชื่อ, role, ปุ่ม sign out
+ *   - Profile picture (Google photo หรือ initials fallback)
+ *
+ * Props:
+ *   user          {object}   Firebase user object
+ *   role          {string}   'admin' | 'ta' | 'manager'
+ *   isDarkMode    {boolean}  สถานะ dark mode ปัจจุบัน
+ *   toggleDarkMode {function} callback toggle dark/light
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
 import { useState } from 'react'
 import { signOut } from 'firebase/auth'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -8,6 +36,7 @@ import {
   Moon, Sun, Users, Tag, DatabaseZap, Upload
 } from 'lucide-react'
 
+// ─── Nav items ตาม role ───────────────────────────────────────────────────────
 const MANAGER_NAV = [
   { path: '/request',     label: 'ยื่นคำขอ',    icon: FilePlus },
   { path: '/my-requests', label: 'คำขอของฉัน',  icon: ClipboardList },

@@ -1,8 +1,22 @@
+/**
+ * Login.jsx — Login page using Google OAuth
+ * ─────────────────────────────────────────────────────────────────────────────
+ * หน้า Login ของระบบ HC Request ใช้ Google OAuth ผ่าน Firebase Authentication
+ * อนุญาตเฉพาะบัญชีที่มี domain @freshket.co เท่านั้น
+ * หาก sign-in สำเร็จแต่ email ไม่ใช่ domain ที่อนุญาต จะทำการ signOut ทันที
+ * แล้วแสดง error message ให้ผู้ใช้ทราบ
+ *
+ * Notes:
+ *   - ไม่รับ props (standalone page, ไม่มี parent ส่ง props มา)
+ *   - ALLOWED_DOMAIN กำหนดเป็น constant ไว้ด้านบน เปลี่ยนตรงนี้ที่เดียว
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
 import { useState } from 'react'
 import { signInWithPopup, signOut } from 'firebase/auth'
 import { auth, googleProvider } from '../../services/firebase'
 import { AlertCircle } from 'lucide-react'
 
+// domain ที่อนุญาตให้ login ได้ — เปลี่ยนที่นี่หากต้องการรองรับ domain อื่น
 const ALLOWED_DOMAIN = 'freshket.co'
 
 export default function Login() {
@@ -14,6 +28,7 @@ export default function Login() {
       const result = await signInWithPopup(auth, googleProvider)
       const email = result.user.email ?? ''
 
+      // ตรวจสอบ domain หลัง sign-in สำเร็จ — ถ้าไม่ใช่ freshket.co ให้ sign-out ออกทันที
       if (!email.endsWith(`@${ALLOWED_DOMAIN}`)) {
         await signOut(auth)
         setError(`อนุญาตเฉพาะบัญชี @${ALLOWED_DOMAIN} เท่านั้น (${email})`)
@@ -39,6 +54,7 @@ export default function Login() {
           </svg>
         </div>
 
+        {/* แสดง error เมื่อ login ไม่สำเร็จ หรือ email ไม่ถูก domain */}
         {error && (
           <div className="w-full flex items-start gap-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 rounded-2xl px-5 py-4 text-xs font-bold shadow-sm animate-shake">
             <AlertCircle size={16} className="shrink-0" />

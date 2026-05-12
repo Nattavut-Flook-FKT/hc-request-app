@@ -1,3 +1,26 @@
+/**
+ * ConfirmModal.jsx — Reusable confirmation dialog
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Modal สำหรับขอยืนยันการทำรายการ (เช่น ลบข้อมูล, ยกเลิกคำขอ)
+ * รองรับ 3 รูปแบบ (variant) คือ danger, warning, และ info
+ * แต่ละ variant มีสีของ icon และปุ่มยืนยันที่แตกต่างกัน
+ * คลิก backdrop ด้านหลังจะปิด modal เช่นเดียวกับปุ่ม X
+ *
+ * Props:
+ *   isOpen      {boolean}  เปิด/ปิด modal
+ *   onClose     {function} callback เมื่อผู้ใช้ยกเลิกหรือคลิก backdrop
+ *   onConfirm   {function} callback เมื่อผู้ใช้กดปุ่มยืนยัน
+ *   title       {string}   หัวข้อของ modal (default: 'ยืนยันการทำรายการ')
+ *   message     {string}   ข้อความคำถามหรือคำอธิบายรายละเอียด
+ *   confirmText {string}   ข้อความบนปุ่มยืนยัน (default: 'ยืนยัน')
+ *   cancelText  {string}   ข้อความบนปุ่มยกเลิก (default: 'ยกเลิก')
+ *   variant     {string}   รูปแบบสี: 'danger' | 'warning' | 'info' (default: 'danger')
+ *
+ * Notes:
+ *   - render null เมื่อ isOpen=false เพื่อไม่ให้ DOM มี element ที่ไม่จำเป็น
+ *   - variantStyles รวม class ของ icon, ปุ่ม, และ border ตาม variant ไว้ในที่เดียว
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
 import { AlertTriangle, X } from 'lucide-react'
 
 export default function ConfirmModal({
@@ -12,6 +35,7 @@ export default function ConfirmModal({
 }) {
   if (!isOpen) return null
 
+  // map variant → Tailwind classes สำหรับ icon, ปุ่ม, และ border
   const variantStyles = {
     danger: {
       iconBg: 'bg-red-100 dark:bg-red-900/30',
@@ -37,7 +61,7 @@ export default function ConfirmModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
+      {/* Backdrop — คลิกเพื่อปิด modal */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
         onClick={onClose}

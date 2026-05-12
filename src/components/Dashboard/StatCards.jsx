@@ -1,5 +1,26 @@
+/**
+ * StatCards.jsx — KPI Summary Cards
+ * ─────────────────────────────────────────────────────────────────────────────
+ * แถว card แสดง KPI ภาพรวมของ HC Request ทั้งหมด (หรือกรองตาม TA)
+ *
+ * Cards ที่แสดง (7 ตัว):
+ *   Open          — รอดำเนินการ (status = 'Open')
+ *   In Progress   — กำลัง Recruit (status = 'Recruiting' | 'Interviewing')
+ *   Offering      — รอตอบรับ Offer (status = 'Offering')
+ *   W.Onboarding  — รอเริ่มงาน (status = 'Onboarding')
+ *   Closed        — เสร็จสิ้น (status = 'Closed')
+ *   Total         — รวมทุกสถานะ (ไม่รวม Cancelled)
+ *   Avg Fill Time — เฉลี่ยจำนวนวันที่ปิดเคส (เฉพาะ Closed + มีทั้ง createdAt/closedAt)
+ *
+ * Props:
+ *   stats      {object}      ค่าที่คำนวณมาจาก computeStats() ใน DashboardPage
+ *   selectedTA {string|null} ถ้าเลือก TA จะแสดง banner "แสดงเฉพาะเคสของ: ..."
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
 import { Inbox, UserCheck, CheckCircle, Clock, Timer, FileCheck, CalendarClock } from 'lucide-react'
 
+// Config ของแต่ละ card: key ตรงกับ key ใน stats object จาก computeStats()
 const STAT_CONFIG = [
   {
     key: 'open',
@@ -63,32 +84,48 @@ const STAT_CONFIG = [
     color: 'text-purple-600 dark:text-purple-400',
     bg: 'bg-purple-50 dark:bg-purple-500/10',
     border: 'border-purple-200 dark:border-purple-500/20',
-    suffix: ' วัน',
+    suffix: ' วัน', // หน่วยต่อท้ายค่า
   },
 ]
 
-export default function StatCards({ stats }) {
+export default function StatCards({ stats, selectedTA }) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-      {STAT_CONFIG.map((card) => {
-        const value = stats[card.key]
-        const display = value === null || value === undefined
-          ? card.key === 'avgDaysToFill' ? '—' : '0'
-          : `${value}${card.suffix ?? ''}`
-        return (
-          <div
-            key={card.key}
-            className={`rounded-xl border ${card.border} ${card.bg} p-5 flex flex-col gap-2 transition-colors`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">{card.label}</span>
-              <card.icon size={18} className={card.color} />
+    <div className="flex flex-col gap-2">
+      {/* Banner เมื่อกำลัง filter ตาม TA — แสดงเฉพาะตอนที่ selectedTA มีค่า */}
+      {selectedTA && (
+        <p className="text-[11px] font-black text-[#008065] dark:text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#008065]" />
+          แสดงเฉพาะเคสของ: {selectedTA}
+        </p>
+      )}
+
+      {/* Grid 7 cards — responsive: 2 cols → 4 cols → 7 cols */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+        {STAT_CONFIG.map((card) => {
+          const value = stats[card.key]
+          // avgDaysToFill = null หมายถึงยังไม่มีข้อมูล → แสดง '—'
+          const display = value === null || value === undefined
+            ? card.key === 'avgDaysToFill' ? '—' : '0'
+            : `${value}${card.suffix ?? ''}`
+
+          return (
+            <div
+              key={card.key}
+              className={`rounded-xl border ${card.border} ${card.bg} p-5 flex flex-col gap-2 transition-colors`}
+            >
+              {/* Icon + label row */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">{card.label}</span>
+                <card.icon size={18} className={card.color} />
+              </div>
+              {/* ตัวเลขหลัก */}
+              <p className={`text-4xl font-black tracking-tight ${card.color}`}>{display}</p>
+              {/* label ภาษาไทย */}
+              <p className="text-xs text-slate-400 dark:text-slate-500 uppercase font-semibold tracking-wider font-mono">{card.labelTh}</p>
             </div>
-            <p className={`text-4xl font-black tracking-tight ${card.color}`}>{display}</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 uppercase font-semibold tracking-wider font-mono">{card.labelTh}</p>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
     </div>
   )
 }

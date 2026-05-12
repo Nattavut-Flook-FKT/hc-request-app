@@ -119,3 +119,13 @@ export function getBusinessUnits(division, department, section) {
   if (!division || !department || !section) return []
   return ORG_STRUCTURE[division]?.[department]?.[section] || []
 }
+
+// helper: หา division จากชื่อ department (reverse lookup)
+// ใช้ตอน auto-fill department จาก Manager profile เพื่อตั้ง division ด้วย
+export function getDivisionByDepartment(department) {
+  if (!department) return ''
+  for (const [division, depts] of Object.entries(ORG_STRUCTURE)) {
+    if (department in depts) return division
+  }
+  return ''
+}

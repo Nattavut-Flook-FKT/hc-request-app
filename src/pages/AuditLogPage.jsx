@@ -1,3 +1,28 @@
+/**
+ * AuditLogPage.jsx — Audit Log viewer
+ * ─────────────────────────────────────────────────────────────────────────────
+ * หน้าแสดงประวัติการเปลี่ยนแปลงทั้งหมดในระบบ HC Request
+ * ดึงข้อมูลจาก Firestore collection 'hc_logs' เรียงตาม timestamp ล่าสุดก่อน
+ * จำกัดที่ 500 รายการล่าสุด
+ * Admin สามารถลบ log รายการใดก็ได้ผ่านปุ่ม trash
+ *
+ * Action types ที่รองรับ:
+ *   Submit      — ยื่นคำขอใหม่
+ *   Assign      — TA รับเคส (assign ตัวเองเป็น TA)
+ *   StatusChange — เปลี่ยนสถานะคำขอ (fromStatus → toStatus)
+ *   Cancel      — ยกเลิกคำขอ
+ *
+ * Props:
+ *   user          {object}   Firebase user object ของผู้ใช้ที่ login อยู่
+ *   role          {string}   role ของผู้ใช้ ('admin' เท่านั้นที่เห็นปุ่มลบ log ได้)
+ *   isDarkMode    {boolean}  สถานะ dark mode
+ *   toggleDarkMode {function} toggle dark/light mode
+ *
+ * Notes:
+ *   - STATUS_CONFIG map action type → label ภาษาไทย + Tailwind color classes
+ *   - action ที่ไม่รู้จักจะ fallback เป็น gray badge แสดง action string ดิบ
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
 import { useEffect, useState } from 'react'
 import { query, collection, orderBy, limit, getDocs, deleteDoc, doc } from 'firebase/firestore'
 import { db } from '../services/firebase'
@@ -5,6 +30,7 @@ import { Trash2 } from 'lucide-react'
 import Layout from '../components/Shared/Layout'
 import ConfirmModal from '../components/Shared/ConfirmModal'
 
+// map action type → label ภาษาไทย + color classes สำหรับ badge
 const STATUS_CONFIG = {
   Submit: { label: 'ยื่นคำขอ', bg: 'bg-emerald-50 dark:bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-400', border: 'border-emerald-200 dark:border-emerald-500/20' },
   Assign: { label: 'รับเคส', bg: 'bg-purple-50 dark:bg-purple-500/10', text: 'text-purple-700 dark:text-purple-400', border: 'border-purple-200 dark:border-purple-500/20' },
@@ -20,6 +46,7 @@ export default function AuditLogPage({ user, role, isDarkMode, toggleDarkMode })
   const [logError, setLogError] = useState('')
 
   useEffect(() => {
+    // ดึง log 500 รายการล่าสุด เรียงตาม timestamp desc
     const q = query(collection(db, 'hc_logs'), orderBy('timestamp', 'desc'), limit(500))
     getDocs(q)
       .then((snap) => {
@@ -37,6 +64,7 @@ export default function AuditLogPage({ user, role, isDarkMode, toggleDarkMode })
     setDeletingLogId(logId)
     try {
       await deleteDoc(doc(db, 'hc_logs', logId))
+      // อัปเดต local state ให้ลบ log ออก โดยไม่ต้อง refetch ทั้งหมด
       setLogs((prev) => prev.filter((log) => log.id !== logId))
     } catch (e) {
       console.error('Delete log error:', e)
@@ -76,6 +104,7 @@ export default function AuditLogPage({ user, role, isDarkMode, toggleDarkMode })
                   <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-left">Action</th>
                   <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-left">จาก → ไป</th>
                   <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-left">โดย</th>
+                  {/* คอลัมน์จัดการแสดงเฉพาะ admin */}
                   {role === 'admin' && (
                     <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-right">จัดการ</th>
                   )}
@@ -83,6 +112,7 @@ export default function AuditLogPage({ user, role, isDarkMode, toggleDarkMode })
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
                 {logs.map((log) => {
+                  // fallback config สำหรับ action type ที่ไม่รู้จัก
                   const config = STATUS_CONFIG[log.action] || { label: log.action, bg: 'bg-gray-100 dark:bg-slate-800', text: 'text-gray-600 dark:text-slate-400', border: 'border-gray-200 dark:border-slate-700' }
                   return (
                     <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors group">
@@ -90,6 +120,7 @@ export default function AuditLogPage({ user, role, isDarkMode, toggleDarkMode })
                         {log.timestamp?.toDate?.().toLocaleString('th-TH') ?? '—'}
                       </td>
                       <td className="px-5 py-4">
+                        {/* แสดง 8 ตัวอักษรแรกของ doc ID เป็น short ID */}
                         <span className="font-mono text-[10px] font-bold text-gray-400 dark:text-slate-600 bg-gray-50 dark:bg-slate-950 px-2 py-1 rounded-md border border-gray-100 dark:border-slate-800">
                           {log.requestId?.slice(0, 8).toUpperCase() ?? '—'}
                         </span>
@@ -104,12 +135,14 @@ export default function AuditLogPage({ user, role, isDarkMode, toggleDarkMode })
                         </span>
                       </td>
                       <td className="px-5 py-4 text-[11px] font-bold text-gray-500 dark:text-slate-400">
+                        {/* แสดง fromStatus → toStatus สำหรับ StatusChange, หรือแค่ toStatus สำหรับ action อื่น */}
                         {log.fromStatus && log.toStatus
                           ? <div className="flex items-center gap-2">
                             {log.fromStatus} <span className="text-gray-300 dark:text-slate-700">→</span> <span className="text-emerald-600 dark:text-emerald-500">{log.toStatus}</span>
                           </div>
                           : log.toStatus ? <span className="text-emerald-600 dark:text-emerald-500">{log.toStatus}</span> : '—'}
                       </td>
+                      {/* byName ใช้ display name, by ใช้ email — fallback ตามลำดับ */}
                       <td className="px-5 py-4 text-xs font-bold text-gray-600 dark:text-slate-400">{log.byName ?? log.by ?? '—'}</td>
                       {role === 'admin' && (
                         <td className="px-5 py-4 text-right">
@@ -131,6 +164,8 @@ export default function AuditLogPage({ user, role, isDarkMode, toggleDarkMode })
           </div>
         )}
       </div>
+
+      {/* Confirm dialog ก่อนลบ log */}
       <ConfirmModal
         isOpen={confirmState.isOpen}
         onClose={() => setConfirmState({ isOpen: false, logId: '' })}
