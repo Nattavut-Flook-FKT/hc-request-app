@@ -178,7 +178,7 @@ export default function App() {
         updatedBy: user?.email,         // บันทึกว่า admin คนไหนเป็นคนกด
       })
       // แจ้งเตือน Slack ว่าระบบเปิดหรือปิด
-      await sendMaintenanceAlert(next)
+      // await sendMaintenanceAlert(next)
       // อัปเดต local state ให้ตรงกับ Firestore
       setMaintenanceMode(next)
       setMaintenanceMessage(next ? 'กำลังดำเนินการปรับปรุงระบบ กรุณารอสักครู่' : '')

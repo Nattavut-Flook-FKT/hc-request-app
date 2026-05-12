@@ -54,6 +54,8 @@ const INITIAL_FORM = {
   reason: '',                    // เหตุผลในการขอ (required)
   targetStartDate: '',           // New HC: วันที่ต้องการเริ่มงาน | Replacement: Last Working Day
   replacementFor: '',            // ชื่อพนักงานที่ต้องการทดแทน (เฉพาะ Replacement)
+  workDaysPerWeek: '',           // จำนวนวันทำงานต่อสัปดาห์ (TA-only, ไม่ส่ง Sheets)
+  shift: '',                     // กะการทำงาน (TA-only, ไม่ส่ง Sheets)
 }
 
 // ─── รายชื่อ Department fallback ──────────────────────────────────────────────
@@ -290,6 +292,9 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   const [openingJD, setOpeningJD] = useState(false)     // กำลังดึง signed URL จาก Supabase
   const [previewUrl, setPreviewUrl] = useState(null)    // Supabase signed URL สำหรับแสดงใน iframe sidebar
 
+  // ─── Library JD State ─────────────────────────────────────────────────────
+  const [libraryJD, setLibraryJD] = useState(null)      // JD จาก jd_library ที่ตรงกับตำแหน่งที่เลือก
+
   // ─── Effect: โหลด Positions + Employees จาก Google Sheets ─────────────────
   // เรียกครั้งเดียวตอน mount พร้อม auto-fill department จาก email ของ user
   // fetchSheetsData() ดึงข้อมูลจาก Google Apps Script endpoint
@@ -395,6 +400,38 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       clearTimeout(timer)
     }
   }, [form.position, form.department, form.orgTrack])
+
+  // ─── Effect: ค้นหา Library JD จาก jd_library ─────────────────────────────
+  // Debounce 400ms: query Firestore เมื่อ position เปลี่ยน
+  useEffect(() => {
+    if (!form.position?.trim()) {
+      setLibraryJD(null)
+      return
+    }
+
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      try {
+        const normalized = form.position.trim().toLowerCase()
+        const q = query(
+          collection(db, 'jd_library'),
+          where('normalizedPosition', '==', normalized),
+          limit(1),
+        )
+        const snap = await getDocs(q)
+        if (cancelled) return
+        setLibraryJD(snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() })
+      } catch (e) {
+        console.error('Error loading library JD:', e)
+        if (!cancelled) setLibraryJD(null)
+      }
+    }, 400)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [form.position])
 
   // ─── Effect: Scroll ไปหา Feedback Banner ─────────────────────────────────
   // เมื่อ success หรือ error เปลี่ยนค่า → scroll smooth ไปด้านบนของฟอร์ม
@@ -558,7 +595,9 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       //   - บันทึกลง Google Sheets
       //   - ส่ง LINE Notify / Slack notification ไปยัง TA team
       // maintenance: true → GAS จะ skip การส่งแจ้งเตือน
-      await sendToWebhook({ ...payload, id: docRef.id, createdAt: new Date().toISOString(), maintenance: maintenanceMode })
+      // workDaysPerWeek และ shift ไม่ส่งไป Sheets — เก็บใน Firestore อย่างเดียว
+      const { workDaysPerWeek: _w, shift: _s, ...webhookPayload } = payload
+      await sendToWebhook({ ...webhookPayload, id: docRef.id, createdAt: new Date().toISOString(), maintenance: true })
 
       // ── Step 6: บันทึก Audit Log ──────────────────────────────────────────
       // logAudit บันทึกลง Firestore collection 'audit_logs' สำหรับ activity tracking
@@ -892,6 +931,41 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
             </div>
           )}
 
+          {/* ── วันทำงาน + กะ ─────────────────────────────────────────────── */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest ml-1 mb-2">วันทำงานต่อสัปดาห์ *</label>
+              <select
+                name="workDaysPerWeek"
+                value={form.workDaysPerWeek}
+                onChange={handleChange}
+                required
+                className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-bold"
+              >
+                <option value="">เลือกจำนวนวัน</option>
+                {[3, 4, 5, 6].map((d) => (
+                  <option key={d} value={d}>{d} วัน/สัปดาห์</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest ml-1 mb-2">กะการทำงาน *</label>
+              <select
+                name="shift"
+                value={form.shift}
+                onChange={handleChange}
+                required
+                className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-bold"
+              >
+                <option value="">เลือกกะ</option>
+                <option value="ปกติ">ปกติ</option>
+                <option value="เช้า">เช้า</option>
+                <option value="บ่าย">บ่าย</option>
+                <option value="ดึก">ดึก</option>
+              </select>
+            </div>
+          </div>
+
           {/* ── เหตุผลในการขอ (Required) ──────────────────────────────────── */}
           <div>
             <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest ml-1 mb-2">เหตุผลในการขอ *</label>
@@ -945,6 +1019,42 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                 >
                   <X size={18} strokeWidth={3} />
                 </button>
+              </div>
+            ) : libraryJD ? (
+              // มี JD ใน Library สำหรับตำแหน่งนี้ — แสดง card พร้อมตัวเลือกอัพโหลดใหม่
+              <div className="border-2 border-dashed border-emerald-300 dark:border-emerald-500/30 rounded-2xl overflow-hidden">
+                <div className="flex items-center gap-3 px-5 py-4 bg-emerald-50 dark:bg-emerald-500/10">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-600 shrink-0">
+                    <FileText size={20} strokeWidth={2.5} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-black text-emerald-700 dark:text-emerald-400">มี JD สำหรับตำแหน่งนี้</p>
+                    <p className="text-[10px] font-bold text-emerald-600/70 dark:text-emerald-500/70 truncate">{libraryJD.fileName || 'JD Library'}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const url = await getJDSignedUrl(libraryJD.filePath)
+                      if (url) window.open(url, '_blank')
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-colors shrink-0"
+                  >
+                    <ExternalLink size={11} />
+                    ดู JD
+                  </button>
+                </div>
+                <label className="flex items-center justify-center gap-2 px-5 py-3 bg-white dark:bg-slate-900 cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-500/5 transition-colors group border-t border-emerald-100 dark:border-emerald-500/20">
+                  <Paperclip size={13} className="text-gray-400 group-hover:text-emerald-500 transition-colors" />
+                  <p className="text-[11px] font-bold text-gray-400 dark:text-slate-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                    อัพโหลดใหม่เพื่อ Update JD
+                  </p>
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                    className="hidden"
+                    onChange={(e) => setJdFile(e.target.files?.[0] ?? null)}
+                  />
+                </label>
               </div>
             ) : (
               // Drop zone สำหรับเลือกไฟล์ใหม่

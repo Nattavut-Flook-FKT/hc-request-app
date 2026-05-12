@@ -256,6 +256,7 @@ export default function RequestTable({
   const [allTAs, setAllTAs] = useState([])
   const [reassigningId, setReassigningId] = useState(null)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [activeTab, setActiveTab] = useState('ทั้งหมด')
   const [filterEmpType,  setFilterEmpType]  = useState('')
   const [filterJobType,  setFilterJobType]  = useState('')
@@ -267,7 +268,7 @@ export default function RequestTable({
   const [filterDateTo,   setFilterDateTo]   = useState('')
   const [showFilterBar,  setShowFilterBar]  = useState(false)
   const [openChip,       setOpenChip]       = useState(null)
-  const [sortField, setSortField] = useState('createdAt')
+  const [sortField, setSortField] = useState('hcId')
   const [sortDir, setSortDir] = useState('desc')
   const [confirmState, setConfirmState] = useState({ isOpen: false, action: null, payload: null })
   // Onboarding modal: กรอกวันเริ่มงานก่อนเปลี่ยนสถานะ
@@ -286,6 +287,12 @@ export default function RequestTable({
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 50
   const [cvUploading, setCvUploading] = useState(new Set()) // Set ของ reqId ที่กำลัง upload
+
+  // ─── Debounce search 300ms ─────────────────────────────────────────────────
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
 
   // ─── Sync filterAssigned เมื่อ focusTA เปลี่ยน (จาก TAWorkloadPanel) ───
   useEffect(() => {
@@ -431,13 +438,22 @@ export default function RequestTable({
         updateData.startDate = ''
         updateData.cvUrl = ''
       }
+      // กลับไป Offering → ล้างแค่ startDate (candidateName ยังคงอยู่)
+      const CLEAR_START_DATE = ['Offering']
+      if (CLEAR_START_DATE.includes(newStatus) && req.startDate) {
+        updateData.startDate = ''
+      }
 
       await updateDoc(doc(db, 'hc_requests', id), updateData)
       const assignedAt = updateData.assignedAt ? new Date().toISOString() : req.assignedAt?.toDate?.().toISOString()
       const offeringDate = PRE_OFFERING.includes(newStatus) && req.offeringDate ? 'CLEAR'
         : (updateData.offeringDate || req.offeringDate || null)
       const clearInfo = CLEAR_CANDIDATE.includes(newStatus) && !!(req.candidateName || req.startDate)
-      sendStatusUpdate(id, newStatus, updateData.assignedToName || req.assignedToName, assignedAt, extraData.startDate || null, extraData.candidateName || null, req?.hcId, offeringDate, clearInfo, extraData.cvUrl || null)
+      // ส่ง startDate='CLEAR' ไป GAS เมื่อกลับไป Offering เพื่อล้าง Onboard Date ใน Sheets
+      const startDateParam = CLEAR_START_DATE.includes(newStatus) && req.startDate
+        ? 'CLEAR'
+        : (extraData.startDate || null)
+      sendStatusUpdate(id, newStatus, updateData.assignedToName || req.assignedToName, assignedAt, startDateParam, extraData.candidateName || null, req?.hcId, offeringDate, clearInfo, extraData.cvUrl || null)
       logAudit({
         requestId: id,
         action: newStatus === 'Rejected' ? 'Rejected' : 'StatusChange',
@@ -785,8 +801,8 @@ export default function RequestTable({
         return key === focusMonth
       })
     }
-    if (search) {
-      const q = search.toLowerCase()
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase()
       list = list.filter((r) =>
         r.position?.toLowerCase().includes(q) ||
         r.department?.toLowerCase().includes(q) ||
@@ -803,14 +819,24 @@ export default function RequestTable({
       )
     }
     list.sort((a, b) => {
-      let aVal = sortField === 'createdAt' ? a.createdAt?.toDate?.()?.getTime() ?? 0 : a[sortField] ?? ''
-      let bVal = sortField === 'createdAt' ? b.createdAt?.toDate?.()?.getTime() ?? 0 : b[sortField] ?? ''
+      let aVal, bVal
+      if (sortField === 'createdAt') {
+        aVal = a.createdAt?.toDate?.()?.getTime() ?? 0
+        bVal = b.createdAt?.toDate?.()?.getTime() ?? 0
+      } else if (sortField === 'hcId') {
+        const parseSeq = (id) => { const m = (id || '').match(/(\d+)-(\d+)$/); return m ? parseInt(m[1]) * 100000 + parseInt(m[2]) : 0 }
+        aVal = parseSeq(a.hcId)
+        bVal = parseSeq(b.hcId)
+      } else {
+        aVal = a[sortField] ?? ''
+        bVal = b[sortField] ?? ''
+      }
       if (aVal < bVal) return sortDir === 'asc' ? -1 : 1
       if (aVal > bVal) return sortDir === 'asc' ? 1 : -1
       return 0
     })
     return list
-  }, [requests, filterMine, filterMyCases, activeTab, filterEmpType, filterJobType, filterRank, filterDept, filterBU, filterAssigned, filterDateFrom, filterDateTo, search, sortField, sortDir, user.email, user.displayName, role, department, allTAs])
+  }, [requests, filterMine, filterMyCases, activeTab, filterEmpType, filterJobType, filterRank, filterDept, filterBU, filterAssigned, filterDateFrom, filterDateTo, debouncedSearch, focusMonth, sortField, sortDir, user.email, user.displayName, role, department, allTAs])
 
   const hasChipFilters     = filterEmpType || filterJobType || filterRank || filterDept || filterBU || filterAssigned
   const hasAdvancedFilters = hasChipFilters || filterDateFrom || filterDateTo
@@ -818,7 +844,7 @@ export default function RequestTable({
   function clearChips()    { setFilterEmpType(''); setFilterJobType(''); setFilterRank(''); setFilterDept(''); setFilterBU(''); setFilterAssigned('') }
   function clearAdvanced() { clearChips(); setFilterDateFrom(''); setFilterDateTo('') }
 
-  useEffect(() => { setPage(1) }, [activeTab, filterEmpType, filterJobType, filterRank, filterDept, filterBU, filterAssigned, filterDateFrom, filterDateTo, search, filterMine, filterMyCases])
+  useEffect(() => { setPage(1) }, [activeTab, filterEmpType, filterJobType, filterRank, filterDept, filterBU, filterAssigned, filterDateFrom, filterDateTo, debouncedSearch, focusMonth, filterMine, filterMyCases])
 
   // ปิด chip dropdown เมื่อคลิกนอก
   useEffect(() => {
@@ -1258,7 +1284,7 @@ export default function RequestTable({
                                   <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest flex items-center gap-1.5 mb-2">
                                     <Calendar size={12} strokeWidth={3} /> วันเริ่มงาน
                                   </p>
-                                  <p className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">{req.startDate}</p>
+                                  <p className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">{(() => { const d = new Date(req.startDate); return isNaN(d) ? req.startDate : d.getDate() + '-' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + '-' + d.getFullYear() })()}</p>
                                 </div>
                               )}
                               {req.rejectReason && (
@@ -1305,6 +1331,23 @@ export default function RequestTable({
                               <div className="bg-gray-50 dark:bg-slate-800/50 p-3 rounded-xl border border-gray-100 dark:border-slate-800">
                                 <p className="text-sm text-gray-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap font-medium">{req.requirements || '—'}</p>
                               </div>
+                              {/* วันทำงาน + กะ — แสดงเฉพาะ TA/Admin */}
+                              {isTA && (req.workDaysPerWeek || req.shift) && (
+                                <div className="mt-4 flex gap-4">
+                                  {req.workDaysPerWeek && (
+                                    <div className="flex-1 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl px-3 py-2 border border-indigo-100 dark:border-indigo-500/20">
+                                      <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">วัน/สัปดาห์</p>
+                                      <p className="text-sm font-black text-indigo-700 dark:text-indigo-300">{req.workDaysPerWeek} วัน</p>
+                                    </div>
+                                  )}
+                                  {req.shift && (
+                                    <div className="flex-1 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl px-3 py-2 border border-indigo-100 dark:border-indigo-500/20">
+                                      <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">กะ</p>
+                                      <p className="text-sm font-black text-indigo-700 dark:text-indigo-300">{req.shift}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
 
                             {/* Meta */}
@@ -1320,17 +1363,6 @@ export default function RequestTable({
                                   {req.createdAt?.toDate?.().toLocaleString('th-TH') ?? '—'}
                                 </p>
                               </div>
-                              {req.jdFileName && (
-                                <div>
-                                  <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest mb-2">ไฟล์ Job Description</p>
-                                  <button
-                                    onClick={handleOpenFile}
-                                    className="flex items-center gap-2 text-xs px-3 py-2 rounded-xl border-2 font-black transition-all bg-emerald-50 dark:bg-emerald-950/30 text-[#008065] dark:text-emerald-400 border-emerald-500/20 hover:border-emerald-500 shadow-sm uppercase tracking-tighter"
-                                  >
-                                    <FileText size={14} strokeWidth={3} /> {req.jdFileName}
-                                  </button>
-                                </div>
-                              )}
                             </div>
                           </div>
 

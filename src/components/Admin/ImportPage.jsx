@@ -433,8 +433,16 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
     setUrlLoading(true)
     setUrlError('')
     try {
-      const gasDataUrl = import.meta.env.VITE_GAS_DATA_URL
-      const gasSecret  = import.meta.env.VITE_GAS_SECRET
+      const { getAuth } = await import('firebase/auth')
+      const idToken = await getAuth().currentUser?.getIdToken()
+      const gasProxy = async (action, params = {}) => {
+        const res = await fetch('/api/gas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+          body: JSON.stringify({ type: 'get', action, params }),
+        })
+        return res.json()
+      }
 
       // ── ตรวจว่าเป็น Google Sheets URL ────────────────────────────────────
       const sheetsMatch = raw.match(/spreadsheets\/d\/([a-zA-Z0-9_-]+)/)
@@ -442,11 +450,7 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
         // ใช้ fetchSheetById — GAS เปิด Sheet โดยตรงด้วย SpreadsheetApp (ไม่ต้อง public)
         const spreadsheetId = sheetsMatch[1]
         const gid           = raw.match(/[#&?]gid=(\d+)/)?.[1] || '0'
-        const params = new URLSearchParams({ action: 'fetchSheetById', spreadsheetId, gid })
-        if (gasSecret) params.set('secret', gasSecret)
-
-        const res  = await fetch(`${gasDataUrl}?${params.toString()}`)
-        const json = await res.json()
+        const json = await gasProxy('fetchSheetById', { spreadsheetId, gid })
         if (!json.success) throw new Error(json.error || 'เปิด Sheet ไม่ได้')
 
         // แปลง headers + rows array → array of objects (เหมือน sheet_to_json)
@@ -464,11 +468,7 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
 
       } else {
         // ── URL อื่น (CSV โดยตรง) → ใช้ fetchCSV proxy ────────────────────
-        const params = new URLSearchParams({ action: 'fetchCSV', url: raw })
-        if (gasSecret) params.set('secret', gasSecret)
-
-        const res  = await fetch(`${gasDataUrl}?${params.toString()}`)
-        const json = await res.json()
+        const json = await gasProxy('fetchCSV', { url: raw })
         if (!json.success) throw new Error(json.error || 'Fetch ไม่สำเร็จ')
 
         const mod  = await import('xlsx')

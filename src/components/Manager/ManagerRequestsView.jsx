@@ -266,24 +266,45 @@ function ExpandedDetail({ req }) {
         )}
       </div>
 
-      {/* Section 4: File attachments — JD document and zero or more CV files */}
+      {/* Section 4: File attachments — JD document and CV files (แยก section ชัดเจน) */}
       {(req.jdFilePath || req.cvFiles?.length > 0) && (
-        <div className="flex flex-wrap gap-2 mt-4">
-          {req.jdFilePath && (
-            <button
-              onClick={() => openFile(req.jdFilePath, false)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-[#008065] hover:text-[#008065] transition-colors"
-            >
-              <FileText size={12} strokeWidth={2} /> {req.jdFileName || 'JD File'}
-            </button>
-          )}
-          {req.cvFiles?.map((cv, i) => (
-            <button key={i} onClick={() => openFile(cv.path, true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-indigo-400 hover:text-indigo-600 transition-colors"
-            >
-              <File size={12} strokeWidth={2} /> {cv.name}
-            </button>
-          ))}
+        <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-800 grid grid-cols-2 gap-6">
+
+          {/* JD */}
+          <div>
+            <p className="text-[9px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest mb-2">Job Description (JD)</p>
+            {req.jdFilePath ? (
+              <button
+                onClick={() => openFile(req.jdFilePath, false)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-gray-400 transition-colors w-full text-left"
+              >
+                <FileText size={12} strokeWidth={2} className="shrink-0" />
+                <span className="truncate">{req.jdFileName || 'JD File'}</span>
+              </button>
+            ) : (
+              <p className="text-[11px] text-gray-400 dark:text-slate-600 italic">ยังไม่มีไฟล์ JD</p>
+            )}
+          </div>
+
+          {/* CV */}
+          <div>
+            <p className="text-[9px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest mb-2">CV ผู้สมัคร</p>
+            {req.cvFiles?.length > 0 ? (
+              <div className="flex flex-col gap-1.5">
+                {req.cvFiles.map((cv, i) => (
+                  <button key={i} onClick={() => openFile(cv.path, true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-gray-400 transition-colors text-left"
+                  >
+                    <File size={12} strokeWidth={2} className="shrink-0" />
+                    <span className="truncate">{cv.name}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-gray-400 dark:text-slate-600 italic">ยังไม่มีไฟล์ CV</p>
+            )}
+          </div>
+
         </div>
       )}
 

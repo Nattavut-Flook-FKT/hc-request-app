@@ -227,6 +227,37 @@ export async function deleteJDFile(filePath) {
   }
 }
 
+/**
+ * อัพโหลดไฟล์ JD เข้า JD Library (folder: library/{libDocId}/)
+ * Uploads a JD PDF file to the JD Library folder in the JD_BUCKET.
+ *
+ * @param {File}   file      - ไฟล์ PDF ที่จะอัพโหลด / PDF file to upload
+ * @param {string} libDocId  - Firestore doc ID ของ jd_library document ที่สร้างแล้ว
+ * @returns {Promise<{url: string|null, path: string|null, error: string|null}>}
+ */
+export async function uploadJDLibraryFile(file, libDocId) {
+  if (!ALLOWED_TYPES.includes(file.type))
+    return { url: null, path: null, error: 'อัพโหลดได้เฉพาะไฟล์ PDF เท่านั้น' }
+  if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024)
+    return { url: null, path: null, error: `ไฟล์ต้องไม่เกิน ${MAX_FILE_SIZE_MB}MB` }
+  try {
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const filePath = `${libDocId}/${Date.now()}_${safeName}`
+    const { error: uploadError } = await supabase.storage
+      .from(JD_BUCKET)
+      .upload(filePath, file, { upsert: false, contentType: file.type })
+    if (uploadError) throw uploadError
+    const { data, error: urlError } = await supabase.storage
+      .from(JD_BUCKET)
+      .createSignedUrl(filePath, 60 * 60 * 24 * 7)
+    if (urlError) throw urlError
+    return { url: data.signedUrl, path: filePath, error: null }
+  } catch (err) {
+    console.error('[uploadJDLibraryFile]', err)
+    return { url: null, path: null, error: err.message }
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CV Files  (bucket: cv-files)
 // รองรับ PDF / DOC / DOCX ไม่เกิน 10MB
