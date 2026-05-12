@@ -46,18 +46,37 @@ var COL_START_DATE = 16  // P: Onboard Date
 // =====================================
 // REVERSE SYNC: Sheets → Firestore
 // =====================================
+
+/**
+ * รันครั้งเดียวจาก GAS Editor เพื่อสร้าง Installable Trigger
+ * Run → setupTriggers (ต้องการสิทธิ์ scriptowner เท่านั้น)
+ *
+ * Simple onEdit trigger ใช้ UrlFetchApp ไม่ได้ → ต้องเป็น Installable Trigger เท่านั้น
+ */
+function setupTriggers() {
+  // ลบ trigger onSheetEdit เดิมก่อน (ป้องกัน duplicate)
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'onSheetEdit') {
+      ScriptApp.deleteTrigger(t)
+      Logger.log('Deleted existing onSheetEdit trigger')
+    }
+  })
+  // สร้าง Installable onEdit trigger ใหม่
+  ScriptApp.newTrigger('onSheetEdit')
+    .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
+    .onEdit()
+    .create()
+  Logger.log('✅ onSheetEdit trigger created — Sheets → Firestore sync is now active')
+}
+
 /**
  * onEdit trigger — ตรวจจับการแก้ไขใน sheet "Job Openings YYYY"
  *
- * เมื่อ TA แก้ค่า Status (col J) หรือ PIC (col I) ใน Sheets
+ * เมื่อ TA แก้ค่า Status (col J), PIC (col I) หรือ Offering Date (col L) ใน Sheets
  * script จะอ่าน HCID (col D) แล้วอัพเดต Firestore ผ่าน REST API
  *
- * วิธี setup trigger:
- *   GAS Editor → Extensions → Apps Script Triggers
- *   → + Add Trigger → Function: onSheetEdit, Event: onEdit
- *
- * หมายเหตุ: ต้องใช้ Installable Trigger (ไม่ใช่ Simple Trigger)
- * เพราะต้องการสิทธิ์ UrlFetchApp สำหรับเรียก Firestore REST API
+ * ⚠️  ต้องรัน setupTriggers() ก่อน 1 ครั้งเพื่อสร้าง Installable Trigger
+ * (Simple Trigger ใช้ UrlFetchApp ไม่ได้)
  */
 function onSheetEdit(e) {
   try {
@@ -71,10 +90,13 @@ function onSheetEdit(e) {
     var numRows  = range.getNumRows()
     var numCols  = range.getNumColumns()
 
-    // ตรวจว่า range ครอบคลุม COL_PIC หรือ COL_STATUS มั้ย
-    var hasPic    = startCol <= COL_PIC    && (startCol + numCols - 1) >= COL_PIC
-    var hasStatus = startCol <= COL_STATUS && (startCol + numCols - 1) >= COL_STATUS
-    if (!hasPic && !hasStatus) return
+    // ตรวจว่า range ครอบคลุม col ที่ต้องการ sync
+    var hasPic       = startCol <= COL_PIC       && (startCol + numCols - 1) >= COL_PIC
+    var hasStatus    = startCol <= COL_STATUS    && (startCol + numCols - 1) >= COL_STATUS
+    var hasOfferDate = startCol <= COL_OFFER_DATE && (startCol + numCols - 1) >= COL_OFFER_DATE
+    var hasCandidate = startCol <= COL_CANDIDATE  && (startCol + numCols - 1) >= COL_CANDIDATE
+    var hasStartDate = startCol <= COL_START_DATE && (startCol + numCols - 1) >= COL_START_DATE
+    if (!hasPic && !hasStatus && !hasOfferDate && !hasCandidate && !hasStartDate) return
 
     var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -90,18 +112,22 @@ function onSheetEdit(e) {
       var pic           = sheet.getRange(row, COL_PIC).getValue()
       var candidateName = sheet.getRange(row, COL_CANDIDATE).getValue()
       var startDate     = sheet.getRange(row, COL_START_DATE).getValue()
+      var offeringDate  = sheet.getRange(row, COL_OFFER_DATE).getValue()
 
-      // แปลง startDate เป็น string ถ้าเป็น Date object
-      if (startDate instanceof Date && !isNaN(startDate)) {
-        startDate = startDate.getDate() + '-' + months[startDate.getMonth()] + '-' + startDate.getFullYear()
+      // แปลง Date objects เป็น string D-MMM-YYYY
+      function fmtDate_(d) {
+        if (!d) return null
+        if (d instanceof Date && !isNaN(d)) return d.getDate() + '-' + months[d.getMonth()] + '-' + d.getFullYear()
+        return d.toString().trim() || null
       }
 
       // อัพเดต Firestore
       var result = updateFirestoreByHcId_(hcId, {
-        status:         status        || null,
-        assignedToName: pic           || null,
-        candidateName:  candidateName || null,
-        startDate:      startDate     || null,
+        status:         status                 || null,
+        assignedToName: pic                    || null,
+        candidateName:  candidateName          || null,
+        startDate:      fmtDate_(startDate),
+        offeringDate:   fmtDate_(offeringDate),
       })
       Logger.log('[onSheetEdit] row=' + row + ' hcId=' + hcId + ' → ' + JSON.stringify(result))
     }
@@ -166,14 +192,15 @@ function updateFirestoreByHcId_(hcId, data) {
   // แปลง Sheets display status → app internal status ก่อนเช็ค VALID_STATUSES
   // (เมื่อ TA แก้ใน Sheets ค่าจะเป็น display name เช่น 'Active Sourcing', 'To be confirmed')
   var SHEETS_TO_APP_STATUS = {
-    'To be confirmed':  'Open',        'Open':             'Open',
-    'Active Sourcing':  'Recruiting',  'Pending Offer':    'Offering',
-    'Pending Onboard':  'Onboarding',  'Onboard':          'Closed',
-    'Job Cancelled':    'Cancelled',   'Turndown':         'Rejected',
-    'On hold':          'Open',        'Internal Transfer':'Closed',
-    'Confidential':     'Recruiting',  'Interviewing':     'Interviewing',
+    'To be confirmed':   'Open',              'Open':              'Open',
+    'Active Sourcing':   'Recruiting',        'Interviewing':      'Interviewing',
+    'Pending Offer':     'Offering',          'Pending Onboard':   'Onboarding',
+    'Onboard':           'Closed',            'Job Cancelled':     'Cancelled',
+    'Turndown':          'Rejected',          'On hold':           'OnHold',
+    'Internal Transfer': 'InternalTransfer',  'Confidential':      'Confidential',
   }
-  var VALID_STATUSES = ['Open','Recruiting','Interviewing','Offering','Onboarding','Rejected','Closed','Cancelled']
+  var VALID_STATUSES = ['Open','Recruiting','Interviewing','Offering','Onboarding',
+                        'Rejected','Closed','Cancelled','OnHold','InternalTransfer','Confidential']
   var appStatus = data.status ? (SHEETS_TO_APP_STATUS[data.status] || data.status) : null
 
   if (appStatus && VALID_STATUSES.includes(appStatus)) {
@@ -191,6 +218,10 @@ function updateFirestoreByHcId_(hcId, data) {
   if (data.startDate) {
     fields['startDate'] = { stringValue: data.startDate }
     updateMask.push('startDate')
+  }
+  if (data.offeringDate) {
+    fields['offeringDate'] = { stringValue: data.offeringDate }
+    updateMask.push('offeringDate')
   }
 
   if (updateMask.length === 0) return { success: true, docId, note: 'nothing to update' }
@@ -255,6 +286,7 @@ function getHrSpreadsheet_() {
 }
 
 function slackNewRequest(data) {
+  Logger.log('[slackNewRequest] START hcId=' + data.hcId + ' url_set=' + (SLACK_NEW_REQUEST ? SLACK_NEW_REQUEST.substring(0,40) + '…' : 'EMPTY'))
   var emoji = data.requestType === 'New HC' ? '🆕' : '🔁'
   var type  = data.requestType === 'New HC'
     ? 'New HC × ' + data.headcount
@@ -266,7 +298,9 @@ function slackNewRequest(data) {
     '*ประเภท:* ' + type + '\n' +
     '*ผู้ยื่น:* ' + data.requesterName + '\n' +
     '🔗 ' + APP_URL + '/all-requests'
+  Logger.log('[slackNewRequest] calling sendSlack_ …')
   sendSlack_(SLACK_NEW_REQUEST, text)
+  Logger.log('[slackNewRequest] DONE')
 }
 
 function slackStatusUpdate(position, department, oldStatus, newStatus, assignedTo, candidateName) {
@@ -281,15 +315,17 @@ function slackStatusUpdate(position, department, oldStatus, newStatus, assignedT
 }
 
 function sendSlack_(webhookUrl, text) {
+  if (!webhookUrl) { Logger.log('[sendSlack_] SKIP — webhookUrl is empty'); return }
   try {
-    UrlFetchApp.fetch(webhookUrl, {
+    var resp = UrlFetchApp.fetch(webhookUrl, {
       method: 'post',
       contentType: 'application/json',
       payload: JSON.stringify({ text: text }),
       muteHttpExceptions: true
     })
+    Logger.log('[sendSlack_] HTTP ' + resp.getResponseCode() + ' body=' + resp.getContentText().substring(0, 80))
   } catch (err) {
-    Logger.log('Slack error: ' + err.message)
+    Logger.log('[sendSlack_] EXCEPTION: ' + err.message)
   }
 }
 
@@ -405,6 +441,7 @@ function doGet(e) {
       const hcId           = e.parameter.hcId           || null   // HCID เช่น REQ-2026-411
       const offeringDate   = e.parameter.offeringDate   || null   // วัน Offer ISO string
       const clearInfo      = e.parameter.clearInfo === '1'        // ล้าง candidateName + startDate
+      const cvUrl          = e.parameter.cvUrl          || null   // ลิ้ง CV (Google Drive, etc.)
 
       const VALID = ['Open','Recruiting','Interviewing','Offering','Onboarding','Rejected','Closed','Cancelled']
       if (!docId || !newStatus)       return responseJson_({ success: false, error: 'Missing params' })
@@ -432,11 +469,30 @@ function doGet(e) {
                 jobSheet.getRange(rowNum, COL_PIC).setValue(assignedToName)
               }
               if (clearInfo) {
-                jobSheet.getRange(rowNum, COL_CANDIDATE).setValue('')   // ล้างชื่อ Candidate
+                jobSheet.getRange(rowNum, COL_CANDIDATE).setValue('')   // ล้างชื่อ Candidate (ล้าง formula ด้วย)
                 jobSheet.getRange(rowNum, COL_START_DATE).setValue('')  // ล้างวันเริ่มงาน
               } else {
-                if (candidateName) jobSheet.getRange(rowNum, COL_CANDIDATE).setValue(candidateName)
-                if (startDate)     jobSheet.getRange(rowNum, COL_START_DATE).setValue(startDate)
+                if (candidateName) {
+                  if (cvUrl) {
+                    // มี CV URL → เขียนเป็น HYPERLINK formula: ชื่อ Candidate กลายเป็น clickable link
+                    var safeUrl  = cvUrl.replace(/"/g, '""')          // escape double-quotes ใน URL
+                    var safeName = candidateName.replace(/"/g, '""')  // escape double-quotes ในชื่อ
+                    jobSheet.getRange(rowNum, COL_CANDIDATE).setFormula('=HYPERLINK("' + safeUrl + '","' + safeName + '")')
+                  } else {
+                    jobSheet.getRange(rowNum, COL_CANDIDATE).setValue(candidateName)
+                  }
+                }
+                if (startDate === 'CLEAR') {
+                  jobSheet.getRange(rowNum, COL_START_DATE).setValue('')  // ล้าง Onboard Date
+                } else if (startDate) {
+                  var sd = new Date(startDate)
+                  var sdMonths = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+                  if (!isNaN(sd)) {
+                    jobSheet.getRange(rowNum, COL_START_DATE).setValue(sd.getDate() + '-' + sdMonths[sd.getMonth()] + '-' + sd.getFullYear())
+                  } else {
+                    jobSheet.getRange(rowNum, COL_START_DATE).setValue(startDate)
+                  }
+                }
               }
               if (offeringDate === 'CLEAR') {
                 // กลับไปสถานะก่อน Offering → ล้างค่า
@@ -577,7 +633,9 @@ function doGet(e) {
       var mSheet  = ss ? ss.getSheetByName(JOB_OPENINGS_SHEET) : null
       var mMaxSeq = 0
       if (mSheet && mSheet.getLastRow() > 1) {
-        var mVals = mSheet.getRange(2, COL_HCID, mSheet.getLastRow() - 1, 1).getValues()
+        // จำกัดที่ 1,000 แถวแรก — ตัด orphaned rows ที่อยู่แถว 1700+ ทิ้ง
+        var mScanRows = Math.min(mSheet.getLastRow() - 1, 1000)
+        var mVals = mSheet.getRange(2, COL_HCID, mScanRows, 1).getValues()
         mVals.forEach(function(row) {
           var v = (row[0] || '').toString().trim()
           if (v.indexOf(mPrefix) === 0) {
@@ -791,32 +849,51 @@ function doPost(e) {
       startDate:      '',
       contractEndDate: '',
     }
-    syncBatchHandler_(ss, [jobOpeningRow])
+    // ── Slack ก่อนเลย — ไม่ให้ Sheets error มาบล็อก ─────────────────────────
+    Logger.log('[doPost] hcId=' + (data.hcId || data.id) + ' maintenance=' + data.maintenance)
+    if (!data.maintenance) {
+      Logger.log('[doPost] calling slackNewRequest …')
+      try { slackNewRequest(data) } catch (slackErr) {
+        Logger.log('[doPost] slackNewRequest error: ' + slackErr.message)
+      }
+    } else {
+      Logger.log('[doPost] SKIPPED Slack — maintenance=true')
+    }
+
+    // ── Sheets sync ────────────────────────────────────────────────────────────
+    try {
+      syncBatchHandler_(ss, [jobOpeningRow])
+    } catch (sheetErr) {
+      Logger.log('[doPost] syncBatchHandler_ error: ' + sheetErr.message)
+    }
 
     // HC_Request sheet (legacy — เก็บไว้เพื่อ backward compat)
-    var sheet = ss.getSheetByName('HC_Request') || ss.insertSheet('HC_Request')
-    if (sheet.getLastRow() === 0) {
+    try {
+      var sheet = ss.getSheetByName('HC_Request') || ss.insertSheet('HC_Request')
+      if (sheet.getLastRow() === 0) {
+        sheet.appendRow([
+          'Status','ประเภทคำขอ','Job Grade','ตำแหน่ง','แผนก','Google Drive Link',
+          'ชื่อผู้ยื่น','คนรับเคส','จำนวน HC','เหตุผล','Requirements',
+          'วันที่เริ่มงาน','วันที่ลาออก (LWD)','ทดแทน (ชื่อ)','Email ผู้ยื่น','Timestamp','Request ID',
+          'ชื่อ Candidate',
+        ])
+        sheet.getRange(1, 1, 1, 18).setFontWeight('bold').setBackground('#4a90d9').setFontColor('#ffffff')
+        sheet.setFrozenRows(1)
+      }
+      var isNew = data.requestType === 'New HC'
       sheet.appendRow([
-        'Status','ประเภทคำขอ','Job Grade','ตำแหน่ง','แผนก','Google Drive Link',
-        'ชื่อผู้ยื่น','คนรับเคส','จำนวน HC','เหตุผล','Requirements',
-        'วันที่เริ่มงาน','วันที่ลาออก (LWD)','ทดแทน (ชื่อ)','Email ผู้ยื่น','Timestamp','Request ID',
-        'ชื่อ Candidate',
+        data.status, data.requestType, data.jg, data.position, data.department,
+        data.driveLink || '', data.requesterName, '',
+        data.headcount, data.reason, data.requirements || '',
+        isNew ? data.targetStartDate : '', isNew ? '' : data.targetStartDate,
+        data.replacementFor || '', data.requesterEmail,
+        new Date(data.createdAt), data.id,
+        '',
       ])
-      sheet.getRange(1, 1, 1, 18).setFontWeight('bold').setBackground('#4a90d9').setFontColor('#ffffff')
-      sheet.setFrozenRows(1)
+    } catch (legacyErr) {
+      Logger.log('[doPost] HC_Request legacy sheet error: ' + legacyErr.message)
     }
-    var isNew = data.requestType === 'New HC'
-    sheet.appendRow([
-      data.status, data.requestType, data.jg, data.position, data.department,
-      data.driveLink || '', data.requesterName, '',
-      data.headcount, data.reason, data.requirements || '',
-      isNew ? data.targetStartDate : '', isNew ? '' : data.targetStartDate,
-      data.replacementFor || '', data.requesterEmail,
-      new Date(data.createdAt), data.id,
-      '',
-    ])
 
-    if (!data.maintenance) slackNewRequest(data)
     return responseJson_({ success: true })
   } catch (err) {
     return responseJson_({ success: false, error: err.message })
