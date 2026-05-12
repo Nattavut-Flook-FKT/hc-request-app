@@ -346,6 +346,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   // ─── Effect: ค้นหา Existing JD สำหรับ Sidebar ─────────────────────────────
   // เมื่อ position + department เปลี่ยน → ค้นหา request ที่มี jdFilePath
   // และตรงกับ department + orgTrack เดียวกัน แล้วแสดงใน JD Preview Sidebar
+  // Debounce 400ms: ป้องกัน Firestore ยิงทุก keystroke ตอนพิมพ์ชื่อตำแหน่ง
   useEffect(() => {
     if (!form.position || !form.department) {
       setExistingJD(null)
@@ -353,12 +354,19 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
     }
 
     let cancelled = false
-    async function loadExistingJD() {
+
+    // รอให้ user หยุดพิมพ์ 400ms ก่อน query Firestore
+    const timer = setTimeout(async () => {
       setCheckingJD(true)
       try {
         // query hc_requests WHERE position == form.position
         // (filter department และ orgTrack ด้วย JS เพราะ Firestore ไม่รองรับ compound query แบบนี้)
-        const q = query(collection(db, 'hc_requests'), where('position', '==', form.position))
+        const q = query(
+          collection(db, 'hc_requests'),
+          where('position', '==', form.position),
+          where('jdFilePath', '!=', ''),
+          limit(20),
+        )
         const snap = await getDocs(q)
         if (cancelled) return
 
@@ -380,10 +388,12 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       } finally {
         if (!cancelled) setCheckingJD(false)
       }
-    }
+    }, 400) // debounce 400ms
 
-    loadExistingJD()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
   }, [form.position, form.department, form.orgTrack])
 
   // ─── Effect: Scroll ไปหา Feedback Banner ─────────────────────────────────
@@ -445,9 +455,14 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
     const prefix      = `REQ-${currentYear}-`
 
     // ── อ่าน max seq จาก Google Sheets (source of truth) ────────────────────
+    // ถ้า Sheets ตอบกลับได้ → ใช้ค่าจาก Sheets อย่างเดียว
+    // ไม่รวม Firestore เพื่อป้องกัน ghost doc ทำให้ HCID กระโดดข้ามเลข
     const sheetsMax = await getMaxHCIDFromSheets()
+    if (sheetsMax > 0) {
+      return `REQ-${currentYear}-${sheetsMax + 1}`
+    }
 
-    // ── อ่าน max seq จาก Firestore (กัน edge case: เคสที่ยังไม่ไป Sheets) ──
+    // ── Fallback: ใช้ Firestore เฉพาะเมื่อ GAS ไม่ตอบสนอง (sheetsMax = 0) ──
     let firestoreMax = 0
     try {
       const q = query(
@@ -463,8 +478,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       }
     } catch (_) {}
 
-    const newSeq = Math.max(sheetsMax, firestoreMax) + 1
-    return `REQ-${currentYear}-${newSeq}`
+    return `REQ-${currentYear}-${firestoreMax + 1}`
   }
 
   // ─── handleSubmit ──────────────────────────────────────────────────────────

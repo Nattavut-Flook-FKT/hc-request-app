@@ -41,13 +41,28 @@ import { BarChart2, List } from 'lucide-react'
 function computeStats(data) {
   const active = data.filter((r) => r.status !== 'Cancelled')
 
-  // คำนวณเฉลี่ยวันปิดเคส — ใช้เฉพาะเคสที่ Closed และมีทั้ง createdAt + closedAt
-  const closedWithDate = data.filter(r => r.status === 'Closed' && r.createdAt && r.closedAt)
-  const avgDaysToFill = closedWithDate.length > 0
-    ? Math.round(closedWithDate.reduce((sum, r) => {
-        const ms = (r.closedAt?.toDate?.() ?? new Date()) - (r.createdAt?.toDate?.() ?? new Date())
-        return sum + ms / (1000 * 60 * 60 * 24)
-      }, 0) / closedWithDate.length)
+  // คำนวณเฉลี่ยวันปิดเคส — นับเคสที่ Closed (ใช้ closedAt) + Onboarding (ใช้วันที่เปลี่ยนสถานะจาก statusHistory)
+  const filledCases = data.filter(r => {
+    if (!r.createdAt) return false
+    if (r.status === 'Closed') return !!r.closedAt
+    if (r.status === 'Onboarding') return true
+    return false
+  })
+  const avgDaysToFill = filledCases.length > 0
+    ? Math.round(filledCases.reduce((sum, r) => {
+        const start = r.createdAt?.toDate?.() ?? null
+        if (!start) return sum
+        let end
+        if (r.status === 'Closed') {
+          end = r.closedAt?.toDate?.() ?? null
+        } else {
+          // W.Onboarding → หาวันที่เปลี่ยนสถานะเป็น Onboarding จาก statusHistory
+          const onbEntry = r.statusHistory?.find(h => h.status === 'Onboarding')
+          end = onbEntry ? new Date(onbEntry.changedAt) : new Date()
+        }
+        if (!end) return sum
+        return sum + (end - start) / (1000 * 60 * 60 * 24)
+      }, 0) / filledCases.length)
     : null
 
   return {
@@ -81,29 +96,41 @@ export default function DashboardPage({ user, role, department, isDarkMode, togg
   // เดือนที่กดใน YoYChart เพื่อกรองตาราง รูปแบบ "YYYY-MM" เช่น "2026-04"
   const [selectedMonth, setSelectedMonth] = useState(null)
 
+  // กรองตามปี: null = ทั้งหมด, 2025, 2026
+  const [yearFilter, setYearFilter]       = useState(null)
+
   /** รับ requests ทั้งหมดจาก RequestTable (hidden mount) */
   function handleStatsChange(_stats, allRequests) {
     if (allRequests) setRequests(allRequests)
   }
 
+  /** requests กรองตามปีที่เลือก (ใช้เป็นฐานสำหรับ stats + analytics) */
+  const yearFilteredRequests = useMemo(() => {
+    if (!yearFilter) return requests
+    return requests.filter(r => {
+      const d = r.createdAt?.toDate?.()
+      return d && d.getFullYear() === yearFilter
+    })
+  }, [requests, yearFilter])
+
   /**
-   * คำนวณ stats โดยกรองตาม selectedTA ก่อน
-   * ถ้ายังไม่ได้เลือก TA → ใช้ทุก request
+   * คำนวณ stats โดยกรองตาม selectedTA + yearFilter
+   * ถ้ายังไม่ได้เลือก TA → ใช้ทุก request (ของปีนั้น)
    */
   const stats = useMemo(() => {
     const filtered = selectedTA
-      ? requests.filter(r => r.assignedToName === selectedTA)
-      : requests
+      ? yearFilteredRequests.filter(r => r.assignedToName === selectedTA)
+      : yearFilteredRequests
     return computeStats(filtered)
-  }, [requests, selectedTA])
+  }, [yearFilteredRequests, selectedTA])
 
   /**
    * Request ที่ส่งเข้า Analytics panels (YoYChart + ManpowerPivot)
-   * กรองตาม selectedTA เหมือน stats
+   * กรองตาม selectedTA + yearFilter เหมือน stats
    */
   const analyticsRequests = useMemo(() =>
-    selectedTA ? requests.filter(r => r.assignedToName === selectedTA) : requests,
-    [requests, selectedTA]
+    selectedTA ? yearFilteredRequests.filter(r => r.assignedToName === selectedTA) : yearFilteredRequests,
+    [yearFilteredRequests, selectedTA]
   )
 
   return (
@@ -117,22 +144,41 @@ export default function DashboardPage({ user, role, department, isDarkMode, togg
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">ภาพรวมคำขออัตรากำลังทั้งหมด</p>
           </div>
 
-          {/* Tab switcher — เลือกระหว่าง ภาพรวม / รายการ */}
-          <div className="flex items-center gap-0.5 p-0.5 bg-gray-100 dark:bg-slate-800 rounded-xl">
-            {TABS.map(t => (
-              <button
-                key={t.v}
-                onClick={() => setTab(t.v)}
-                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
-                  tab === t.v
-                    ? 'bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
-                }`}
-              >
-                <t.icon size={14} />
-                {t.label}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            {/* Year filter — ทั้งหมด / 2025 / 2026 */}
+            <div className="flex items-center gap-0.5 p-0.5 bg-gray-100 dark:bg-slate-800 rounded-xl">
+              {[null, 2025, 2026].map(y => (
+                <button
+                  key={y ?? 'all'}
+                  onClick={() => setYearFilter(y)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+                    yearFilter === y
+                      ? 'bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-100 shadow-sm'
+                      : 'text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
+                  }`}
+                >
+                  {y ?? 'ทั้งหมด'}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab switcher — เลือกระหว่าง ภาพรวม / รายการ */}
+            <div className="flex items-center gap-0.5 p-0.5 bg-gray-100 dark:bg-slate-800 rounded-xl">
+              {TABS.map(t => (
+                <button
+                  key={t.v}
+                  onClick={() => setTab(t.v)}
+                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+                    tab === t.v
+                      ? 'bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-100 shadow-sm'
+                      : 'text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
+                  }`}
+                >
+                  <t.icon size={14} />
+                  {t.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -176,7 +222,7 @@ export default function DashboardPage({ user, role, department, isDarkMode, togg
                 กดการ์ด TA → setSelectedTA → กรองทั้ง stats, analytics, table */}
             {(role === 'admin' || role === 'ta') && (
               <TAWorkloadPanel
-                requests={requests}
+                requests={yearFilteredRequests}
                 selectedTA={selectedTA}
                 onSelectTA={setSelectedTA}
               />
@@ -184,8 +230,8 @@ export default function DashboardPage({ user, role, department, isDarkMode, togg
 
             {/* Export panel — filter + summary + download CSV / Pivot CSV
                 แสดงเฉพาะ admin/ta และต้องมีข้อมูลอย่างน้อย 1 รายการ */}
-            {(role === 'admin' || role === 'ta') && requests.length > 0 && (
-              <ReportPanel requests={requests} />
+            {(role === 'admin' || role === 'ta') && yearFilteredRequests.length > 0 && (
+              <ReportPanel requests={yearFilteredRequests} />
             )}
           </>
         )}

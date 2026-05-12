@@ -19,12 +19,19 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 import { useState } from 'react'
-import { collection, getDocs, writeBatch } from 'firebase/firestore'
+import { collection, getDocs, writeBatch, doc } from 'firebase/firestore'
 import { db } from '../services/firebase'
-import { Clock, Tag, FileText, Trash2, DatabaseZap, Settings2, AlertTriangle, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Clock, Tag, FileText, Trash2, DatabaseZap, Settings2, AlertTriangle, RefreshCw, CheckCircle2, AlertCircle, UserCog } from 'lucide-react'
 import { listJDFiles, deleteJDFile } from '../services/supabase'
 import { syncFromSheets } from '../services/webhook'
 import Layout from '../components/Shared/Layout'
+
+/** ตัดนามสกุลออก เหลือแค่ "ชื่อ (nickname)" — เหมือน RequestTable.shortName */
+function shortName(fullName) {
+  if (!fullName) return fullName
+  const match = fullName.match(/^.+?\)/)
+  return match ? match[0].trim() : fullName
+}
 
 export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode }) {
   // สถานะการทำงานของแต่ละ tool: key → { state: 'idle'|'running'|'done'|'error', count }
@@ -37,6 +44,67 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode 
   // ── Sync from Sheets state ────────────────────────────────────────────────
   const [syncState,  setSyncState]  = useState('idle')  // 'idle'|'running'|'done'|'error'
   const [syncResult, setSyncResult] = useState(null)
+
+  // ── Fix TA Names state ────────────────────────────────────────────────────
+  const [fixNamesState,  setFixNamesState]  = useState('idle') // 'idle'|'running'|'done'|'error'
+  const [fixNamesResult, setFixNamesResult] = useState(null)
+
+  /**
+   * fixTANames — แปลง assignedToName + changedByName ที่มีชื่อเต็ม (เช่น "Jitlada (Mo) Mooltha")
+   * ให้เหลือแค่ชื่อสั้น "Jitlada (Mo)" เพื่อให้ตรงกับข้อมูลที่ Import จาก Sheets
+   */
+  async function fixTANames() {
+    if (fixNamesState === 'running') return
+    setFixNamesState('running')
+    setFixNamesResult(null)
+    try {
+      const snap = await getDocs(collection(db, 'hc_requests'))
+      const CHUNK = 400
+      let updatedDocs = 0
+      const toUpdate = [] // { ref, data }
+
+      snap.docs.forEach(d => {
+        const data = d.data()
+        const updates = {}
+
+        // แก้ assignedToName
+        if (data.assignedToName) {
+          const fixed = shortName(data.assignedToName)
+          if (fixed !== data.assignedToName) updates.assignedToName = fixed
+        }
+
+        // แก้ changedByName ใน statusHistory array
+        if (data.statusHistory?.length > 0) {
+          const fixedHistory = data.statusHistory.map(entry => {
+            if (!entry.changedByName) return entry
+            const fixed = shortName(entry.changedByName)
+            return fixed !== entry.changedByName ? { ...entry, changedByName: fixed } : entry
+          })
+          // เช็คว่ามีการเปลี่ยนแปลงจริงไหม
+          const changed = fixedHistory.some((h, i) => h.changedByName !== data.statusHistory[i].changedByName)
+          if (changed) updates.statusHistory = fixedHistory
+        }
+
+        if (Object.keys(updates).length > 0) toUpdate.push({ ref: doc(db, 'hc_requests', d.id), updates })
+      })
+
+      // batch write ทีละ 400
+      for (let i = 0; i < toUpdate.length; i += CHUNK) {
+        const batch = writeBatch(db)
+        toUpdate.slice(i, i + CHUNK).forEach(({ ref, updates }) => batch.update(ref, updates))
+        await batch.commit()
+        updatedDocs += toUpdate.slice(i, i + CHUNK).length
+      }
+
+      setFixNamesResult({ total: snap.size, updated: updatedDocs })
+      setFixNamesState('done')
+    } catch (err) {
+      console.error('[fixTANames]', err)
+      setFixNamesResult({ error: err.message })
+      setFixNamesState('error')
+    }
+    setTimeout(() => { setFixNamesState('idle'); setFixNamesResult(null) }, 8000)
+  }
 
   async function handleSyncSheets() {
     if (syncState === 'running') return
@@ -203,6 +271,44 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode 
               ))}
             </div>
           )}
+        </div>
+
+        {/* ── Fix TA Names card ───────────────────────────────────────────────── */}
+        <div className="rounded-2xl border p-5 bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800 mb-2">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-blue-600 dark:text-blue-400"><UserCog size={20} /></span>
+              <div>
+                <p className="text-sm font-black text-blue-700 dark:text-blue-400">Fix TA Names (ชื่อสั้น)</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                  แปลง "Jitlada (Mo) Mooltha" → "Jitlada (Mo)" ใน assignedToName + statusHistory ทุก request
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={fixTANames}
+              disabled={fixNamesState === 'running'}
+              className={`flex items-center gap-2 text-xs font-black px-4 py-2 rounded-xl border transition-all shrink-0 shadow-sm whitespace-nowrap
+                ${fixNamesState === 'running'
+                  ? 'bg-gray-100 dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-400 cursor-wait'
+                  : fixNamesState === 'done'
+                    ? 'bg-blue-100 dark:bg-blue-800/40 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                    : fixNamesState === 'error'
+                      ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-800 text-red-600 dark:text-red-400'
+                      : 'bg-white dark:bg-slate-800 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-800/40'
+                }`}
+            >
+              {fixNamesState === 'running' ? (
+                <><Settings2 size={13} className="animate-spin"/> กำลังแก้ไข...</>
+              ) : fixNamesState === 'done' ? (
+                <><CheckCircle2 size={13}/> แก้แล้ว {fixNamesResult?.updated ?? 0} / {fixNamesResult?.total ?? 0} docs</>
+              ) : fixNamesState === 'error' ? (
+                <><AlertCircle size={13}/> {fixNamesResult?.error || 'Error'}</>
+              ) : (
+                <><UserCog size={13}/> Fix Names</>
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-col gap-4">

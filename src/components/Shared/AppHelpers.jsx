@@ -14,7 +14,8 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 import { Navigate } from 'react-router-dom'
-import { Settings2, PowerOff } from 'lucide-react'
+import { Settings2, PowerOff, GripVertical } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 
 // อ่านค่า VITE_DEV_EMAIL จาก .env — ถ้าไม่มีค่า RoleSwitcher จะไม่แสดง
 const DEV_EMAIL = import.meta.env.VITE_DEV_EMAIL
@@ -33,17 +34,94 @@ const DEV_EMAIL = import.meta.env.VITE_DEV_EMAIL
  *   onDeptSwitch {function} callback(dept: string) เมื่อพิมพ์ dept ใหม่
  */
 export function RoleSwitcher({ currentRole, onSwitch, currentDept, onDeptSwitch }) {
-  // ซ่อน widget ทั้งหมดเมื่อไม่ได้อยู่ใน dev mode
   if (!DEV_EMAIL) return null
+
+  // โหลด position จาก localStorage (fallback = มุมขวาล่าง)
+  const [pos, setPos] = useState(() => {
+    try {
+      const saved = localStorage.getItem('devSwitcherPos')
+      if (saved) return JSON.parse(saved)
+    } catch (_) {}
+    return { x: window.innerWidth - 240, y: window.innerHeight - 220 }
+  })
+
+  const dragging = useRef(false)
+  const offset   = useRef({ x: 0, y: 0 })
+  const panelRef = useRef(null)
+
+  const onMouseMove = useCallback((e) => {
+    if (!dragging.current) return
+    const nx = e.clientX - offset.current.x
+    const ny = e.clientY - offset.current.y
+    // clamp ไม่ให้หลุดออกนอกหน้าจอ
+    const maxX = window.innerWidth  - (panelRef.current?.offsetWidth  ?? 220)
+    const maxY = window.innerHeight - (panelRef.current?.offsetHeight ?? 180)
+    setPos({ x: Math.max(0, Math.min(nx, maxX)), y: Math.max(0, Math.min(ny, maxY)) })
+  }, [])
+
+  const onMouseUp = useCallback(() => {
+    if (!dragging.current) return
+    dragging.current = false
+    document.body.style.userSelect = ''
+    // บันทึก position ล่าสุดลง localStorage
+    setPos(prev => {
+      try { localStorage.setItem('devSwitcherPos', JSON.stringify(prev)) } catch (_) {}
+      return prev
+    })
+  }, [])
+
+  // Clamp position on mount — ถ้า localStorage เก็บ position นอกจอ (เช่น จากหน้าจออื่น) ดึงกลับเข้ามา
+  useEffect(() => {
+    setPos(prev => {
+      const W = window.innerWidth
+      const H = window.innerHeight
+      const pw = panelRef.current?.offsetWidth  ?? 220
+      const ph = panelRef.current?.offsetHeight ?? 200
+      const cx = Math.max(0, Math.min(prev.x, W - pw))
+      const cy = Math.max(0, Math.min(prev.y, H - ph))
+      if (cx === prev.x && cy === prev.y) return prev
+      try { localStorage.setItem('devSwitcherPos', JSON.stringify({ x: cx, y: cy })) } catch (_) {}
+      return { x: cx, y: cy }
+    })
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup',   onMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup',   onMouseUp)
+    }
+  }, [onMouseMove, onMouseUp])
+
+  function startDrag(e) {
+    dragging.current = true
+    document.body.style.userSelect = 'none'
+    offset.current = {
+      x: e.clientX - pos.x,
+      y: e.clientY - pos.y,
+    }
+  }
+
   return (
-    <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 scale-90 sm:scale-100 origin-bottom-right">
-      <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-2 shadow-2xl flex flex-col gap-1 ring-4 ring-emerald-500/10">
-        <div className="px-3 py-1.5 border-b border-gray-50 dark:border-slate-800 mb-1 flex items-center gap-2">
-          <Settings2 size={14} className="text-emerald-500" />
-          <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Dev Switcher</span>
+    <div
+      ref={panelRef}
+      style={{ left: pos.x, top: pos.y }}
+      className="fixed z-[100]"
+    >
+      <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-2 shadow-2xl flex flex-col gap-1 ring-4 ring-emerald-500/10 w-52">
+
+        {/* Drag handle — ลากที่นี่เพื่อย้าย panel */}
+        <div
+          onMouseDown={startDrag}
+          className="px-3 py-1.5 border-b border-gray-50 dark:border-slate-800 mb-1 flex items-center gap-2 cursor-grab active:cursor-grabbing select-none"
+        >
+          <Settings2 size={14} className="text-emerald-500 shrink-0" />
+          <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 flex-1">Dev Switcher</span>
+          <GripVertical size={12} className="text-gray-300 dark:text-slate-700 shrink-0" />
         </div>
 
-        {/* Role Switch — กดเพื่อ mock role โดยไม่ผ่าน Firebase */}
+        {/* Role Switch */}
         <div className="flex flex-col gap-1 mb-2 px-1">
           <span className="text-[9px] font-bold text-gray-400 uppercase ml-1 mb-0.5">Roles</span>
           <div className="flex gap-1">
@@ -63,7 +141,7 @@ export function RoleSwitcher({ currentRole, onSwitch, currentDept, onDeptSwitch 
           </div>
         </div>
 
-        {/* Dept Override — พิมพ์ชื่อแผนกเพื่อ mock department โดยไม่ผ่าน Firebase */}
+        {/* Dept Override */}
         <div className="flex flex-col gap-1 px-1">
           <span className="text-[9px] font-bold text-gray-400 uppercase ml-1 mb-0.5">Dept Override</span>
           <input

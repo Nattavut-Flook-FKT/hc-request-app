@@ -128,7 +128,7 @@ export async function sendMaintenanceAlert(active) {
  * @returns {Promise<void|'cancelled'>} resolve เมื่อ GAS ตอบกลับ หรือ 'cancelled' ถ้าถูก debounce
  *                                      Resolves when GAS responds, or 'cancelled' if debounced away
  */
-export function sendStatusUpdate(docId, status, assignedToName = null, assignedAt = null, startDate = null, candidateName = null, hcId = null, offeringDate = null, clearInfo = false) {
+export function sendStatusUpdate(docId, status, assignedToName = null, assignedAt = null, startDate = null, candidateName = null, hcId = null, offeringDate = null, clearInfo = false, cvUrl = null) {
   if (!DATA_URL) {
     console.error('[sendStatusUpdate] VITE_GAS_DATA_URL not configured')
     return Promise.resolve()
@@ -143,6 +143,7 @@ export function sendStatusUpdate(docId, status, assignedToName = null, assignedA
       if (hcId)           params.set('hcId', hcId)
       if (offeringDate)   params.set('offeringDate', offeringDate)
       if (clearInfo)      params.set('clearInfo', '1')
+      if (cvUrl)          params.set('cvUrl', cvUrl)
       if (GAS_SECRET)     params.set('secret', GAS_SECRET)
       const url = `${DATA_URL}?${params.toString()}`
       const res = await fetch(url)
@@ -201,14 +202,17 @@ export async function syncBatchToSheets(requests) {
    * Ensures Sheets shows human-readable status names for HR staff.
    */
   const STATUS_MAP = {
-    Open:         'Open',
-    Recruiting:   'Active Sourcing',
-    Interviewing: 'Interviewing',
-    Offering:     'Pending Offer',
-    Onboarding:   'Pending Onboard',
-    Closed:       'Onboard',
-    Rejected:     'Turndown',
-    Cancelled:    'Job Cancelled',
+    Open:             'Open',
+    Recruiting:       'Active Sourcing',
+    Interviewing:     'Interviewing',
+    Offering:         'Pending Offer',
+    Onboarding:       'Pending Onboard',
+    Closed:           'Onboard',
+    Rejected:         'Turndown',
+    Cancelled:        'Job Cancelled',
+    OnHold:           'On hold',
+    Confidential:     'Confidential',
+    InternalTransfer: 'Internal Transfer',
   }
 
   // แปลง request objects เป็น row format ที่ GAS คาดหวัง
@@ -223,7 +227,7 @@ export async function syncBatchToSheets(requests) {
       position:        r.position || '',                                     // ตำแหน่งงาน / Job position
       jg:              r.jg || '',                                           // Job Grade / Job grade
       department:      r.department || '',                                   // แผนก / Department
-      businessUnit:    r.businessUnit || r.division || '',                   // BU หรือ division / Business unit or division
+      division:        r.businessUnit || r.division || '',                   // Division (Col H) / Division or business unit
       assignedToName:  r.assignedToName || '',                               // ชื่อ TA ที่ได้รับมอบหมาย / Assigned TA name
       status:          STATUS_MAP[r.status] || r.status || '',               // สถานะ (แปลงผ่าน STATUS_MAP) / Mapped status
       candidateName:   r.candidateName || '',                                // ชื่อผู้สมัคร / Candidate name
@@ -329,9 +333,9 @@ export async function syncFromSheets() {
     'Onboard':         'Closed',
     'Turndown':        'Rejected',      // legacy
     'Job Cancelled':   'Cancelled',
-    'On hold':         'Open',          // On hold → treat as Open in app
-    'Internal Transfer': 'Closed',      // Internal Transfer → Closed
-    'Confidential':    'Recruiting',    // Confidential → still recruiting
+    'On hold':           'OnHold',           // On hold → OnHold status
+    'Internal Transfer': 'InternalTransfer', // Internal Transfer → InternalTransfer
+    'Confidential':      'Confidential',     // Confidential → Confidential
     // passthrough — in case internal names are written directly in Sheets
     'Recruiting': 'Recruiting', 'Offering':  'Offering',
     'Onboarding': 'Onboarding', 'Closed':    'Closed',
@@ -383,11 +387,12 @@ export async function syncFromSheets() {
           if (appStatus && !(appStatus === 'Recruiting' && RECRUITING_EQUIVALENT.has(entry.currentStatus))) {
             update.status = appStatus
           }
-          if (row.pic)            update.assignedToName  = row.pic
-          if (row.candidate)      update.candidateName   = row.candidate
-          if (row.startDate)      update.startDate       = row.startDate
-          if (row.offeringDate)   update.offeringDate    = row.offeringDate
-          if (row.contractEndDate)update.contractEndDate = row.contractEndDate
+          if (row.pic)                          update.assignedToName  = row.pic
+          if (row.candidate)                    update.candidateName   = row.candidate
+          if (row.startDate)                    update.startDate       = row.startDate
+          if (row.offeringDate)                 update.offeringDate    = row.offeringDate
+          if (row.contractEndDate)              update.contractEndDate = row.contractEndDate
+          if (row.division || row.businessUnit) update.businessUnit    = row.division || row.businessUnit
           if (Object.keys(update).length > 0) { batch.update(entry.ref, update); synced++ }
         } else if (row.hcId && row.position) {
           // ── CREATE: row ใหม่ที่ TA เพิ่มใน Sheets แต่ยังไม่มีใน Firestore ─
@@ -396,7 +401,7 @@ export async function syncFromSheets() {
             hcId:           row.hcId,
             position:       row.position       || '',
             department:     row.department     || '',
-            businessUnit:   row.businessUnit   || '',
+            businessUnit:   row.division || row.businessUnit || '',
             jg:             row.jg             || '',
             requestType:    row.requestType    || 'New HC',
             employmentType: row.employmentType || 'Monthly',

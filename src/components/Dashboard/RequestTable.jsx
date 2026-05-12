@@ -90,20 +90,23 @@ import ConfirmModal from '../Shared/ConfirmModal'
 
 // ─── สี Badge ของแต่ละสถานะ (light + dark mode) ───
 const STATUS_CONFIG = {
-  Open: { label: 'Open', bg: 'bg-yellow-50 dark:bg-yellow-500/10', text: 'text-yellow-700 dark:text-yellow-500', border: 'border-yellow-200 dark:border-yellow-500/20' },
-  Recruiting: { label: 'Recruiting', bg: 'bg-emerald-50 dark:bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-500', border: 'border-emerald-200 dark:border-emerald-500/20' },
-  Interviewing: { label: 'Interviewing', bg: 'bg-orange-50 dark:bg-orange-500/10', text: 'text-orange-700 dark:text-orange-500', border: 'border-orange-200 dark:border-orange-500/20' },
-  Offering: { label: 'Offering', bg: 'bg-indigo-50 dark:bg-indigo-500/10', text: 'text-indigo-700 dark:text-indigo-500', border: 'border-indigo-200 dark:border-indigo-500/20' },
-  Onboarding: { label: 'W.Onboarding', bg: 'bg-teal-50 dark:bg-teal-500/10', text: 'text-teal-700 dark:text-teal-500', border: 'border-teal-200 dark:border-teal-500/20' },
-  Rejected: { label: 'Rejected', bg: 'bg-red-50 dark:bg-red-500/10', text: 'text-red-700 dark:text-red-500', border: 'border-red-200 dark:border-red-500/20' },
-  Closed: { label: 'Closed', bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-400', border: 'border-slate-200 dark:border-slate-700' },
-  Cancelled: { label: 'Cancelled', bg: 'bg-gray-50 dark:bg-slate-900', text: 'text-gray-500 dark:text-slate-500', border: 'border-gray-200 dark:border-slate-800' },
+  Open:             { label: 'Open',              bg: 'bg-yellow-50 dark:bg-yellow-500/10',   text: 'text-yellow-700 dark:text-yellow-500',  border: 'border-yellow-200 dark:border-yellow-500/20' },
+  Recruiting:       { label: 'Recruiting',        bg: 'bg-emerald-50 dark:bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-500', border: 'border-emerald-200 dark:border-emerald-500/20' },
+  Interviewing:     { label: 'Interviewing',      bg: 'bg-orange-50 dark:bg-orange-500/10',   text: 'text-orange-700 dark:text-orange-500',  border: 'border-orange-200 dark:border-orange-500/20' },
+  Offering:         { label: 'Offering',          bg: 'bg-indigo-50 dark:bg-indigo-500/10',   text: 'text-indigo-700 dark:text-indigo-500',  border: 'border-indigo-200 dark:border-indigo-500/20' },
+  Onboarding:       { label: 'W.Onboarding',      bg: 'bg-teal-50 dark:bg-teal-500/10',       text: 'text-teal-700 dark:text-teal-500',      border: 'border-teal-200 dark:border-teal-500/20' },
+  Rejected:         { label: 'Rejected',          bg: 'bg-red-50 dark:bg-red-500/10',         text: 'text-red-700 dark:text-red-500',        border: 'border-red-200 dark:border-red-500/20' },
+  Closed:           { label: 'Closed',            bg: 'bg-slate-100 dark:bg-slate-800',       text: 'text-slate-700 dark:text-slate-400',    border: 'border-slate-200 dark:border-slate-700' },
+  Cancelled:        { label: 'Cancelled',         bg: 'bg-gray-50 dark:bg-slate-900',         text: 'text-gray-500 dark:text-slate-500',     border: 'border-gray-200 dark:border-slate-800' },
+  OnHold:           { label: 'On Hold',           bg: 'bg-gray-100 dark:bg-slate-800/60',     text: 'text-gray-500 dark:text-slate-400',     border: 'border-gray-300 dark:border-slate-600' },
+  Confidential:     { label: 'Confidential',      bg: 'bg-gray-800 dark:bg-gray-900',         text: 'text-white',                            border: 'border-gray-900 dark:border-black' },
+  InternalTransfer: { label: 'Internal Transfer', bg: 'bg-blue-800 dark:bg-blue-900',         text: 'text-white',                            border: 'border-blue-900 dark:border-blue-950' },
 }
 
 // ─── Tab list และสถานะที่ TA สามารถเปลี่ยนได้ (ยกเว้น Open) ───
-const STATUS_TABS = ['ทั้งหมด', 'Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Rejected', 'Closed', 'Cancelled']
-const TA_STATUSES = ['Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Closed']
-const ALL_STATUSES = ['Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Rejected', 'Closed', 'Cancelled']
+const STATUS_TABS = ['ทั้งหมด', 'Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Rejected', 'Closed', 'Cancelled', 'OnHold', 'Confidential', 'InternalTransfer']
+const TA_STATUSES = ['Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Closed', 'OnHold', 'Confidential', 'InternalTransfer']
+const ALL_STATUSES = ['Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Rejected', 'Closed', 'Cancelled', 'OnHold', 'Confidential', 'InternalTransfer']
 
 // ค้นหา Email จากชื่อแบบ Dynamic (ตัดชื่อจริงมาเทียบกับ allTAs)
 function getAssignedEmail(req, allTAs = []) {
@@ -147,6 +150,8 @@ function StatusBadge({ status }) {
 function getDaysOpen(req) {
   const createdAt = req.createdAt?.toDate?.()
   if (!createdAt) return null
+  // นับ SLA เฉพาะ request ที่เปิดในปี 2026 เป็นต้นไป
+  if (createdAt.getFullYear() < 2026) return null
 
   const DONE = new Set(['Closed', 'Cancelled'])
 
@@ -216,8 +221,19 @@ function SLABadge({ req }) {
 }
 
 // สร้าง entry สำหรับ statusHistory array
+/**
+ * shortName — ตัดนามสกุลออก เหลือแค่ชื่อ + nickname ในวงเล็บ
+ * "Jitlada (Mo) Mooltha" → "Jitlada (Mo)"
+ * "Somchai Smith"        → "Somchai Smith"  (ไม่มีวงเล็บ → คงเดิม)
+ */
+function shortName(fullName) {
+  if (!fullName) return fullName
+  const match = fullName.match(/^.+?\)/)
+  return match ? match[0].trim() : fullName
+}
+
 function buildHistoryEntry(status, user) {
-  return { status, changedAt: new Date().toISOString(), changedBy: user.email, changedByName: user.displayName }
+  return { status, changedAt: new Date().toISOString(), changedBy: user.email, changedByName: shortName(user.displayName) }
 }
 
 function SortIcon({ field, sortField, sortDir }) {
@@ -260,6 +276,7 @@ export default function RequestTable({
   const [candidateEditId, setCandidateEditId] = useState(null)   // id ที่กำลัง edit
   const [candidateEditVal, setCandidateEditVal] = useState('')   // ค่าที่กำลังพิมพ์
   const [offeringCandidateName, setOfferingCandidateName] = useState('')
+  const [offeringCvUrl, setOfferingCvUrl] = useState('')
   // Reject modal: กรอกเหตุผลก่อน Reject
   const [rejectModal, setRejectModal] = useState({ isOpen: false, id: null })
   const [rejectReason, setRejectReason] = useState('')
@@ -368,8 +385,8 @@ export default function RequestTable({
     setUpdating(id)
     const req = requests.find((r) => r.id === id)
     try {
-      await updateDoc(doc(db, 'hc_requests', id), { status: 'Recruiting', assignedTo: user.email, assignedToName: user.displayName, assignedAt: serverTimestamp(), statusHistory: arrayUnion(buildHistoryEntry('Recruiting', user)) })
-      sendStatusUpdate(id, 'Recruiting', user.displayName, new Date().toISOString(), null, null, req?.hcId)
+      await updateDoc(doc(db, 'hc_requests', id), { status: 'Recruiting', assignedTo: user.email, assignedToName: shortName(user.displayName), assignedAt: serverTimestamp(), statusHistory: arrayUnion(buildHistoryEntry('Recruiting', user)) })
+      sendStatusUpdate(id, 'Recruiting', shortName(user.displayName), new Date().toISOString(), null, null, req?.hcId)
       logAudit({ requestId: id, action: 'Assign', by: user.email, byName: user.displayName, fromStatus: req?.status, toStatus: 'Recruiting', position: req?.position, department: req?.department })
     } catch (err) {
       console.error('[handleClaim]', err)
@@ -383,15 +400,20 @@ export default function RequestTable({
   async function handleStatusChange(id, newStatus, extraData = {}) {
     const req = requests.find((r) => r.id === id)
     try {
+      // กรอง undefined ออกจาก extraData ก่อน spread
+      // Firestore SDK v9 treats undefined as deleteField() — ต้องไม่ปล่อยให้ลบ field โดยไม่ตั้งใจ
+      const safeExtra = Object.fromEntries(
+        Object.entries(extraData).filter(([, v]) => v !== undefined && v !== null)
+      )
       const updateData = {
         status: newStatus,
-        ...extraData,
+        ...safeExtra,
         statusHistory: arrayUnion(buildHistoryEntry(newStatus, user)),
       }
 
       if (req.status === 'Open' && ['Recruiting', 'Interviewing', 'Offering', 'Closed'].includes(newStatus) && !req.assignedTo) {
         updateData.assignedTo = user.email
-        updateData.assignedToName = user.displayName
+        updateData.assignedToName = shortName(user.displayName)
         updateData.assignedAt = serverTimestamp()
       }
 
@@ -407,6 +429,7 @@ export default function RequestTable({
       if (CLEAR_CANDIDATE.includes(newStatus) && (req.candidateName || req.startDate)) {
         updateData.candidateName = ''
         updateData.startDate = ''
+        updateData.cvUrl = ''
       }
 
       await updateDoc(doc(db, 'hc_requests', id), updateData)
@@ -414,7 +437,7 @@ export default function RequestTable({
       const offeringDate = PRE_OFFERING.includes(newStatus) && req.offeringDate ? 'CLEAR'
         : (updateData.offeringDate || req.offeringDate || null)
       const clearInfo = CLEAR_CANDIDATE.includes(newStatus) && !!(req.candidateName || req.startDate)
-      sendStatusUpdate(id, newStatus, updateData.assignedToName || req.assignedToName, assignedAt, extraData.startDate || null, extraData.candidateName || null, req?.hcId, offeringDate, clearInfo)
+      sendStatusUpdate(id, newStatus, updateData.assignedToName || req.assignedToName, assignedAt, extraData.startDate || null, extraData.candidateName || null, req?.hcId, offeringDate, clearInfo, extraData.cvUrl || null)
       logAudit({
         requestId: id,
         action: newStatus === 'Rejected' ? 'Rejected' : 'StatusChange',
@@ -438,21 +461,22 @@ export default function RequestTable({
   async function handleOfferingConfirm() {
     if (!offeringModal.id) return
     if (offeringModal.mode === 'offering') {
-      // Offering: กรอกชื่อ candidate (optional) — offeringDate auto-set ใน handleStatusChange
-      await handleStatusChange(offeringModal.id, 'Offering', {
-        candidateName: offeringCandidateName.trim() || undefined,
-      })
+      // Offering: กรอกชื่อ candidate (optional) + CV URL (optional)
+      const extra = {}
+      if (offeringCandidateName.trim()) extra.candidateName = offeringCandidateName.trim()
+      if (offeringCvUrl.trim())         extra.cvUrl         = offeringCvUrl.trim()
+      await handleStatusChange(offeringModal.id, 'Offering', extra)
     } else {
       // Onboarding: ต้องมี startDate
       if (!offeringStartDate) return
-      await handleStatusChange(offeringModal.id, 'Onboarding', {
-        startDate: offeringStartDate,
-        candidateName: offeringCandidateName.trim() || undefined,
-      })
+      const extra = { startDate: offeringStartDate }
+      if (offeringCandidateName.trim()) extra.candidateName = offeringCandidateName.trim()
+      await handleStatusChange(offeringModal.id, 'Onboarding', extra)
     }
     setOfferingModal({ isOpen: false, id: null, mode: 'onboarding' })
     setOfferingStartDate('')
     setOfferingCandidateName('')
+    setOfferingCvUrl('')
   }
 
   // Reject confirm: บันทึก Rejected (หยุดที่ Rejected → TA กด "Recruit ใหม่" เองเมื่อพร้อม)
@@ -718,7 +742,7 @@ export default function RequestTable({
     if (filterMyCases) {
       base = role === 'admin'
         ? base.filter(r => Boolean(r.assignedTo) || Boolean(r.assignedToName))
-        : base.filter(r => getAssignedEmail(r, allTAs) === user.email?.toLowerCase() || (r.assignedToName && r.assignedToName === user.displayName))
+        : base.filter(r => getAssignedEmail(r, allTAs) === user.email?.toLowerCase() || (r.assignedToName && (r.assignedToName === user.displayName || r.assignedToName === shortName(user.displayName))))
     }
 
     const counts = { ทั้งหมด: base.length }
@@ -742,7 +766,7 @@ export default function RequestTable({
     if (filterMyCases) {
       list = role === 'admin'
         ? list.filter((r) => Boolean(r.assignedTo) || Boolean(r.assignedToName))
-        : list.filter((r) => getAssignedEmail(r, allTAs) === user.email?.toLowerCase() || (r.assignedToName && r.assignedToName === user.displayName))
+        : list.filter((r) => getAssignedEmail(r, allTAs) === user.email?.toLowerCase() || (r.assignedToName && (r.assignedToName === user.displayName || r.assignedToName === shortName(user.displayName))))
     }
     if (activeTab !== 'ทั้งหมด') list = list.filter((r) => r.status === activeTab)
     if (filterEmpType)  list = list.filter((r) => r.employmentType === filterEmpType)
@@ -766,8 +790,16 @@ export default function RequestTable({
       list = list.filter((r) =>
         r.position?.toLowerCase().includes(q) ||
         r.department?.toLowerCase().includes(q) ||
+        r.businessUnit?.toLowerCase().includes(q) ||
         r.requesterName?.toLowerCase().includes(q) ||
-        r.id?.toLowerCase().includes(q)
+        r.assignedToName?.toLowerCase().includes(q) ||
+        r.candidateName?.toLowerCase().includes(q) ||
+        r.hcId?.toLowerCase().includes(q) ||
+        r.id?.toLowerCase().includes(q) ||
+        r.jg?.toLowerCase().includes(q) ||
+        r.requestType?.toLowerCase().includes(q) ||
+        r.employmentType?.toLowerCase().includes(q) ||
+        (STATUS_CONFIG[r.status]?.label ?? r.status)?.toLowerCase().includes(q)
       )
     }
     list.sort((a, b) => {
@@ -818,7 +850,7 @@ export default function RequestTable({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="ค้นหาตำแหน่ง, แผนก, ผู้ยื่น..."
+            placeholder="ค้นหาตำแหน่ง, แผนก, TA, ผู้สมัคร, HCID, สถานะ..."
             className="w-full pl-8 pr-10 py-1.5 text-sm border border-gray-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[#00ce7c]/30 transition-all font-medium"
           />
           {search && (
@@ -854,10 +886,11 @@ export default function RequestTable({
       </div>
 
       {/* Status Tabs */}
-      <div className="flex items-center gap-1 border-b border-gray-100 dark:border-slate-800 overflow-x-auto pb-0">
+      <div className="flex flex-wrap items-center gap-1 border-b border-gray-100 dark:border-slate-800 pb-0">
         {STATUS_TABS.map((tab) => {
           const active = activeTab === tab
           const count = tabCounts[tab] ?? 0
+          const tabLabel = STATUS_CONFIG[tab]?.label ?? tab
           return (
             <button
               key={tab}
@@ -867,7 +900,7 @@ export default function RequestTable({
                   : 'border-transparent text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300'
                 }`}
             >
-              {tab}
+              {tabLabel}
               {count > 0 && (
                 <span className={`text-[10px] px-1.5 py-0.5 rounded-full leading-none transition-colors ${active
                     ? 'bg-[#008065] text-white'
@@ -1067,7 +1100,9 @@ export default function RequestTable({
                               }}
                               className="text-[10px] font-bold border border-emerald-500/30 rounded-lg px-2 py-1 bg-white dark:bg-slate-900 text-[#008065] dark:text-emerald-400 focus:outline-none cursor-pointer uppercase tracking-tight"
                             >
-                              {getAvailableStatuses(req.status, isAdmin).map((s) => <option key={s} value={s}>{s}</option>)}
+                              {getAvailableStatuses(req.status, isAdmin).map((s) => (
+                                <option key={s} value={s}>{STATUS_CONFIG[s]?.label ?? s}</option>
+                              ))}
                             </select>
                           )}
                           {/* Offering / Onboarding → Reject พร้อมเหตุผล */}
@@ -1299,8 +1334,8 @@ export default function RequestTable({
                             </div>
                           </div>
 
-                          {/* ── CV Files — TA อัพโหลด/ลบได้, Owner (manager) ดูอย่างเดียว ── */}
-                          {(isTA || isOwner) && (
+                          {/* ── CV Files — TA อัพโหลด/ลบได้, Manager ดูอย่างเดียว ── */}
+                          {(isTA || role === 'manager' || isOwner) && (
                             <div className="mt-4 border border-gray-100 dark:border-slate-800 rounded-2xl p-4 bg-white dark:bg-slate-900">
                               <div className="flex items-center justify-between mb-3">
                                 <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
@@ -1571,6 +1606,22 @@ export default function RequestTable({
               autoFocus
             />
 
+            {offeringModal.mode === 'offering' && (
+              <>
+                <label className="block text-[10px] font-black text-gray-500 dark:text-slate-500 uppercase tracking-widest mb-2">
+                  ลิ้ง CV (optional)
+                </label>
+                <input
+                  id="offering-cv-url" name="offering-cv-url"
+                  type="url"
+                  value={offeringCvUrl}
+                  onChange={(e) => setOfferingCvUrl(e.target.value)}
+                  placeholder="https://drive.google.com/..."
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-sm font-medium mb-4"
+                />
+              </>
+            )}
+
             {offeringModal.mode === 'onboarding' && (
               <>
                 <label className="block text-[10px] font-black text-gray-500 dark:text-slate-500 uppercase tracking-widest mb-2">วันเริ่มงาน *</label>
@@ -1586,7 +1637,7 @@ export default function RequestTable({
 
             <div className="flex gap-3 mt-6">
               <button
-                onClick={() => { setOfferingModal({ isOpen: false, id: null, mode: 'onboarding' }); setOfferingStartDate(''); setOfferingCandidateName('') }}
+                onClick={() => { setOfferingModal({ isOpen: false, id: null, mode: 'onboarding' }); setOfferingStartDate(''); setOfferingCandidateName(''); setOfferingCvUrl('') }}
                 className="flex-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
               >
                 ยกเลิก

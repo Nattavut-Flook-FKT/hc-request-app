@@ -29,9 +29,16 @@ let cache = null
 // Stores the Unix timestamp (ms) of the last successful fetch.
 let cacheTime = null
 
+// pendingPromise — deduplicates concurrent calls: ถ้ามี in-flight request อยู่แล้ว
+// callers ถัดไปจะ await promise เดิมแทนที่จะยิง HTTP ซ้ำ
+let pendingPromise = null
+
 // TTL 15 นาที: ถ้าข้อมูลในแคชอายุน้อยกว่านี้จะไม่ fetch ซ้ำ
 // Cache TTL of 15 minutes: if cached data is fresher than this, skip re-fetching.
 const CACHE_TTL_MS = 15 * 60 * 1000 // 15 นาที
+
+// sessionStorage key สำหรับเก็บ cache ข้ามการ refresh หน้า
+const SESSION_KEY = 'hcapp_sheets_cache'
 
 /**
  * ดึงข้อมูล master data จาก Google Apps Script endpoint
@@ -56,35 +63,60 @@ const CACHE_TTL_MS = 15 * 60 * 1000 // 15 นาที
 export async function fetchSheetsData() {
   const now = Date.now()
 
-  // ตรวจสอบ cache: ถ้ายังสดอยู่ให้คืนค่าทันทีโดยไม่ fetch
-  // Cache hit: return early if the cached data is still within TTL
+  // 1. In-memory cache hit (fastest path — ไม่ต้อง deserialize)
   if (cache && cacheTime && now - cacheTime < CACHE_TTL_MS) return cache
+
+  // 2. sessionStorage cache hit — ใช้ข้ามการ refresh หน้า (ป้องกัน GAS cold start ทุก reload)
+  try {
+    const stored = sessionStorage.getItem(SESSION_KEY)
+    if (stored) {
+      const { data, time } = JSON.parse(stored)
+      if (now - time < CACHE_TTL_MS) {
+        cache = data
+        cacheTime = time
+        return data
+      }
+    }
+  } catch (_) { /* sessionStorage ไม่รองรับ (private browsing ฯลฯ) — ข้ามไป */ }
+
+  // 3. Deduplicate in-flight requests — ถ้ามี HTTP call ค้างอยู่แล้ว ให้ await อันเดิม
+  //    ป้องกัน App.jsx + HCRequestForm ยิง GAS พร้อมกัน 2 ครั้งในการ load ครั้งแรก
+  if (pendingPromise) return pendingPromise
 
   const url = import.meta.env.VITE_GAS_DATA_URL
   if (!url) {
-    // environment variable ไม่ได้ตั้งค่า — คืนค่าว่างเพื่อป้องกัน crash
-    // ENV var missing — return empty structure to prevent downstream crashes
     console.warn('VITE_GAS_DATA_URL not set')
     return { managers: {}, positions: [], employees: {} }
   }
 
-  try {
-    const res = await fetch(url)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
+  pendingPromise = (async () => {
+    try {
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
 
-    // อัปเดต cache และเวลาที่ fetch สำเร็จ
-    // Update the cache and record the fetch timestamp on success
-    cache = data
-    cacheTime = now
-    return data
-  } catch (err) {
-    console.error('Failed to fetch sheets data:', err)
-    // คืน cache เก่าถ้ามี ไม่งั้นคืนค่าว่าง (ไม่ save cache เพื่อให้ retry ครั้งถัดไป)
-    // Return stale cache if available; otherwise return empty structure.
-    // Intentionally do NOT update cacheTime so the next call will retry.
-    return cache ?? { managers: {}, positions: [], employees: {} }
-  }
+      // อัปเดต in-memory cache
+      cache = data
+      cacheTime = now
+
+      // อัปเดต sessionStorage cache เพื่อให้ page refresh ครั้งถัดไปเร็ว
+      try {
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify({ data, time: now }))
+      } catch (_) { /* sessionStorage quota exceeded — ข้ามไป */ }
+
+      return data
+    } catch (err) {
+      console.error('Failed to fetch sheets data:', err)
+      // คืน stale cache ถ้ามี ไม่งั้นคืนค่าว่าง
+      return cache ?? { managers: {}, positions: [], employees: {} }
+    } finally {
+      // เมื่อ request เสร็จ (ไม่ว่าจะสำเร็จหรือล้มเหลว) ล้าง pendingPromise
+      // เพื่อให้ retry ครั้งถัดไปทำ HTTP call ใหม่ได้ถ้าจำเป็น
+      pendingPromise = null
+    }
+  })()
+
+  return pendingPromise
 }
 
 /**
