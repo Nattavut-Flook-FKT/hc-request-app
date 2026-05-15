@@ -78,8 +78,8 @@ const STAT_CONFIG = [
   },
   {
     key: 'avgDaysToFill',
-    label: 'Avg Fill Time',
-    labelTh: 'เฉลี่ยวันปิดเคส',
+    label: 'Avg SLA Offer',
+    labelTh: 'เฉลี่ยวันถึง Offer',
     icon: Timer,
     color: 'text-purple-600 dark:text-purple-400',
     bg: 'bg-purple-50 dark:bg-purple-500/10',

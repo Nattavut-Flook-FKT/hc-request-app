@@ -3,9 +3,11 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * ตาราง pivot แสดงจำนวน HC Request ที่เปิดใหม่แต่ละเดือน
  * แถว = แผนก หรือ ตำแหน่งงาน (สลับได้)
- * คอลัมน์ = 6 เดือนล่าสุด + คอลัมน์รวม
+ * คอลัมน์ = 12 เดือน (ม.ค.–ธ.ค.) ของปีที่เลือก + คอลัมน์รวม
  *
  * ฟีเจอร์:
+ *   - Year selector: กดเลือกปี (ดึงจากข้อมูล + ปีปัจจุบัน)
+ *   - แสดงเดือนล่วงหน้า (future months ของปีนั้นก็โชว์)
  *   - Toggle กลุ่มข้อมูล: แผนก (department) | ตำแหน่ง (position)
  *   - Search filter กรองชื่อแถว
  *   - Heat-map สีเขียว: ยิ่งเข้มยิ่งมี request เยอะ
@@ -13,42 +15,36 @@
  *
  * Props:
  *   requests {Array} ข้อมูล HC Request ทั้งหมด (จาก Firestore)
- *
- * หมายเหตุ:
- *   - กรอง Cancelled ออก เพราะไม่ถือเป็น active request
- *   - นับตามวันที่ createdAt (วันที่เปิด request) ไม่ใช่วันที่ปิด
- *   - ถ้า rows = 0 component จะ return null (ไม่แสดงอะไร)
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import { useMemo, useState } from 'react'
-import { Search } from 'lucide-react'
+import { Search, Download } from 'lucide-react'
 
 // ชื่อเดือนภาษาไทย index 0 = ม.ค.
 const MONTH_TH = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
 
 /**
- * สร้าง array ของ 6 เดือนล่าสุด รูปแบบ "YYYY-MM"
- * เช่น ["2025-11", "2025-12", "2026-01", "2026-02", "2026-03", "2026-04"]
+ * แปลง createdAt เป็น Date object
+ * รองรับทั้ง Firestore Timestamp (imported) และ ISO string (web app)
  */
-function getLast6Months() {
-  const now = new Date()
-  const months = []
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-  }
-  return months
+function toDate(v) {
+  if (!v) return null
+  if (typeof v?.toDate === 'function') return v.toDate()
+  const d = new Date(v)
+  return isNaN(d.getTime()) ? null : d
+}
+
+/** สร้าง array 12 เดือนของปีที่ระบุ ["YYYY-01", ..., "YYYY-12"] */
+function getYearMonths(year) {
+  return Array.from({ length: 12 }, (_, i) =>
+    `${year}-${String(i + 1).padStart(2, '0')}`
+  )
 }
 
 /**
  * คืน Tailwind class สำหรับ heat-map coloring
  * intensity = val / maxCell (0–1)
- *   0       → ไม่มีสี (คืน null)
- *   0–0.25  → เขียวอ่อนมาก
- *   0.25–0.5 → เขียวอ่อน
- *   0.5–0.75 → เขียวกลาง
- *   0.75+   → เขียวเข้ม (brand color)
  */
 function cellClass(intensity) {
   if (intensity <= 0)   return null
@@ -61,11 +57,22 @@ function cellClass(intensity) {
 // ════════════════════════════════════════════════════════════════
 export default function ManpowerPivot({ requests }) {
   const [search,  setSearch]  = useState('')
-  // groupBy: 'department' = แถวคือแผนก | 'position' = แถวคือตำแหน่ง
   const [groupBy, setGroupBy] = useState('department')
 
-  // 6 เดือนล่าสุด — คำนวณครั้งเดียวตอน mount
-  const months = useMemo(() => getLast6Months(), [])
+  const currentYear = new Date().getFullYear()
+  const [selectedYear, setSelectedYear] = useState(currentYear)
+
+  /** ปีที่แสดงใน selector — fixed 2024–2027 */
+  const availableYears = [2024, 2025, 2026, 2027]
+
+  /** 12 เดือนของปีที่เลือก */
+  const months = useMemo(() => getYearMonths(selectedYear), [selectedYear])
+
+  /** เดือนปัจจุบัน "YYYY-MM" เพื่อ mark future months */
+  const nowKey = useMemo(() => {
+    const n = new Date()
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`
+  }, [])
 
   /**
    * สร้าง rows ของตาราง pivot
@@ -78,13 +85,12 @@ export default function ManpowerPivot({ requests }) {
     requests
       .filter(r => r.status !== 'Cancelled')
       .forEach(r => {
-        const d = r.createdAt?.toDate?.()
+        const d = toDate(r.createdAt)
         if (!d) return
 
         const moKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-        if (!months.includes(moKey)) return // ข้ามถ้าเกิน 6 เดือนย้อนหลัง
+        if (!months.includes(moKey)) return // ข้ามถ้าไม่อยู่ในปีที่เลือก
 
-        // key คือชื่อแผนก หรือชื่อตำแหน่ง ขึ้นอยู่กับ groupBy
         const key = groupBy === 'department'
           ? (r.department || 'ไม่ระบุ')
           : (r.position   || 'ไม่ระบุ')
@@ -96,17 +102,14 @@ export default function ManpowerPivot({ requests }) {
 
     const rows = Object.values(map).sort((a, b) => b.total - a.total)
 
-    // maxCell ใช้เป็น scale ของ heat-map (ค่าสูงสุดในทุก cell)
     let maxCell = 1
     rows.forEach(r => months.forEach(m => { if ((r[m] || 0) > maxCell) maxCell = r[m] }))
 
-    // totalsRow = ผลรวมแต่ละคอลัมน์เดือน (แถว footer)
     const totalsRow = {}
     months.forEach(m => {
       totalsRow[m] = rows.reduce((s, r) => s + (r[m] || 0), 0)
     })
 
-    // grandTotal = ผลรวมทั้งหมด (มุมขวาล่าง)
     const grandTotal = rows.reduce((s, r) => s + r.total, 0)
 
     return { rows, maxCell, totalsRow, grandTotal }
@@ -117,28 +120,100 @@ export default function ManpowerPivot({ requests }) {
     ? rows.filter(r => r.key.toLowerCase().includes(search.toLowerCase()))
     : rows
 
+  /** Export ตารางที่แสดงอยู่เป็น CSV (UTF-8 BOM เพื่อให้ Excel อ่านภาษาไทยได้) */
+  function handleExportCSV() {
+    const groupLabel = groupBy === 'department' ? 'แผนก' : 'ตำแหน่ง'
+
+    // Header row: [แผนก, ม.ค.2026, ก.พ.2026, ..., รวม]
+    const headers = [
+      groupLabel,
+      ...months.map(m => {
+        const [yr, mo] = m.split('-')
+        return `${MONTH_TH[Number(mo) - 1]}${yr}`
+      }),
+      'รวม',
+    ]
+
+    // Data rows
+    const dataRows = filtered.map(row => [
+      row.key,
+      ...months.map(m => row[m] || 0),
+      row.total,
+    ])
+
+    // Totals row
+    const totalsData = [
+      'รวมทั้งหมด',
+      ...months.map(m => totalsRow[m] || 0),
+      grandTotal,
+    ]
+
+    const allRows = [headers, ...dataRows, totalsData]
+    const csv = allRows.map(row => row.map(c => `"${c}"`).join(',')).join('\n')
+
+    // BOM + download
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `headcount-breakdown-${selectedYear}-${groupBy}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   // ไม่มีข้อมูลเลย → ไม่แสดง component
-  if (rows.length === 0) return null
+  if (rows.length === 0 && availableYears.length === 0) return null
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden">
 
-      {/* ── Header: ชื่อ + คำอธิบาย + controls ──────────────── */}
+      {/* ── Header ──────────────────────────────────────────── */}
       <div className="px-6 pt-5 pb-4 border-b border-gray-50 dark:border-slate-800">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h3 className="text-sm font-black text-gray-800 dark:text-gray-100 tracking-tight">
-              Headcount Breakdown
-            </h3>
-            {/* คำอธิบายว่าตารางนี้แสดงอะไร */}
-            <p className="text-xs text-gray-500 dark:text-slate-400 mt-1 leading-relaxed">
-              จำนวน HC Request ที่<span className="font-bold">เปิดใหม่</span>แต่ละเดือน แยกตาม{groupBy === 'department' ? 'แผนก' : 'ตำแหน่ง'} · 6 เดือนล่าสุด ·{' '}
-              <span className="font-bold text-[#008065]">{grandTotal} requests</span>
-            </p>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+
+          {/* ชื่อ + คำอธิบาย + Year selector */}
+          <div className="flex flex-col gap-2">
+            <div>
+              <h3 className="text-sm font-black text-gray-800 dark:text-gray-100 tracking-tight">
+                Headcount Breakdown
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                จำนวน HC Request ที่<span className="font-bold">เปิดใหม่</span>แต่ละเดือน แยกตาม{groupBy === 'department' ? 'แผนก' : 'ตำแหน่ง'} ·{' '}
+                <span className="font-bold text-[#008065]">{grandTotal} requests</span>
+                {' '}ในปี {selectedYear}
+              </p>
+            </div>
+
+            {/* Year selector chips */}
+            <div className="flex items-center gap-1.5">
+              {availableYears.map(yr => (
+                <button
+                  key={yr}
+                  onClick={() => setSelectedYear(yr)}
+                  className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wider transition-all border ${
+                    selectedYear === yr
+                      ? 'bg-[#008065] text-white border-[#008065] shadow-sm'
+                      : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700 hover:border-[#008065] hover:text-[#008065]'
+                  }`}
+                >
+                  {yr}
+                </button>
+              ))}
+            </div>
           </div>
 
+          {/* Controls: export + toggle + search */}
           <div className="flex items-center gap-2">
-            {/* Toggle แถวตาม department หรือ position */}
+            {/* Export CSV */}
+            <button
+              onClick={handleExportCSV}
+              title={`Export CSV ปี ${selectedYear}`}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-500 dark:text-slate-400 hover:border-[#008065] hover:text-[#008065] dark:hover:text-emerald-400 text-[10px] font-black uppercase tracking-wider transition-all"
+            >
+              <Download size={12} />
+              CSV
+            </button>
+
             <div className="flex items-center gap-0.5 p-0.5 bg-gray-100 dark:bg-slate-800 rounded-lg">
               {[{ v: 'department', l: 'แผนก' }, { v: 'position', l: 'ตำแหน่ง' }].map(t => (
                 <button
@@ -155,7 +230,6 @@ export default function ManpowerPivot({ requests }) {
               ))}
             </div>
 
-            {/* Search กรองชื่อแถว */}
             <div className="relative">
               <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-600" />
               <input
@@ -170,31 +244,40 @@ export default function ManpowerPivot({ requests }) {
         </div>
       </div>
 
-      {/* ── Pivot Table ───────────────────────────────────────── */}
+      {/* ── Pivot Table ──────────────────────────────────────── */}
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="border-b border-gray-100 dark:border-slate-800">
-              {/* Column หัวแถว — sticky เพื่อเลื่อนแนวนอนได้ */}
+              {/* Column หัวแถว — sticky */}
               <th className="px-5 py-3 text-left text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest sticky left-0 bg-white dark:bg-slate-900 min-w-[160px] z-10">
                 {groupBy === 'department' ? 'แผนก' : 'ตำแหน่ง'}
               </th>
 
-              {/* Column header ของแต่ละเดือน */}
+              {/* Month columns */}
               {months.map(m => {
-                const [yr, mo] = m.split('-')
+                const [, mo] = m.split('-')
+                const isFuture = m > nowKey
                 return (
                   <th
                     key={m}
-                    className="px-3 py-3 text-center text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest min-w-[56px]"
+                    className={`px-3 py-3 text-center text-[10px] font-black uppercase tracking-widest min-w-[52px] ${
+                      isFuture
+                        ? 'text-gray-300 dark:text-slate-700'
+                        : 'text-gray-400 dark:text-slate-600'
+                    }`}
                   >
-                    <span className="block">{MONTH_TH[Number(mo) - 1]}</span>
-                    <span className="text-[8px] font-bold text-gray-300 dark:text-slate-700">{yr}</span>
+                    {MONTH_TH[Number(mo) - 1]}
+                    {isFuture && (
+                      <span className="block text-[7px] font-semibold text-gray-300 dark:text-slate-700 normal-case tracking-normal">
+                        ล่วงหน้า
+                      </span>
+                    )}
                   </th>
                 )
               })}
 
-              {/* Column รวม — สีเขียวเพื่อเน้น */}
+              {/* Column รวม */}
               <th className="px-4 py-3 text-center text-[10px] font-black text-[#008065] dark:text-emerald-400 uppercase tracking-widest min-w-[52px]">
                 รวม
               </th>
@@ -205,7 +288,7 @@ export default function ManpowerPivot({ requests }) {
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={months.length + 2} className="px-5 py-10 text-center text-xs text-gray-400 dark:text-slate-600">
-                  ไม่พบข้อมูล
+                  ไม่มีข้อมูลในปี {selectedYear}
                 </td>
               </tr>
             ) : (
@@ -213,33 +296,30 @@ export default function ManpowerPivot({ requests }) {
                 <tr
                   key={row.key}
                   className={`border-b border-gray-50 dark:border-slate-800/50 hover:bg-gray-50/80 dark:hover:bg-slate-800/30 transition-colors ${
-                    i % 2 !== 0 ? 'bg-gray-50/30 dark:bg-slate-800/10' : '' // zebra stripe
+                    i % 2 !== 0 ? 'bg-gray-50/30 dark:bg-slate-800/10' : ''
                   }`}
                 >
-                  {/* ชื่อแผนก/ตำแหน่ง — sticky ซ้ายมือ */}
                   <td className="px-5 py-2.5 text-xs font-semibold text-gray-700 dark:text-gray-300 sticky left-0 bg-inherit z-10 whitespace-nowrap">
                     {row.key}
                   </td>
 
-                  {/* Cell แต่ละเดือน — แสดง count พร้อม heat-map color */}
                   {months.map(m => {
                     const val = row[m] || 0
                     const cls = cellClass(val / maxCell)
+                    const isFuture = m > nowKey
                     return (
-                      <td key={m} className="px-3 py-2.5 text-center">
+                      <td key={m} className={`px-3 py-2.5 text-center ${isFuture ? 'opacity-50' : ''}`}>
                         {val > 0 ? (
                           <span className={`inline-flex items-center justify-center min-w-[22px] h-6 px-1.5 rounded text-[11px] font-black tabular-nums ${cls}`}>
                             {val}
                           </span>
                         ) : (
-                          // ไม่มีข้อมูลแสดงเส้นประ
                           <span className="text-gray-200 dark:text-slate-800 text-[10px] select-none">—</span>
                         )}
                       </td>
                     )
                   })}
 
-                  {/* ยอดรวมของแถว */}
                   <td className="px-4 py-2.5 text-center">
                     <span className="text-[12px] font-black tabular-nums text-[#008065] dark:text-emerald-400">
                       {row.total}
@@ -250,21 +330,23 @@ export default function ManpowerPivot({ requests }) {
             )}
           </tbody>
 
-          {/* ── Total row ───────────────────────────────────────── */}
+          {/* ── Total row ──────────────────────────────────────── */}
           {filtered.length > 0 && (
             <tfoot>
               <tr className="border-t-2 border-gray-200 dark:border-slate-700">
                 <td className="px-5 py-3 text-[10px] font-black text-gray-500 dark:text-slate-400 uppercase tracking-wider sticky left-0 bg-gray-50 dark:bg-slate-800/60 z-10">
                   รวมทั้งหมด
                 </td>
-                {months.map(m => (
-                  <td key={m} className="px-3 py-3 text-center bg-gray-50 dark:bg-slate-800/60">
-                    <span className="text-[12px] font-black tabular-nums text-gray-600 dark:text-slate-300">
-                      {totalsRow[m] || 0}
-                    </span>
-                  </td>
-                ))}
-                {/* Grand total มุมขวาล่าง */}
+                {months.map(m => {
+                  const isFuture = m > nowKey
+                  return (
+                    <td key={m} className={`px-3 py-3 text-center bg-gray-50 dark:bg-slate-800/60 ${isFuture ? 'opacity-50' : ''}`}>
+                      <span className="text-[12px] font-black tabular-nums text-gray-600 dark:text-slate-300">
+                        {totalsRow[m] || 0}
+                      </span>
+                    </td>
+                  )
+                })}
                 <td className="px-4 py-3 text-center bg-gray-50 dark:bg-slate-800/60">
                   <span className="text-[13px] font-black tabular-nums text-[#008065] dark:text-emerald-400">
                     {grandTotal}
@@ -282,21 +364,20 @@ export default function ManpowerPivot({ requests }) {
           สีเซลล์ = ความหนาแน่นของ Request ในเดือนนั้น:
         </span>
         <div className="flex items-center gap-1.5">
-          {/* แสดง scale จากน้อย (อ่อน) ไปมาก (เข้ม) */}
           {[
             { cls: 'bg-emerald-50 dark:bg-emerald-900/20', label: '1 (น้อย)' },
             { cls: 'bg-emerald-100 dark:bg-emerald-900/30', label: '' },
             { cls: 'bg-emerald-200 dark:bg-emerald-900/50', label: '' },
             { cls: 'bg-[#008065]', label: `${maxCell}+ (มาก)` },
-          ].map((s, i) => (
-            <span key={i} className="flex items-center gap-1">
+          ].map((s, idx) => (
+            <span key={idx} className="flex items-center gap-1">
               <span className={`w-5 h-4 rounded-sm ${s.cls}`} />
               {s.label && <span className="text-[9px] font-semibold text-gray-400 dark:text-slate-600">{s.label}</span>}
             </span>
           ))}
         </div>
         <span className="ml-auto text-[10px] text-gray-300 dark:text-slate-700">
-          — = ไม่มี Request ในเดือนนั้น
+          — = ไม่มี Request · เดือนล่วงหน้า = opacity ลด
         </span>
       </div>
     </div>

@@ -264,6 +264,7 @@ export default function RequestTable({
   const [filterDept,     setFilterDept]     = useState('')
   const [filterBU,       setFilterBU]       = useState('')
   const [filterAssigned, setFilterAssigned] = useState('')
+  const [filterYear,     setFilterYear]     = useState('')
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo,   setFilterDateTo]   = useState('')
   const [showFilterBar,  setShowFilterBar]  = useState(false)
@@ -303,31 +304,16 @@ export default function RequestTable({
   // ─── Realtime listener: ดึง hc_requests จาก Firestore แบบ realtime ───
   // ใช้ Page Visibility API → หยุด listener เมื่อ tab ไม่ active เพื่อลด Firestore reads
   useEffect(() => {
-    const q = query(collection(db, 'hc_requests'), orderBy('createdAt', 'desc'), limit(500))
+    const q = query(collection(db, 'hc_requests'), orderBy('createdAt', 'desc'), limit(2000))
     let unsubscribe = null
 
     const handleSnapshot = (snapshot) => {
       const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
       setRequests(data)
       setLoading(false)
-      const active = data.filter((r) => r.status !== 'Cancelled')
-      // คำนวณ Average Days to Fill จาก request ที่ Closed และมี closedAt
-      const closedWithDate = data.filter(r => r.status === 'Closed' && r.createdAt && r.closedAt)
-      const avgDaysToFill = closedWithDate.length > 0
-        ? Math.round(closedWithDate.reduce((sum, r) => sum + getDaysOpen(r), 0) / closedWithDate.length)
-        : null
-      onStatsChange?.(
-        {
-          open: active.filter((r) => r.status === 'Open').length,
-          assigned: active.filter((r) => ['Recruiting', 'Interviewing'].includes(r.status)).length,
-          offering: active.filter((r) => r.status === 'Offering').length,
-          onboarding: active.filter((r) => r.status === 'Onboarding').length,
-          closed: active.filter((r) => r.status === 'Closed').length,
-          total: active.length,
-          avgDaysToFill,
-        },
-        data
-      )
+      // ส่ง data ดิบออกไป — onStatsChange จะ setRequests ใน parent
+      // avgDaysToFill คำนวณใน useMemo แยกต่างหากเพื่อไม่ block snapshot callback
+      onStatsChange?.(null, data)
     }
 
     const subscribe = () => {
@@ -739,6 +725,11 @@ export default function RequestTable({
   const assignees     = useMemo(() => [...new Set(requests.map((r) => r.assignedToName).filter(Boolean))].sort(), [requests])
   const businessUnits = useMemo(() => [...new Set(requests.map((r) => r.businessUnit).filter(Boolean))].sort(), [requests])
   const ranks         = useMemo(() => [...new Set(requests.map((r) => r.jg).filter(Boolean))].sort(), [requests])
+  const years         = useMemo(() => {
+    const yrs = [...new Set(requests.map((r) => r.createdAt?.toDate?.()?.getFullYear()).filter(Boolean))]
+    return yrs.sort((a, b) => b - a).map(String) // เรียงจากใหม่→เก่า
+  }, [requests])
+
 
   // ─── คำนวณจำนวนรายการในแต่ละ Tab (นับตาม visibility rule เดียวกับ displayed) ───
   const tabCounts = useMemo(() => {
@@ -760,11 +751,12 @@ export default function RequestTable({
         ? base.filter(r => Boolean(r.assignedTo) || Boolean(r.assignedToName))
         : base.filter(r => getAssignedEmail(r, allTAs) === user.email?.toLowerCase() || (r.assignedToName && (r.assignedToName === user.displayName || r.assignedToName === shortName(user.displayName))))
     }
+    if (filterYear) base = base.filter(r => r.createdAt?.toDate?.()?.getFullYear() === Number(filterYear))
 
     const counts = { ทั้งหมด: base.length }
     ALL_STATUSES.forEach(s => { counts[s] = base.filter(r => r.status === s).length })
     return counts
-  }, [requests, filterMine, filterMyCases, user.email, user.displayName, role, department, allTAs])
+  }, [requests, filterYear, filterMine, filterMyCases, user.email, user.displayName, role, department, allTAs])
 
   // ─── กรองและเรียงข้อมูลสำหรับแสดงในตาราง ───
   // Visibility: manager เห็นเฉพาะของตัวเอง + แผนก, ta/admin เห็นทั้งหมด
@@ -785,6 +777,7 @@ export default function RequestTable({
         : list.filter((r) => getAssignedEmail(r, allTAs) === user.email?.toLowerCase() || (r.assignedToName && (r.assignedToName === user.displayName || r.assignedToName === shortName(user.displayName))))
     }
     if (activeTab !== 'ทั้งหมด') list = list.filter((r) => r.status === activeTab)
+    if (filterYear)     list = list.filter((r) => r.createdAt?.toDate?.()?.getFullYear() === Number(filterYear))
     if (filterEmpType)  list = list.filter((r) => r.employmentType === filterEmpType)
     if (filterJobType)  list = list.filter((r) => r.requestType === filterJobType)
     if (filterRank)     list = list.filter((r) => r.jg === filterRank)
@@ -836,15 +829,15 @@ export default function RequestTable({
       return 0
     })
     return list
-  }, [requests, filterMine, filterMyCases, activeTab, filterEmpType, filterJobType, filterRank, filterDept, filterBU, filterAssigned, filterDateFrom, filterDateTo, debouncedSearch, focusMonth, sortField, sortDir, user.email, user.displayName, role, department, allTAs])
+  }, [requests, filterMine, filterMyCases, activeTab, filterYear, filterEmpType, filterJobType, filterRank, filterDept, filterBU, filterAssigned, filterDateFrom, filterDateTo, debouncedSearch, focusMonth, sortField, sortDir, user.email, user.displayName, role, department, allTAs])
 
-  const hasChipFilters     = filterEmpType || filterJobType || filterRank || filterDept || filterBU || filterAssigned
+  const hasChipFilters     = filterYear || filterEmpType || filterJobType || filterRank || filterDept || filterBU || filterAssigned
   const hasAdvancedFilters = hasChipFilters || filterDateFrom || filterDateTo
 
-  function clearChips()    { setFilterEmpType(''); setFilterJobType(''); setFilterRank(''); setFilterDept(''); setFilterBU(''); setFilterAssigned('') }
+  function clearChips()    { setFilterYear(''); setFilterEmpType(''); setFilterJobType(''); setFilterRank(''); setFilterDept(''); setFilterBU(''); setFilterAssigned('') }
   function clearAdvanced() { clearChips(); setFilterDateFrom(''); setFilterDateTo('') }
 
-  useEffect(() => { setPage(1) }, [activeTab, filterEmpType, filterJobType, filterRank, filterDept, filterBU, filterAssigned, filterDateFrom, filterDateTo, debouncedSearch, focusMonth, filterMine, filterMyCases])
+  useEffect(() => { setPage(1) }, [activeTab, filterYear, filterEmpType, filterJobType, filterRank, filterDept, filterBU, filterAssigned, filterDateFrom, filterDateTo, debouncedSearch, focusMonth, filterMine, filterMyCases])
 
   // ปิด chip dropdown เมื่อคลิกนอก
   useEffect(() => {
@@ -898,7 +891,7 @@ export default function RequestTable({
             Filters
             {hasAdvancedFilters && (
               <span className="ml-1 bg-emerald-600 text-white text-[10px] px-1.5 py-0.5 rounded-full leading-none">
-                {[filterDept, filterAssigned, filterDateFrom, filterDateTo].filter(Boolean).length}
+                {[filterYear, filterDept, filterAssigned, filterDateFrom, filterDateTo].filter(Boolean).length}
               </span>
             )}
           </button>
@@ -975,6 +968,8 @@ export default function RequestTable({
         }
         return (
           <div className="flex flex-wrap gap-2 items-center">
+            <ChipSelect id="year"     label="ปี"             value={filterYear}     onChange={setFilterYear}     options={years} />
+            <div className="w-px h-4 bg-gray-200 dark:bg-slate-700" />
             <ChipSelect id="empType"  label="Emp. Type"      value={filterEmpType}  onChange={setFilterEmpType}  options={['Monthly','Daily','Contract','Intern']} />
             <ChipSelect id="jobType"  label="Job Type"       value={filterJobType}  onChange={setFilterJobType}  options={['New HC','Replace']} />
             <ChipSelect id="rank"     label="Rank"           value={filterRank}     onChange={setFilterRank}     options={ranks} />

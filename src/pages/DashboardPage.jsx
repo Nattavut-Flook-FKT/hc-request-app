@@ -30,39 +30,52 @@ import TAWorkloadPanel from '../components/Dashboard/TAWorkloadPanel'
 import ReportPanel from '../components/Dashboard/ReportPanel'
 import YoYChart from '../components/Dashboard/YoYChart'
 import ManpowerPivot from '../components/Dashboard/ManpowerPivot'
-import { useState, useMemo } from 'react'
-import { BarChart2, List } from 'lucide-react'
+import { useState, useMemo, useCallback } from 'react'
+import { BarChart2, List, ChevronDown, ChevronUp } from 'lucide-react'
 
 /**
  * คำนวณ stat ทั้ง 7 ตัวที่ StatCards ต้องการ
  * รับ array ของ request → คืน object { open, assigned, offering, onboarding, closed, total, avgDaysToFill }
  * หมายเหตุ: ไม่นับ Cancelled เข้า total
  */
-function computeStats(data) {
-  const active = data.filter((r) => r.status !== 'Cancelled')
+/** statuses ที่ไม่นับเข้า Total (ยกเลิก / ปฏิเสธ / พักไว้ / โอนภายใน / ลับ) */
+const EXCLUDED_STATUSES = new Set(['Cancelled', 'Rejected', 'OnHold', 'Confidential', 'InternalTransfer'])
 
-  // คำนวณเฉลี่ยวันปิดเคส — นับเคสที่ Closed (ใช้ closedAt) + Onboarding (ใช้วันที่เปลี่ยนสถานะจาก statusHistory)
-  const filledCases = data.filter(r => {
-    if (!r.createdAt) return false
-    if (r.status === 'Closed') return !!r.closedAt
-    if (r.status === 'Onboarding') return true
-    return false
-  })
+/** statuses ที่ถือว่า "ยังดำเนินการอยู่" — ใช้ตรวจ crossover ปี */
+const ACTIVE_STATUSES = new Set(['Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding'])
+
+function computeStats(data) {
+  const active = data.filter((r) => !EXCLUDED_STATUSES.has(r.status))
+
+  // คำนวณเฉลี่ย SLA — วัดจาก Open Date → Offering Date (ตรงกับ SLA Offer ใน Sheet)
+  // นับเฉพาะ Closed ที่มี closedAt เท่านั้น — ไม่นับ W.Onboarding (ยังไม่ขึ้นงานจริง)
+  const filledCases = data.filter(r => r.status === 'Closed' && !!r.closedAt)
   const avgDaysToFill = filledCases.length > 0
-    ? Math.round(filledCases.reduce((sum, r) => {
-        const start = r.createdAt?.toDate?.() ?? null
-        if (!start) return sum
-        let end
-        if (r.status === 'Closed') {
-          end = r.closedAt?.toDate?.() ?? null
-        } else {
-          // W.Onboarding → หาวันที่เปลี่ยนสถานะเป็น Onboarding จาก statusHistory
-          const onbEntry = r.statusHistory?.find(h => h.status === 'Onboarding')
-          end = onbEntry ? new Date(onbEntry.changedAt) : new Date()
+    ? (() => {
+        let total = 0, count = 0
+        for (const r of filledCases) {
+          // helper: แปลง changedAt ซึ่งอาจเป็น Timestamp | ISO string | Date
+          const toJS = (v) => {
+            if (!v) return null
+            if (typeof v?.toDate === 'function') return v.toDate()  // Firestore Timestamp
+            const d = new Date(v)
+            return isNaN(d) ? null : d
+          }
+
+          // Start: Open Date (createdAt)
+          const start = r.createdAt?.toDate?.() ?? toJS(r.createdAt) ?? null
+          if (!start) continue
+
+          // End: Offering Date (statusHistory หรือ offeringDate field)
+          const offEntry = r.statusHistory?.find(h => h.status === 'Offering')
+          const offerDate = toJS(offEntry?.changedAt) ?? toJS(r.offeringDate) ?? null
+          if (!offerDate) continue
+
+          const days = (offerDate - start) / (1000 * 60 * 60 * 24)
+          if (days >= 0) { total += days; count++ }
         }
-        if (!end) return sum
-        return sum + (end - start) / (1000 * 60 * 60 * 24)
-      }, 0) / filledCases.length)
+        return count > 0 ? Math.round(total / count) : null
+      })()
     : null
 
   return {
@@ -82,6 +95,110 @@ const TABS = [
   { v: 'list',     label: 'รายการ',  icon: List },
 ]
 
+// ── ClosedBreakdown — แสดงรายการ Closed ทั้งหมดในปีที่เลือก (Admin only) ──────
+function ClosedBreakdown({ requests, yearFilter }) {
+  const [open, setOpen] = useState(false)
+
+  const closedAll = useMemo(() =>
+    requests.filter(r => r.status === 'Closed'),
+    [requests]
+  )
+
+  // แบ่งเป็น "เปิดในปีที่เลือก" vs "crossover จากปีก่อน"
+  const sameYear  = closedAll.filter(r => r.createdAt?.toDate?.()?.getFullYear() === yearFilter)
+  const crossover = closedAll.filter(r => (r.createdAt?.toDate?.()?.getFullYear() ?? 0) < yearFilter)
+
+  if (!closedAll.length) return null
+
+  const Row = ({ r }) => {
+    const createdYr = r.createdAt?.toDate?.()?.getFullYear() ?? '?'
+    const closedAtStr = r.closedAt?.toDate?.()?.toLocaleDateString('th-TH', { year:'numeric', month:'short', day:'numeric' }) ?? '—'
+    return (
+      <tr className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
+        <td className="px-3 py-1.5 font-mono text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">{r.hcId}</td>
+        <td className="px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 max-w-[200px] truncate">{r.position}</td>
+        <td className="px-3 py-1.5 text-xs text-gray-500 dark:text-slate-400">{r.department}</td>
+        <td className="px-3 py-1.5 text-xs text-gray-500 dark:text-slate-400 max-w-[120px] truncate">{r.candidateName || '—'}</td>
+        <td className="px-3 py-1.5 text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">{r.startDate || '—'}</td>
+        <td className="px-3 py-1.5 text-xs text-gray-400 dark:text-slate-600 whitespace-nowrap">{closedAtStr}</td>
+        <td className="px-3 py-1.5 text-xs text-gray-400 dark:text-slate-600">{createdYr}</td>
+      </tr>
+    )
+  }
+
+  const THead = () => (
+    <thead className="sticky top-0 bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
+      <tr>
+        {['HCID','ตำแหน่ง','แผนก','Candidate','Onboard Date','closedAt','เปิดปี'].map(h => (
+          <th key={h} className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-wider text-gray-400 dark:text-slate-500 whitespace-nowrap">{h}</th>
+        ))}
+      </tr>
+    </thead>
+  )
+
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900/50 overflow-hidden">
+      {/* Header */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">🔍 Closed Breakdown {yearFilter}</span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold">
+            {closedAll.length} records total
+          </span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold">
+            เปิดปี {yearFilter}: {sameYear.length}
+          </span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 font-bold">
+            crossover จากปีก่อน: {crossover.length}
+          </span>
+        </div>
+        {open ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
+      </button>
+
+      {open && (
+        <div className="border-t border-slate-200 dark:border-slate-700">
+          {/* Crossover section */}
+          {crossover.length > 0 && (
+            <div>
+              <p className="px-4 py-2 text-[10px] font-black text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 uppercase tracking-wider">
+                🔀 Crossover จากปีก่อน — เปิดก่อนปี {yearFilter} แต่ปิดปี {yearFilter} ({crossover.length} records)
+              </p>
+              <div className="overflow-x-auto max-h-64">
+                <table className="w-full">
+                  <THead />
+                  <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+                    {crossover.sort((a,b) => (a.hcId||'').localeCompare(b.hcId||'')).map(r => <Row key={r.id} r={r} />)}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Same-year section */}
+          {sameYear.length > 0 && (
+            <div>
+              <p className="px-4 py-2 text-[10px] font-black text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 uppercase tracking-wider border-t border-slate-200 dark:border-slate-700">
+                📋 เปิดและปิดในปี {yearFilter} ({sameYear.length} records)
+              </p>
+              <div className="overflow-x-auto max-h-64">
+                <table className="w-full">
+                  <THead />
+                  <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+                    {sameYear.sort((a,b) => (a.hcId||'').localeCompare(b.hcId||'')).map(r => <Row key={r.id} r={r} />)}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ════════════════════════════════════════════════════════════════
 export default function DashboardPage({ user, role, department, isDarkMode, toggleDarkMode }) {
   // แท็บที่เลือกอยู่ 'overview' | 'list'
@@ -99,17 +216,62 @@ export default function DashboardPage({ user, role, department, isDarkMode, togg
   // กรองตามปี: null = ทั้งหมด, 2025, 2026
   const [yearFilter, setYearFilter]       = useState(null)
 
-  /** รับ requests ทั้งหมดจาก RequestTable (hidden mount) */
-  function handleStatsChange(_stats, allRequests) {
+  /** รับ requests ทั้งหมดจาก RequestTable (hidden mount)
+   *  ต้อง useCallback เพื่อให้ reference stable — ถ้าไม่ stable จะทำให้
+   *  RequestTable useEffect([onStatsChange]) re-run → unsubscribe/resubscribe Firestore ทุก render */
+  const handleStatsChange = useCallback((_stats, allRequests) => {
     if (allRequests) setRequests(allRequests)
-  }
+  }, [])
 
-  /** requests กรองตามปีที่เลือก (ใช้เป็นฐานสำหรับ stats + analytics) */
+  /**
+   * requests กรองตามปีที่เลือก
+   *
+   * Logic: นับรวมเคสที่ "เกี่ยวข้อง" กับปีนั้น ไม่ใช่แค่ createdAt
+   *   1. เคสที่เปิดในปีนั้น (createdAt year === yearFilter)  → เสมอ
+   *   2. เคสที่เปิดปีก่อน แต่ยังดำเนินการอยู่ในปีที่เลือก
+   *      (status ไม่ใช่ Closed/Cancelled)                   → นับรวม
+   *   3. เคสที่เปิดปีก่อน แต่ Closed ในปีที่เลือก
+   *      (closedAt year === yearFilter)                      → นับรวม
+   */
   const yearFilteredRequests = useMemo(() => {
     if (!yearFilter) return requests
     return requests.filter(r => {
-      const d = r.createdAt?.toDate?.()
-      return d && d.getFullYear() === yearFilter
+      const createdYear = r.createdAt?.toDate?.()?.getFullYear()
+      if (!createdYear) return false
+
+      // เคสเปิดในปีนั้น → ตรงอยู่แล้ว
+      if (createdYear === yearFilter) return true
+
+      // เคสเปิดก่อนปีที่เลือก → ตรวจว่ายังมีชีวิตอยู่ในปีนั้น
+      if (createdYear < yearFilter) {
+        // ยังดำเนินการอยู่ (active statuses: Open/Recruiting/Interviewing/Offering/Onboarding)
+        if (ACTIVE_STATUSES.has(r.status)) return true
+        // ปิดในปีที่เลือก — ใช้หลาย source เพื่อหาปีที่ Closed จริง
+        if (r.status === 'Closed') {
+          // Source 1: closedAt Timestamp (web app กด Closed เอง หรือ import ที่มี Onboard Date)
+          let closedYear = r.closedAt?.toDate?.()?.getFullYear() ?? null
+
+          // Source 2: startDate string "YYYY-MM-DD" — authoritative กว่าเพราะ import ตรง
+          // closedAt อาจ fallback เป็น createdAt (ปีผิด) ถ้า import ไม่มี Onboard Date
+          if (r.startDate?.length >= 4) {
+            const y = parseInt(r.startDate.slice(0, 4), 10)
+            if (y >= 2000 && y <= 2100) closedYear = y
+          }
+
+          // Source 3: statusHistory Onboarding entry (fallback สุดท้าย)
+          if (!closedYear) {
+            const onbH = r.statusHistory?.find(h => h.status === 'Onboarding')
+            if (onbH?.changedAt) {
+              const y = new Date(onbH.changedAt).getFullYear()
+              if (y >= 2000 && y <= 2100) closedYear = y
+            }
+          }
+
+          if (closedYear === yearFilter) return true
+        }
+      }
+
+      return false
     })
   }, [requests, yearFilter])
 
@@ -232,6 +394,18 @@ export default function DashboardPage({ user, role, department, isDarkMode, togg
                 แสดงเฉพาะ admin/ta และต้องมีข้อมูลอย่างน้อย 1 รายการ */}
             {(role === 'admin' || role === 'ta') && yearFilteredRequests.length > 0 && (
               <ReportPanel requests={yearFilteredRequests} />
+            )}
+
+            {/* ── Closed Breakdown (Admin Diagnostic) ──────────────────
+                แสดงเฉพาะ admin + เมื่อเลือก year filter
+                เพื่อตรวจสอบว่า Closed ทั้งหมดในปีนั้นมีรายการอะไรบ้าง
+                แยกเป็น "เปิดปีนั้น" กับ "crossover จากปีก่อน"
+            ─────────────────────────────────────────────────────────── */}
+            {role === 'admin' && yearFilter && (
+              <ClosedBreakdown
+                requests={yearFilteredRequests}
+                yearFilter={yearFilter}
+              />
             )}
           </>
         )}
