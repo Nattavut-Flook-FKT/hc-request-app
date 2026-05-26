@@ -30,8 +30,9 @@ import {
   LogOut, LayoutDashboard, FilePlus, List,
   Briefcase, FolderOpen, ClipboardList, ScrollText,
   Moon, Sun, Users, Tag, DatabaseZap, Upload,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, HelpCircle,
 } from 'lucide-react'
+import UserGuide from './UserGuide'
 
 // ── Nav item definitions แต่ละ role ──────────────────────────────
 // แต่ละ group คือ array ของ nav items — null ระหว่าง group = เส้นคั่น
@@ -94,6 +95,7 @@ export default function Sidebar({ user, role, isDarkMode, toggleDarkMode }) {
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem('sidebarCollapsed') === 'true'
   )
+  const [showGuide, setShowGuide] = useState(false)
   const navigate     = useNavigate()
   const { pathname } = useLocation()
 
@@ -176,7 +178,7 @@ export default function Sidebar({ user, role, isDarkMode, toggleDarkMode }) {
       {/* ── Bottom section: dark mode + collapse toggle + user profile ── */}
       <div className="shrink-0 border-t border-gray-100 dark:border-slate-800">
 
-        {/* Dark mode toggle + collapse button */}
+        {/* Dark mode toggle + help button + collapse button */}
         <div className={`flex items-center py-2 px-2 gap-1 ${collapsed ? 'flex-col' : ''}`}>
           <button
             onClick={toggleDarkMode}
@@ -187,6 +189,15 @@ export default function Sidebar({ user, role, isDarkMode, toggleDarkMode }) {
               ? <Sun size={15} className="text-yellow-400" />
               : <Moon size={15} />
             }
+          </button>
+
+          {/* ปุ่มเปิดคู่มือการใช้งาน */}
+          <button
+            onClick={() => setShowGuide(true)}
+            title="คู่มือการใช้งาน"
+            className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-[#008065] dark:hover:text-emerald-400 transition-colors"
+          >
+            <HelpCircle size={15} />
           </button>
 
           {/* spacer เฉพาะตอน expanded */}
@@ -245,6 +256,9 @@ export default function Sidebar({ user, role, isDarkMode, toggleDarkMode }) {
           )}
         </div>
       </div>
+
+      {/* ── User Guide modal ──────────────────────────────────── */}
+      {showGuide && <UserGuide onClose={() => setShowGuide(false)} />}
     </aside>
   )
 }

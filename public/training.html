@@ -1,0 +1,1918 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HC Request — TA Technical Guide</title>
+  <style>
+    :root {
+      --g: #008065;
+      --g2: #005c49;
+      --gl: #e6f4f1;
+      --gll: #f0faf7;
+      --tx: #111827;
+      --tx2: #6b7280;
+      --bd: #e5e7eb;
+      --bg: #f9fafb;
+      --wh: #ffffff;
+      --r: 1.1rem;
+      --blue: #3b82f6;
+      --orng: #f59e0b;
+      --red: #ef4444;
+      --pur: #8b5cf6;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      font-size: 15px;
+    }
+
+    body {
+      font-family: 'Segoe UI', 'Noto Sans Thai', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--tx);
+      line-height: 1.75;
+    }
+
+    /* ─── NAV ─── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      background: rgba(255, 255, 255, .94);
+      backdrop-filter: blur(20px);
+      border-bottom: 1.5px solid var(--bd);
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      padding: 0 1.75rem;
+      height: 58px;
+    }
+
+    .nav-brand {
+      font-weight: 900;
+      font-size: .95rem;
+      color: var(--g);
+      white-space: nowrap;
+      text-decoration: none;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: .15rem;
+      overflow-x: auto;
+      flex: 1;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      color: var(--tx2);
+      font-size: .78rem;
+      font-weight: 600;
+      padding: .35rem .7rem;
+      border-radius: 99px;
+      transition: .15s;
+      white-space: nowrap;
+    }
+
+    .nav-links a:hover {
+      background: var(--gl);
+      color: var(--g);
+    }
+
+    .nav-ver {
+      font-size: .7rem;
+      color: var(--tx2);
+      white-space: nowrap;
+      background: var(--bg);
+      padding: .25rem .65rem;
+      border-radius: 99px;
+      border: 1px solid var(--bd);
+    }
+
+    /* ─── HERO ─── */
+    .hero {
+      background: linear-gradient(130deg, var(--g2) 0%, var(--g) 55%, #00b391 100%);
+      color: #fff;
+      padding: 4.5rem 1.75rem 3.5rem;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .025) 0, rgba(255, 255, 255, .025) 1px, transparent 0, transparent 50%);
+      background-size: 20px 20px;
+    }
+
+    .hero-tag {
+      display: inline-block;
+      border: 1px solid rgba(255, 255, 255, .3);
+      background: rgba(255, 255, 255, .12);
+      font-size: .7rem;
+      font-weight: 700;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      padding: .3rem 1rem;
+      border-radius: 99px;
+      margin-bottom: 1.25rem;
+    }
+
+    .hero h1 {
+      font-size: clamp(1.6rem, 4vw, 2.8rem);
+      font-weight: 900;
+      margin-bottom: .9rem;
+    }
+
+    .hero p {
+      opacity: .82;
+      font-size: 1rem;
+      max-width: 540px;
+      margin: 0 auto;
+    }
+
+    /* ─── LAYOUT ─── */
+    .wrap {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 0 1.25rem;
+    }
+
+    .sec {
+      padding: 3.5rem 0 1rem;
+    }
+
+    .sec-title {
+      font-size: 1.35rem;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      margin-bottom: .4rem;
+    }
+
+    .sec-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: var(--gl);
+      color: var(--g);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+
+    .sec-sub {
+      color: var(--tx2);
+      font-size: .88rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .hr {
+      height: 1.5px;
+      background: linear-gradient(90deg, var(--bd), transparent);
+    }
+
+    /* ─── CARD ─── */
+    .card {
+      background: var(--wh);
+      border: 1.5px solid var(--bd);
+      border-radius: var(--r);
+      padding: 1.5rem;
+      box-shadow: 0 1px 6px rgba(0, 0, 0, .05);
+    }
+
+    .card+.card,
+    .card+.flow-box,
+    .flow-box+.card {
+      margin-top: 1rem;
+    }
+
+    .card h4 {
+      font-weight: 800;
+      font-size: .95rem;
+      margin-bottom: .6rem;
+    }
+
+    /* ─── FLOW BOX: แสดงสิ่งที่เกิดขึ้นใน backend ─── */
+    .flow-box {
+      border-radius: var(--r);
+      border: 1.5px solid;
+      padding: 1.25rem 1.5rem;
+      position: relative;
+    }
+
+    .flow-box.firestore {
+      border-color: #fbbf24;
+      background: #fffbeb;
+    }
+
+    .flow-box.gas {
+      border-color: #34d399;
+      background: #ecfdf5;
+    }
+
+    .flow-box.supabase {
+      border-color: #818cf8;
+      background: #eef2ff;
+    }
+
+    .flow-box.audit {
+      border-color: #f472b6;
+      background: #fdf4ff;
+    }
+
+    .flow-box.slack {
+      border-color: #818cf8;
+      background: #eef2ff;
+    }
+
+    .flow-tag {
+      position: absolute;
+      top: -11px;
+      left: 1rem;
+      font-size: .65rem;
+      font-weight: 900;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      padding: .2rem .7rem;
+      border-radius: 99px;
+      border: 1.5px solid;
+    }
+
+    .flow-box.firestore .flow-tag {
+      background: #fef3c7;
+      color: #92400e;
+      border-color: #fbbf24;
+    }
+
+    .flow-box.gas .flow-tag {
+      background: #d1fae5;
+      color: #065f46;
+      border-color: #34d399;
+    }
+
+    .flow-box.supabase .flow-tag {
+      background: #e0e7ff;
+      color: #3730a3;
+      border-color: #818cf8;
+    }
+
+    .flow-box.audit .flow-tag {
+      background: #fce7f3;
+      color: #9d174d;
+      border-color: #f472b6;
+    }
+
+    .flow-field {
+      font-family: monospace;
+      font-size: .8rem;
+    }
+
+    .flow-field span.key {
+      color: #92400e;
+      font-weight: 700;
+    }
+
+    .flow-field span.val {
+      color: #065f46;
+    }
+
+    .flow-field span.fn {
+      color: #3730a3;
+      font-style: italic;
+    }
+
+    .flow-box ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: .4rem;
+    }
+
+    .flow-box li {
+      display: flex;
+      gap: .6rem;
+      font-size: .82rem;
+    }
+
+    .flow-box li::before {
+      content: '→';
+      color: var(--tx2);
+      flex-shrink: 0;
+    }
+
+    /* ─── ACTION HEADER ─── */
+    .action-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1.1rem 1.4rem;
+      border-radius: var(--r);
+      border: 2px solid var(--g);
+      background: var(--gll);
+      margin-bottom: 1rem;
+    }
+
+    .action-num {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--g);
+      color: #fff;
+      font-weight: 900;
+      font-size: .9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .action-name {
+      font-weight: 900;
+      font-size: 1rem;
+    }
+
+    .action-fn {
+      font-family: monospace;
+      font-size: .75rem;
+      color: var(--g2);
+      background: rgba(0, 128, 101, .08);
+      padding: .15rem .5rem;
+      border-radius: 5px;
+      margin-top: .15rem;
+    }
+
+    /* ─── FLOW ARROW ─── */
+    .flow-chain {
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+    }
+
+    .flow-arrow {
+      text-align: center;
+      color: var(--tx2);
+      font-size: .8rem;
+      font-weight: 700;
+      padding: .1rem 0;
+    }
+
+    /* ─── STATUS BADGES ─── */
+    .badge {
+      display: inline-block;
+      padding: .25rem .75rem;
+      border-radius: 99px;
+      font-size: .72rem;
+      font-weight: 800;
+      border: 1.5px solid;
+    }
+
+    .b-open {
+      background: #fefce8;
+      color: #a16207;
+      border-color: #fde047;
+    }
+
+    .b-rec {
+      background: #f0fdf4;
+      color: #15803d;
+      border-color: #86efac;
+    }
+
+    .b-int {
+      background: #fff7ed;
+      color: #c2410c;
+      border-color: #fdba74;
+    }
+
+    .b-off {
+      background: #eef2ff;
+      color: #4338ca;
+      border-color: #a5b4fc;
+    }
+
+    .b-onb {
+      background: #f0fdfa;
+      color: #0f766e;
+      border-color: #5eead4;
+    }
+
+    .b-cls {
+      background: #f8fafc;
+      color: #475569;
+      border-color: #cbd5e1;
+    }
+
+    .b-rej {
+      background: #fff1f2;
+      color: #be123c;
+      border-color: #fda4af;
+    }
+
+    .b-can {
+      background: #f9fafb;
+      color: #6b7280;
+      border-color: #e5e7eb;
+    }
+
+    /* ─── PIPELINE ─── */
+    .pipeline {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+      align-items: center;
+      margin: 1.25rem 0;
+    }
+
+    .pipe-arr {
+      color: #d1d5db;
+      font-size: 1.1rem;
+      font-weight: 900;
+    }
+
+    /* ─── CALLOUT ─── */
+    .tip {
+      border-left: 4px solid var(--g);
+      background: var(--gl);
+      padding: .9rem 1.1rem;
+      border-radius: 0 var(--r) var(--r) 0;
+      font-size: .85rem;
+      margin: .75rem 0;
+    }
+
+    .warn {
+      border-left: 4px solid var(--orng);
+      background: #fffbeb;
+      padding: .9rem 1.1rem;
+      border-radius: 0 var(--r) var(--r) 0;
+      font-size: .85rem;
+      margin: .75rem 0;
+    }
+
+    .info {
+      border-left: 4px solid var(--blue);
+      background: #eff6ff;
+      padding: .9rem 1.1rem;
+      border-radius: 0 var(--r) var(--r) 0;
+      font-size: .85rem;
+      margin: .75rem 0;
+    }
+
+    .tip strong {
+      color: var(--g2);
+    }
+
+    .warn strong {
+      color: #92400e;
+    }
+
+    .info strong {
+      color: #1d4ed8;
+    }
+
+    /* ─── CODE INLINE ─── */
+    code {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      padding: .1rem .4rem;
+      border-radius: 4px;
+      font-size: .8rem;
+      font-family: monospace;
+      color: var(--g2);
+    }
+
+    /* ─── SLA VIZ ─── */
+    .sla-bar {
+      display: flex;
+      align-items: stretch;
+      border-radius: var(--r);
+      overflow: hidden;
+      border: 1.5px solid var(--bd);
+      height: 52px;
+      margin: 1rem 0;
+    }
+
+    .sla-seg {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .7rem;
+      font-weight: 800;
+      text-align: center;
+      padding: .25rem;
+      flex: 1;
+    }
+
+    .sla-count {
+      flex: 2;
+      background: #f0fdf4;
+      color: #15803d;
+    }
+
+    .sla-pause {
+      background: #eef2ff;
+      color: #4338ca;
+    }
+
+    .sla-reset {
+      background: #fff7ed;
+      color: #c2410c;
+    }
+
+    .sla-done {
+      flex: .8;
+      background: #f8fafc;
+      color: #475569;
+    }
+
+    /* ─── TABLE ─── */
+    .mini-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .82rem;
+    }
+
+    .mini-table th {
+      background: #f8fafc;
+      padding: .6rem .9rem;
+      text-align: left;
+      font-weight: 800;
+      color: var(--tx2);
+      border-bottom: 2px solid var(--bd);
+      font-size: .73rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .mini-table td {
+      padding: .55rem .9rem;
+      border-bottom: 1px solid #f3f4f6;
+      vertical-align: top;
+    }
+
+    .mini-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* ─── FOOTER ─── */
+    footer {
+      background: #111827;
+      color: rgba(255, 255, 255, .5);
+      text-align: center;
+      padding: 2.5rem;
+      font-size: .8rem;
+      margin-top: 4rem;
+    }
+
+    footer strong {
+      color: #fff;
+    }
+
+    /* ─── APP MOCKUP ─── */
+    .app-mock {
+      border-radius: 13px;
+      overflow: hidden;
+      border: 1.5px solid #d1d5db;
+      box-shadow: 0 8px 32px rgba(0,0,0,.10);
+      margin: 1.5rem 0;
+      font-size: .8rem;
+    }
+    .mock-chrome {
+      background: #f3f4f6;
+      border-bottom: 1px solid #e5e7eb;
+      padding: .55rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+    }
+    .mock-dots { display: flex; gap: 5px; }
+    .mock-dots span { width: 10px; height: 10px; border-radius: 50%; }
+    .mock-dots span:nth-child(1) { background: #ef4444; }
+    .mock-dots span:nth-child(2) { background: #f59e0b; }
+    .mock-dots span:nth-child(3) { background: #22c55e; }
+    .mock-url {
+      flex: 1;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: .18rem .75rem;
+      font-size: .68rem;
+      color: #6b7280;
+      font-family: monospace;
+    }
+    .mock-layout {
+      display: flex;
+      background: #f8fafc;
+      min-height: 260px;
+    }
+    .mock-sidebar {
+      width: 170px;
+      background: #fff;
+      border-right: 1px solid #e5e7eb;
+      padding: .6rem .5rem;
+      flex-shrink: 0;
+    }
+    .mock-brand {
+      padding: .4rem .7rem .6rem;
+      font-weight: 900;
+      font-size: .78rem;
+      color: #008065;
+    }
+    .mock-nav-item {
+      padding: .38rem .7rem;
+      border-radius: 7px;
+      font-size: .72rem;
+      font-weight: 600;
+      color: #6b7280;
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      margin-bottom: 1px;
+    }
+    .mock-nav-item.active {
+      background: #008065;
+      color: #fff;
+      font-weight: 700;
+    }
+    .mock-nav-item.muted { opacity: .35; }
+    .mock-nav-label {
+      font-size: .6rem;
+      font-weight: 700;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      padding: .6rem .7rem .2rem;
+    }
+    .mock-content { flex: 1; padding: 1.1rem; overflow: hidden; }
+    .mock-page-title { font-size: .88rem; font-weight: 900; color: #111827; margin-bottom: .1rem; }
+    .mock-page-sub {
+      font-size: .6rem; font-weight: 700; color: #9ca3af;
+      text-transform: uppercase; letter-spacing: .12em; margin-bottom: .9rem;
+    }
+    .mock-table {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 11px;
+      overflow: hidden;
+      width: 100%;
+    }
+    .mock-table-head {
+      background: #f8fafc;
+      border-bottom: 2px solid #e5e7eb;
+      display: grid;
+      grid-template-columns: 2fr 1.2fr .9fr .9fr .7fr;
+      padding: .38rem .9rem;
+      gap: .5rem;
+    }
+    .mock-table-head span {
+      font-size: .62rem; font-weight: 800; color: #9ca3af;
+      text-transform: uppercase; letter-spacing: .05em;
+    }
+    .mock-row {
+      display: grid;
+      grid-template-columns: 2fr 1.2fr .9fr .9fr .7fr;
+      padding: .55rem .9rem;
+      border-bottom: 1px solid #f3f4f6;
+      align-items: center;
+      gap: .5rem;
+    }
+    .mock-row:last-child { border-bottom: none; }
+    .mock-row-pos { font-weight: 800; font-size: .78rem; color: #111827; }
+    .mock-row-dept { font-size: .62rem; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+    .mock-id { font-family: monospace; font-size: .67rem; color: #6b7280; }
+    .mock-date { font-size: .68rem; color: #9ca3af; }
+    .mock-btn-g {
+      display: inline-flex; align-items: center; gap: .25rem;
+      padding: .22rem .55rem; border-radius: 6px;
+      font-size: .68rem; font-weight: 700;
+      background: #008065; color: #fff;
+    }
+    .mock-btn-g.claim { background: #059669; }
+    /* Status dropdown */
+    .mock-dropdown {
+      background: #fff;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.12);
+      padding: .35rem;
+      width: 190px;
+    }
+    .mock-dd-item {
+      padding: .4rem .7rem;
+      border-radius: 7px;
+      font-size: .78rem;
+      font-weight: 600;
+      color: #374151;
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .mock-dd-item.active-dd { background: #f0fdf4; color: #008065; font-weight: 800; }
+    .mock-dd-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    /* Workload cards */
+    .mock-workload {
+      display: grid; grid-template-columns: repeat(3,1fr); gap: .6rem; margin-top: .6rem;
+    }
+    .mock-wcard {
+      background: #fff; border: 1.5px solid #e5e7eb; border-radius: 10px;
+      padding: .65rem .8rem;
+    }
+    .mock-wcard.highlight { border-color: #008065; background: #f0fdf4; }
+    .mock-wcard-name { font-weight: 800; font-size: .78rem; color: #111827; }
+    .mock-wcard-num { font-size: 1.2rem; font-weight: 900; color: #008065; float: right; margin-top: -2px; }
+    .mock-wcard-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: .35rem; }
+    .mock-tag {
+      font-size: .58rem; font-weight: 700; padding: 2px 6px; border-radius: 99px;
+      background: #dcfce7; color: #15803d;
+    }
+    .mock-tag.r { background: #dcfce7; color: #15803d; }
+    .mock-tag.i { background: #fff7ed; color: #c2410c; }
+    .mock-tag.o { background: #eef2ff; color: #4338ca; }
+    .mock-tag.w { background: #f0fdfa; color: #0f766e; }
+    .mock-tag.op { background: #fefce8; color: #a16207; }
+
+    @media (max-width:620px) {
+      .sla-bar {
+        flex-direction: column;
+        height: auto;
+      }
+
+      .sla-seg {
+        padding: .5rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <nav>
+    <a class="nav-brand" href="#">🌿 HC Request</a>
+    <div class="nav-links">
+      <a href="#overview">Overview</a>
+      <a href="#claim">1. Claim</a>
+      <a href="#status">2. Status</a>
+      <a href="#offering">3. Offering</a>
+      <a href="#onboarding">4. Onboarding</a>
+      <a href="#reject">5. Reject</a>
+      <a href="#reopen">6. Reopen</a>
+      <a href="#reassign">7. Reassign</a>
+      <a href="#cv">8. CV</a>
+      <a href="#sla">SLA</a>
+      <a href="#realtime">Realtime</a>
+    </div>
+    <span class="nav-ver">TA Guide v2</span>
+  </nav>
+
+  <div class="hero">
+    <div class="hero-tag">TA Technical Training · อิงจาก Codebase จริง</div>
+    <h1>HC Request — คู่มือ TA ฉบับละเอียด</h1>
+    <p>ทุก action ที่ TA กด — มันเชื่อมไปไหน เขียนอะไร ส่งอะไรบ้าง</p>
+  </div>
+
+  <div class="wrap">
+
+    <!-- ──────────────────────────────────────────────────────────
+     OVERVIEW
+──────────────────────────────────────────────────────────── -->
+    <div class="sec" id="overview">
+      <div class="sec-title">
+        <div class="sec-icon">🗺️</div>ภาพรวมระบบที่ TA ต้องรู้
+      </div>
+      <div class="sec-sub">ข้อมูลไหลผ่านกี่ระบบ? แต่ละระบบเก็บอะไร?</div>
+
+      <div class="card">
+        <table class="mini-table">
+          <thead>
+            <tr>
+              <th>ระบบ</th>
+              <th>หน้าที่</th>
+              <th>เก็บอะไร</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong style="color:#d97706">🔥 Firestore</strong></td>
+              <td>Database หลัก (realtime)</td>
+              <td><code>hc_requests</code> — ทุก field ของ request<br /><code>hc_logs</code> — ประวัติทุก
+                action<br /><code>users</code> — role ของแต่ละคน</td>
+            </tr>
+            <tr>
+              <td><strong style="color:#059669">📊 Google Sheets</strong></td>
+              <td>รายงานสำหรับ HR/TA ดู</td>
+              <td>Sheet "Job Openings 2025" — ทุก row sync มาจาก Firestore ผ่าน GAS</td>
+            </tr>
+            <tr>
+              <td><strong style="color:#4f46e5">🗄️ Supabase Storage</strong></td>
+              <td>เก็บไฟล์</td>
+              <td>bucket <code>jd-files</code> — ไฟล์ JD<br />bucket <code>cv-files</code> — ไฟล์ CV ผู้สมัคร</td>
+            </tr>
+            <tr>
+              <td><strong style="color:#7c3aed">💬 Slack</strong></td>
+              <td>แจ้งเตือน</td>
+              <td>New request → channel TA<br />Status update → channel updates</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="tip">
+        <strong>💡 สิ่งสำคัญ:</strong> ทุกครั้งที่ TA กด action ในเว็บ — ข้อมูลจะถูก <strong>เขียนลง Firestore
+          ก่อน</strong> แล้วจึง sync ไป Google Sheets ผ่าน GAS และบันทึก Audit Log พร้อมกัน
+      </div>
+
+      <!-- ── UI Mockup: Dashboard TA Workload (format จริง) ── -->
+      <p style="font-size:.78rem;font-weight:700;color:var(--tx2);margin-top:1.5rem;margin-bottom:.4rem;">🖥️ หน้าตาแอพ — TA เห็นแบบนี้</p>
+      <div class="app-mock">
+        <div class="mock-chrome">
+          <div class="mock-dots"><span></span><span></span><span></span></div>
+          <div class="mock-url">hcrequest.web.app/dashboard</div>
+        </div>
+        <div class="mock-layout">
+          <div class="mock-sidebar">
+            <div class="mock-brand">🌿 HC Request<br/><span style="font-size:.58rem;font-weight:600;color:#9ca3af;">People Experience</span></div>
+            <div class="mock-nav-item active">🏠 Dashboard</div>
+            <div class="mock-nav-item">≡ All Requests</div>
+            <div class="mock-nav-item">👤 My Cases</div>
+            <div class="mock-nav-item">📁 JD Files</div>
+            <div class="mock-nav-item">📋 Audit Log</div>
+            <div class="mock-nav-label">Admin Only</div>
+            <div class="mock-nav-item muted">📍 Positions</div>
+            <div class="mock-nav-item muted">👥 Users</div>
+            <div class="mock-nav-item muted">⚙️ Admin Tools</div>
+            <div class="mock-nav-item muted">📥 Import Data</div>
+          </div>
+          <div class="mock-content">
+            <div class="mock-page-title">Dashboard</div>
+            <div class="mock-page-sub">ภาพรวม HC Request ทั้งหมด</div>
+            <div style="font-size:.7rem;font-weight:800;color:#374151;margin-bottom:.45rem;letter-spacing:.03em;">📊 TA WORKLOAD <span style="font-size:.6rem;font-weight:600;color:#9ca3af;margin-left:.5rem;">× อ้างอิงกรอง</span></div>
+            <div class="mock-workload">
+              <div class="mock-wcard">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                  <div class="mock-wcard-name">Jiratcha (Belle)</div>
+                  <div style="font-size:1.1rem;font-weight:900;color:#374151;">44</div>
+                </div>
+                <div class="mock-wcard-tags">
+                  <span class="mock-tag r">● Recruiting 9</span>
+                  <span class="mock-tag w">● W.Onboarding 7</span>
+                  <span class="mock-tag op">● Open 28</span>
+                </div>
+              </div>
+              <div class="mock-wcard">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                  <div class="mock-wcard-name">Jitlada (Mo)</div>
+                  <div style="font-size:1.1rem;font-weight:900;color:#374151;">17</div>
+                </div>
+                <div class="mock-wcard-tags">
+                  <span class="mock-tag r">● Recruiting 11</span>
+                  <span class="mock-tag o">● Offering 1</span>
+                  <span class="mock-tag w">● W.Onboarding 1</span>
+                  <span class="mock-tag op">● Open 4</span>
+                </div>
+              </div>
+              <div class="mock-wcard highlight">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                  <div class="mock-wcard-name">Artit (Top)</div>
+                  <div style="font-size:1.1rem;font-weight:900;color:#008065;">12</div>
+                </div>
+                <div class="mock-wcard-tags">
+                  <span class="mock-tag r">● Recruiting 10</span>
+                  <span class="mock-tag w">● W.Onboarding 2</span>
+                </div>
+              </div>
+              <div class="mock-wcard">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                  <div class="mock-wcard-name">Saran (Aof)</div>
+                  <div style="font-size:1.1rem;font-weight:900;color:#374151;">8</div>
+                </div>
+                <div class="mock-wcard-tags">
+                  <span class="mock-tag r">● Recruiting 4</span>
+                  <span class="mock-tag w">● W.Onboarding 1</span>
+                  <span class="mock-tag op">● Open 3</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <!-- ──────────────────────────────────────────────────────────
+     1. CLAIM
+──────────────────────────────────────────────────────────── -->
+    <div class="sec" id="claim">
+      <div class="sec-title">
+        <div class="sec-icon">✋</div>Action 1 — รับเคส (Claim)
+      </div>
+      <div class="sec-sub">TA กดปุ่ม "รับเคส" ใน request ที่ status = Open</div>
+
+      <div class="action-header">
+        <div class="action-num">1</div>
+        <div>
+          <div class="action-name">handleClaim(id)</div>
+          <div class="action-fn">RequestTable.jsx → handleClaim()</div>
+        </div>
+      </div>
+
+      <!-- ── UI Mockup: All Requests → รับเคส (format จริง) ── -->
+      <div class="app-mock">
+        <div class="mock-chrome">
+          <div class="mock-dots"><span></span><span></span><span></span></div>
+          <div class="mock-url">hcrequest.web.app/all-requests</div>
+        </div>
+        <div class="mock-layout" style="min-height:auto;">
+          <div class="mock-sidebar">
+            <div class="mock-brand">🌿 HC Request<br/><span style="font-size:.58rem;font-weight:600;color:#9ca3af;">People Experience</span></div>
+            <div class="mock-nav-item">🏠 Dashboard</div>
+            <div class="mock-nav-item active">≡ All Requests</div>
+            <div class="mock-nav-item">👤 My Cases</div>
+            <div class="mock-nav-item">📁 JD Files</div>
+          </div>
+          <div class="mock-content" style="padding:.9rem;overflow-x:auto;">
+            <div class="mock-page-title">All Requests</div>
+            <div class="mock-page-sub">คำขออัตรากำลังทั้งหมด</div>
+            <!-- Real column layout -->
+            <div style="min-width:620px;">
+              <div style="display:grid;grid-template-columns:90px 68px 1.8fr 1.1fr .9fr 1fr;gap:.4rem;padding:.35rem .7rem;background:#f8fafc;border:1px solid #e5e7eb;border-radius:9px 9px 0 0;border-bottom:2px solid #e5e7eb;">
+                <span style="font-size:.6rem;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;">HC ID</span>
+                <span style="font-size:.6rem;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;">ประเภท</span>
+                <span style="font-size:.6rem;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;">ตำแหน่ง / JG</span>
+                <span style="font-size:.6rem;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;">แผนก</span>
+                <span style="font-size:.6rem;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;">TA</span>
+                <span style="font-size:.6rem;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;">สถานะ</span>
+              </div>
+              <!-- Row 1: Open → รับเคส -->
+              <div style="display:grid;grid-template-columns:90px 68px 1.8fr 1.1fr .9fr 1fr;gap:.4rem;padding:.55rem .7rem;background:#fffbeb;border:1px solid #fde68a;border-top:none;align-items:center;">
+                <span style="font-family:monospace;font-size:.65rem;font-weight:700;color:#6b7280;background:#f3f4f6;padding:2px 5px;border-radius:5px;">REQ-2026-411</span>
+                <span style="font-size:.68rem;font-weight:800;background:#fed7aa;color:#9a3412;padding:2px 6px;border-radius:5px;text-align:center;">Replace</span>
+                <div>
+                  <div style="font-weight:800;font-size:.78rem;color:#111827;">Software Engineer</div>
+                  <div style="font-size:.6rem;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-top:1px;">Staff</div>
+                </div>
+                <div style="font-size:.72rem;color:#374151;font-weight:500;">Tech&amp;Products</div>
+                <div style="font-size:.68rem;color:#9ca3af;">—</div>
+                <div style="display:flex;align-items:center;gap:.35rem;">
+                  <span style="font-size:.68rem;font-weight:800;background:#f3f4f6;color:#6b7280;padding:3px 8px;border-radius:7px;border:1px solid #e5e7eb;">Open</span>
+                  <span class="mock-btn-g claim" style="font-size:.65rem;padding:.2rem .45rem;">✋ รับเคส</span>
+                </div>
+              </div>
+              <!-- Row 2: Recruiting -->
+              <div style="display:grid;grid-template-columns:90px 68px 1.8fr 1.1fr .9fr 1fr;gap:.4rem;padding:.55rem .7rem;background:#fff;border:1px solid #e5e7eb;border-top:none;align-items:center;">
+                <span style="font-family:monospace;font-size:.65rem;font-weight:700;color:#6b7280;background:#f3f4f6;padding:2px 5px;border-radius:5px;">REQ-2026-408</span>
+                <span style="font-size:.68rem;font-weight:800;background:#fed7aa;color:#9a3412;padding:2px 6px;border-radius:5px;text-align:center;">Replace</span>
+                <div>
+                  <div style="font-weight:800;font-size:.78rem;color:#111827;">Distribution Center Manager</div>
+                  <div style="font-size:.6rem;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-top:1px;">Manager</div>
+                </div>
+                <div style="font-size:.72rem;color:#374151;font-weight:500;">Distribution Center</div>
+                <div style="font-size:.7rem;font-weight:700;color:#059669;">Artit (Top)</div>
+                <span style="font-size:.68rem;font-weight:800;background:#dcfce7;color:#15803d;padding:3px 8px;border-radius:7px;border:1px solid #86efac;">Recruiting</span>
+              </div>
+              <!-- Row 3: New HC - Interviewing -->
+              <div style="display:grid;grid-template-columns:90px 68px 1.8fr 1.1fr .9fr 1fr;gap:.4rem;padding:.55rem .7rem;background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 9px 9px;align-items:center;">
+                <span style="font-family:monospace;font-size:.65rem;font-weight:700;color:#6b7280;background:#f3f4f6;padding:2px 5px;border-radius:5px;">REQ-2026-414</span>
+                <span style="font-size:.68rem;font-weight:800;background:#ede9fe;color:#5b21b6;padding:2px 6px;border-radius:5px;text-align:center;">New HC</span>
+                <div>
+                  <div style="font-weight:800;font-size:.78rem;color:#111827;">Operations Specialist (IYR)</div>
+                  <div style="font-size:.6rem;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-top:1px;">Senior Staff</div>
+                </div>
+                <div style="font-size:.72rem;color:#374151;font-weight:500;">Operations</div>
+                <div style="font-size:.7rem;font-weight:700;color:#059669;">Artit (Top)</div>
+                <span style="font-size:.68rem;font-weight:800;background:#fff7ed;color:#c2410c;padding:3px 8px;border-radius:7px;border:1px solid #fdba74;">Interviewing</span>
+              </div>
+            </div>
+            <p style="font-size:.63rem;color:#9ca3af;margin-top:.4rem;">👆 แถวสีเหลือง = status <strong style="color:#a16207;">Open</strong> — กดปุ่ม <strong style="color:#059669;">รับเคส</strong> เพื่อ assign ตัวเองเป็น TA</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-chain">
+
+        <div class="flow-box firestore">
+          <span class="flow-tag">Firestore — hc_requests/{id}</span>
+          <ul>
+            <li><span class="flow-field"><span class="key">status</span>: <span class="val">"Recruiting"</span></span>
+            </li>
+            <li><span class="flow-field"><span class="key">assignedTo</span>: <span class="val">user.email</span> (email
+                ของ TA คนนี้)</span></li>
+            <li><span class="flow-field"><span class="key">assignedToName</span>: <span
+                  class="val">user.displayName</span></span></li>
+            <li><span class="flow-field"><span class="key">assignedAt</span>: <span class="val">serverTimestamp()</span>
+                ← เวลา server จริง ไม่ใช่เวลาเครื่อง</span></li>
+            <li><span class="flow-field"><span class="key">statusHistory</span>: <span class="val">arrayUnion({
+                  status:"Recruiting", changedAt, changedBy, changedByName })</span></span></li>
+          </ul>
+        </div>
+
+        <div class="flow-arrow">↓ พร้อมกัน (ไม่รอ Firestore)</div>
+
+        <div class="flow-box gas">
+          <span class="flow-tag">GAS — Google Sheets sync</span>
+          <ul>
+            <li>GET
+              <code>?action=updateStatus&id={docId}&status=Recruiting&assignedToName={name}&assignedAt={iso}&hcId={hcId}&secret=XXX</code>
+            </li>
+            <li>GAS หาแถวใน "Job Openings 2025" ด้วย HCID → อัปเดต column PIC + Status</li>
+          </ul>
+        </div>
+
+        <div class="flow-arrow">↓ พร้อมกัน</div>
+
+        <div class="flow-box audit">
+          <span class="flow-tag">Audit Log — hc_logs</span>
+          <ul>
+            <li><span class="flow-field"><span class="key">action</span>: <span class="val">"Assign"</span></span></li>
+            <li><span class="flow-field"><span class="key">fromStatus</span>: <span class="val">"Open"</span> → <span
+                  class="key">toStatus</span>: <span class="val">"Recruiting"</span></span></li>
+            <li><span class="flow-field"><span class="key">by</span>: <span class="val">user.email</span>, <span
+                  class="key">byName</span>: <span class="val">user.displayName</span></span></li>
+            <li><span class="flow-field"><span class="key">timestamp</span>: <span
+                  class="val">serverTimestamp()</span></span></li>
+          </ul>
+        </div>
+
+      </div>
+
+      <div class="info">
+        <strong>📌 สิ่งที่เปลี่ยนใน Sheets:</strong> Column I (PIC) = ชื่อ TA / Column J (Status) = "Active Sourcing"
+      </div>
+
+      <!-- ── Google Sheets format mockup (เหมือนไฟล์จริง) ── -->
+      <p style="font-size:.75rem;font-weight:700;color:var(--tx2);margin-top:1.25rem;margin-bottom:.5rem;">📊 Google Sheets "Job Openings 2025" — ที่ GAS เขียนข้อมูลไป (format เหมือนไฟล์จริง)</p>
+      <div style="border-radius:8px;overflow:hidden;border:1px solid #c0c0c0;box-shadow:0 2px 8px rgba(0,0,0,.12);font-family:Arial,sans-serif;font-size:.72rem;overflow-x:auto;">
+        <!-- Sheets title bar -->
+        <div style="background:#fff;border-bottom:1px solid #e0e0e0;padding:.3rem .75rem;display:flex;align-items:center;gap:.6rem;">
+          <span style="font-size:1rem;">📊</span>
+          <span style="font-weight:600;font-size:.75rem;color:#202124;">[FKT-People] - Recruitment Report (Prototype HC Request App)</span>
+        </div>
+        <!-- Sheet tabs -->
+        <div style="background:#f1f3f4;border-bottom:1px solid #e0e0e0;padding:0 .5rem;display:flex;gap:0;align-items:flex-end;">
+          <div style="background:#fff;border:1px solid #e0e0e0;border-bottom:none;padding:.25rem .9rem;font-size:.65rem;font-weight:700;color:#1a73e8;border-radius:4px 4px 0 0;">Job Openings 2025</div>
+          <div style="padding:.25rem .9rem;font-size:.65rem;color:#5f6368;">Pivot job</div>
+          <div style="padding:.25rem .9rem;font-size:.65rem;color:#5f6368;">SLA</div>
+          <div style="padding:.25rem .9rem;font-size:.65rem;color:#5f6368;">TA Report</div>
+        </div>
+        <div style="overflow-x:auto;background:#fff;">
+          <!-- ── CSS macro for consistent cell style ── -->
+          <!-- col widths: date | empType | jobType | hcid | position | rank | dept | bu | pic | status -->
+          <table style="border-collapse:collapse;min-width:860px;width:100%;table-layout:fixed;">
+            <colgroup>
+              <col style="width:82px"><col style="width:64px"><col style="width:72px">
+              <col style="width:106px"><col style="width:170px"><col style="width:82px">
+              <col style="width:110px"><col style="width:98px"><col style="width:106px"><col style="width:110px">
+            </colgroup>
+            <!-- Header row — Sheets style: bold, gray bg -->
+            <thead>
+              <tr style="background:#f8f9fa;">
+                <th style="border:1px solid #d0d0d0;padding:.28rem .45rem;font-size:.62rem;font-weight:700;color:#202124;text-align:left;">Open Jobs</th>
+                <th style="border:1px solid #d0d0d0;padding:.28rem .45rem;font-size:.62rem;font-weight:700;color:#202124;text-align:left;">Emp. Type</th>
+                <th style="border:1px solid #d0d0d0;padding:.28rem .45rem;font-size:.62rem;font-weight:700;color:#202124;text-align:left;">Job Type</th>
+                <th style="border:1px solid #d0d0d0;padding:.28rem .45rem;font-size:.62rem;font-weight:700;color:#202124;text-align:left;">HCID</th>
+                <th style="border:1px solid #d0d0d0;padding:.28rem .45rem;font-size:.62rem;font-weight:700;color:#202124;text-align:left;">Position</th>
+                <th style="border:1px solid #d0d0d0;padding:.28rem .45rem;font-size:.62rem;font-weight:700;color:#202124;text-align:left;">Rank</th>
+                <th style="border:1px solid #d0d0d0;padding:.28rem .45rem;font-size:.62rem;font-weight:700;color:#202124;text-align:left;">Department</th>
+                <th style="border:1px solid #d0d0d0;padding:.28rem .45rem;font-size:.62rem;font-weight:700;color:#202124;text-align:left;">Business Unit</th>
+                <th style="border:1px solid #d0d0d0;padding:.28rem .45rem;font-size:.63rem;font-weight:700;color:#1a73e8;text-align:left;">PIC ★</th>
+                <th style="border:1px solid #d0d0d0;padding:.28rem .45rem;font-size:.63rem;font-weight:700;color:#1a73e8;text-align:left;">Status ★</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Row 1 — Replace / Saran (Aof) / Active Sourcing -->
+              <tr>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">12-Apr-2026</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Monthly</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;">
+                  <span style="display:inline-flex;align-items:center;gap:3px;background:#1e7e34;color:#fff;font-size:.62rem;font-weight:700;padding:2px 7px 2px 8px;border-radius:99px;white-space:nowrap;">Replace <span style="font-size:.55rem;">▾</span></span>
+                </td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;font-size:.65rem;color:#5f6368;">REQ-2026-411</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;font-weight:600;color:#202124;">Software Engineer</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Staff</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Tech&amp;Products</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Tech&amp;Pro...</td>
+                <!-- PIC: Saran (Aof) = ชมพูอ่อน/salmon -->
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;background:#f4cccc;color:#990000;font-weight:600;">Saran (Aof) <span style="font-size:.55rem;">▾</span></td>
+                <!-- Status: Active Sourcing = salmon -->
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;background:#f4cccc;color:#990000;font-weight:600;">Active Sourcing <span style="font-size:.55rem;">▾</span></td>
+              </tr>
+              <!-- Row 2 — Replace / Artit (Top) / Pending Onboard -->
+              <tr>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">2-Apr-2026</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Monthly</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;">
+                  <span style="display:inline-flex;align-items:center;gap:3px;background:#1e7e34;color:#fff;font-size:.62rem;font-weight:700;padding:2px 7px 2px 8px;border-radius:99px;white-space:nowrap;">Replace <span style="font-size:.55rem;">▾</span></span>
+                </td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;font-size:.65rem;color:#5f6368;">REQ-2026-408</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;font-weight:600;color:#202124;">Distribution Center Manager</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Manager</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Distribution Center...</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Distributio...</td>
+                <!-- PIC: Artit (Top) = เหลืองอำพัน -->
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;background:#ffd966;color:#7f6000;font-weight:600;">Artit (Top) <span style="font-size:.55rem;">▾</span></td>
+                <!-- Status: Pending Onboard = เขียวอ่อน -->
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;background:#b7e1cd;color:#0d652d;font-weight:600;">Pending Onboard <span style="font-size:.55rem;">▾</span></td>
+              </tr>
+              <!-- Row 3 — Replace / Jiratcha (Belle) / Active Sourcing -->
+              <tr>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">16-Apr-2026</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Monthly</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;">
+                  <span style="display:inline-flex;align-items:center;gap:3px;background:#1e7e34;color:#fff;font-size:.62rem;font-weight:700;padding:2px 7px 2px 8px;border-radius:99px;white-space:nowrap;">Replace <span style="font-size:.55rem;">▾</span></span>
+                </td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;font-size:.65rem;color:#5f6368;">REQ-2026-412</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;font-weight:600;color:#202124;">Executive Driver</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Staff</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">CEO Office</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">CEO Office</td>
+                <!-- PIC: Jiratcha (Belle) = แดงเข้ม + ตัวอักษรขาว -->
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;background:#cc0000;color:#fff;font-weight:600;">Jiratcha (Belle) <span style="font-size:.55rem;">▾</span></td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;background:#f4cccc;color:#990000;font-weight:600;">Active Sourcing <span style="font-size:.55rem;">▾</span></td>
+              </tr>
+              <!-- Row 4 — New HC / Artit (Top) / Active Sourcing -->
+              <tr>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">16-Apr-2026</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Monthly</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;">
+                  <span style="display:inline-flex;align-items:center;gap:3px;background:#1155cc;color:#fff;font-size:.62rem;font-weight:700;padding:2px 7px 2px 8px;border-radius:99px;white-space:nowrap;">New HC <span style="font-size:.55rem;">▾</span></span>
+                </td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;font-size:.65rem;color:#5f6368;">REQ-2026-413</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;font-weight:600;color:#202124;">Operations Engineer</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Assistant...</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Operations</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Operations</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;background:#ffd966;color:#7f6000;font-weight:600;">Artit (Top) <span style="font-size:.55rem;">▾</span></td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;background:#f4cccc;color:#990000;font-weight:600;">Active Sourcing <span style="font-size:.55rem;">▾</span></td>
+              </tr>
+              <!-- Row 5 — New HC / Jiratcha (Belle) / Pending Onboard -->
+              <tr>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">16-Apr-2026</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Intern</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;">
+                  <span style="display:inline-flex;align-items:center;gap:3px;background:#1155cc;color:#fff;font-size:.62rem;font-weight:700;padding:2px 7px 2px 8px;border-radius:99px;white-space:nowrap;">New HC <span style="font-size:.55rem;">▾</span></span>
+                </td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;font-size:.65rem;color:#5f6368;">REQ-2026-419</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;font-weight:600;color:#202124;">IT Support Intern</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Intern</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">People Experience</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">People E...</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;background:#cc0000;color:#fff;font-weight:600;">Jiratcha (Belle) <span style="font-size:.55rem;">▾</span></td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;background:#b7e1cd;color:#0d652d;font-weight:600;">Pending Onboard <span style="font-size:.55rem;">▾</span></td>
+              </tr>
+              <!-- Row 6 — Replace / Jitlada (Mo) / Active Sourcing -->
+              <tr>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">9-Apr-2026</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Monthly</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;">
+                  <span style="display:inline-flex;align-items:center;gap:3px;background:#1e7e34;color:#fff;font-size:.62rem;font-weight:700;padding:2px 7px 2px 8px;border-radius:99px;white-space:nowrap;">Replace <span style="font-size:.55rem;">▾</span></span>
+                </td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;font-size:.65rem;color:#5f6368;">REQ-2026-405</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;font-weight:600;color:#202124;">Portfolio Management Executive</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Supervisor</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Portfolio Manage...</td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;color:#202124;">Commercial</td>
+                <!-- PIC: Jitlada (Mo) = ม่วงอ่อน/lavender -->
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;background:#d9b8f5;color:#4a148c;font-weight:600;">Jitlada (Mo) <span style="font-size:.55rem;">▾</span></td>
+                <td style="border:1px solid #e0e0e0;padding:.28rem .45rem;background:#f4cccc;color:#990000;font-weight:600;">Active Sourcing <span style="font-size:.55rem;">▾</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- Legend -->
+        <div style="background:#f8f9fa;padding:.4rem .75rem;font-size:.62rem;color:#5f6368;border-top:1px solid #e0e0e0;display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;">
+          <span>★ GAS เขียน 2 column นี้</span>
+          <span style="display:inline-flex;align-items:center;gap:3px;"><span style="width:10px;height:10px;background:#cc0000;border-radius:2px;display:inline-block;"></span> Jiratcha (Belle)</span>
+          <span style="display:inline-flex;align-items:center;gap:3px;"><span style="width:10px;height:10px;background:#d9b8f5;border-radius:2px;display:inline-block;"></span> Jitlada (Mo)</span>
+          <span style="display:inline-flex;align-items:center;gap:3px;"><span style="width:10px;height:10px;background:#ffd966;border-radius:2px;display:inline-block;"></span> Artit (Top)</span>
+          <span style="display:inline-flex;align-items:center;gap:3px;"><span style="width:10px;height:10px;background:#f4cccc;border-radius:2px;display:inline-block;"></span> Saran (Aof)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <!-- ──────────────────────────────────────────────────────────
+     2. STATUS CHANGE
+──────────────────────────────────────────────────────────── -->
+    <div class="sec" id="status">
+      <div class="sec-title">
+        <div class="sec-icon">🔄</div>Action 2 — เปลี่ยนสถานะทั่วไป
+      </div>
+      <div class="sec-sub">TA คลิก dropdown Status ในตาราง → เลือกสถานะใหม่</div>
+
+      <div class="action-header">
+        <div class="action-num">2</div>
+        <div>
+          <div class="action-name">handleStatusChange(id, newStatus)</div>
+          <div class="action-fn">RequestTable.jsx → handleStatusChange()</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:1rem;">
+        <h4>สถานะที่ TA เลือกได้ (TA_STATUSES)</h4>
+        <div class="pipeline">
+          <span class="badge b-rec">Recruiting</span>
+          <span class="pipe-arr">→</span>
+          <span class="badge b-int">Interviewing</span>
+          <span class="pipe-arr">→</span>
+          <span class="badge b-off">Offering</span>
+          <span class="pipe-arr">→</span>
+          <span class="badge b-onb">W.Onboarding</span>
+          <span class="pipe-arr">→</span>
+          <span class="badge b-cls">Closed</span>
+        </div>
+        <p style="font-size:.82rem; color:var(--tx2); margin-top:.5rem;">TA <strong>ไม่สามารถ</strong>เลือก "Open" ได้ —
+          Admin เท่านั้นที่เห็น Open ใน dropdown</p>
+      </div>
+
+      <!-- ── UI Mockup: Status dropdown ── -->
+      <div style="display:flex;gap:1.5rem;align-items:flex-start;margin:1.25rem 0;flex-wrap:wrap;">
+        <div style="flex:1;min-width:220px;">
+          <p style="font-size:.75rem;font-weight:700;color:var(--tx2);margin-bottom:.5rem;">📋 ตาราง — คลิกที่ status badge เพื่อเปลี่ยน</p>
+          <div style="background:#fff;border:1.5px solid #e5e7eb;border-radius:11px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+            <div style="background:#f8fafc;border-bottom:2px solid #e5e7eb;padding:.4rem 1rem;font-size:.63rem;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;">ตำแหน่ง / สถานะ</div>
+            <div style="padding:.65rem 1rem;display:flex;align-items:center;justify-content:space-between;gap:.75rem;">
+              <div>
+                <div style="font-weight:800;font-size:.8rem;color:#111827;">DevOps Engineer</div>
+                <div style="font-size:.62rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-top:2px;">Tech&amp;Products</div>
+              </div>
+              <div style="cursor:pointer;">
+                <span class="badge b-rec" style="cursor:pointer;">Recruiting ▾</span>
+              </div>
+            </div>
+          </div>
+          <p style="font-size:.65rem;color:#9ca3af;margin-top:.4rem;">👆 คลิกที่ badge → dropdown เปิด</p>
+        </div>
+        <div>
+          <p style="font-size:.75rem;font-weight:700;color:var(--tx2);margin-bottom:.5rem;">🔽 Dropdown ที่เห็น (TA role)</p>
+          <div class="mock-dropdown">
+            <div class="mock-dd-item active-dd"><span class="mock-dd-dot" style="background:#86efac;"></span>Recruiting ✓</div>
+            <div class="mock-dd-item"><span class="mock-dd-dot" style="background:#fdba74;"></span>Interviewing</div>
+            <div class="mock-dd-item"><span class="mock-dd-dot" style="background:#a5b4fc;"></span>Offering</div>
+            <div class="mock-dd-item"><span class="mock-dd-dot" style="background:#5eead4;"></span>W.Onboarding</div>
+            <div class="mock-dd-item"><span class="mock-dd-dot" style="background:#cbd5e1;"></span>Closed</div>
+            <div class="mock-dd-item"><span class="mock-dd-dot" style="background:#fda4af;"></span>Rejected</div>
+            <div style="border-top:1px solid #f3f4f6;margin:.3rem .4rem;"></div>
+            <div class="mock-dd-item" style="opacity:.35;font-size:.7rem;"><span class="mock-dd-dot" style="background:#fde047;"></span>Open (Admin only)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-chain">
+
+        <div class="flow-box firestore">
+          <span class="flow-tag">Firestore — hc_requests/{id}</span>
+          <ul>
+            <li><span class="flow-field"><span class="key">status</span>: <span class="val">newStatus</span></span></li>
+            <li><span class="flow-field"><span class="key">statusHistory</span>: <span class="val">arrayUnion({ status,
+                  changedAt, changedBy, changedByName })</span></span></li>
+            <li style="opacity:.5; font-size:.78rem; padding-left:.5rem;">──── กฎพิเศษเพิ่มเติม ────</li>
+            <li><span class="flow-field">ถ้า request ยังไม่มี TA + status ใหม่ไม่ใช่ Open → <span
+                  class="key">assignedTo/Name/At</span> = TA คนนี้ (auto-assign)</span></li>
+            <li><span class="flow-field">newStatus = <span class="val">"Rejected"</span> → เพิ่ม <span
+                  class="key">rejectedAt</span>: serverTimestamp()</span></li>
+            <li><span class="flow-field">newStatus = <span class="val">"Closed"</span> → เพิ่ม <span
+                  class="key">closedAt</span>: serverTimestamp()</span></li>
+            <li><span class="flow-field">newStatus = <span class="val">"Onboarding"</span> → ล้าง <span
+                  class="key">rejectReason</span>, <span class="key">rejectedAt</span></span></li>
+            <li><span class="flow-field">newStatus = <span class="val">"Offering"</span> (และยังไม่มี offeringDate) →
+                เพิ่ม <span class="key">offeringDate</span>: now</span></li>
+            <li><span class="flow-field">กลับไป Open/Recruiting/Interviewing → ล้าง <span
+                  class="key">offeringDate</span></span></li>
+            <li><span class="flow-field">กลับไปก่อน Onboarding → ล้าง <span class="key">candidateName</span>, <span
+                  class="key">startDate</span></span></li>
+          </ul>
+        </div>
+
+        <div class="flow-arrow">↓</div>
+
+        <div class="flow-box gas">
+          <span class="flow-tag">GAS — updateStatus</span>
+          <ul>
+            <li>GET <code>?action=updateStatus&id={docId}&status={new}&hcId={hcId}&secret=XXX</code></li>
+            <li>GAS map status → ชื่อ Sheets: <code>Recruiting → "Active Sourcing"</code>,
+              <code>Offering → "Pending Offer"</code>, <code>Onboarding → "Pending Onboard"</code>,
+              <code>Closed → "Onboard"</code>, <code>Rejected → "Turndown"</code>,
+              <code>Cancelled → "Job Cancelled"</code></li>
+            <li>มี debounce 800ms — ถ้ากด status ซ้ำเร็วๆ จะส่งแค่ครั้งสุดท้าย</li>
+          </ul>
+        </div>
+
+        <div class="flow-arrow">↓</div>
+
+        <div class="flow-box audit">
+          <span class="flow-tag">Audit Log — hc_logs</span>
+          <ul>
+            <li><span class="flow-field"><span class="key">action</span>: <span class="val">"StatusChange"</span></span>
+            </li>
+            <li><span class="flow-field"><span class="key">fromStatus</span> → <span class="key">toStatus</span></span>
+            </li>
+            <li><span class="flow-field">note: วันเริ่มงาน/ชื่อ candidate ถ้ามี</span></li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <!-- ──────────────────────────────────────────────────────────
+     3. OFFERING
+──────────────────────────────────────────────────────────── -->
+    <div class="sec" id="offering">
+      <div class="sec-title">
+        <div class="sec-icon">📄</div>Action 3 — เปลี่ยนเป็น Offering
+      </div>
+      <div class="sec-sub">TA เลือก Offering → ระบบเปิด popup ให้กรอกชื่อผู้สมัคร (optional)</div>
+
+      <div class="action-header">
+        <div class="action-num">3</div>
+        <div>
+          <div class="action-name">handleOfferingConfirm() → mode "offering"</div>
+          <div class="action-fn">RequestTable.jsx → offeringModal (mode='offering')</div>
+        </div>
+      </div>
+
+      <!-- ── UI Mockup: Offering modal ── -->
+      <div style="margin:1rem 0 1.25rem;">
+        <p style="font-size:.75rem;font-weight:700;color:var(--tx2);margin-bottom:.6rem;">🖥️ Popup ที่ขึ้นมาเมื่อเลือก Offering</p>
+        <div style="max-width:380px;background:#fff;border:1.5px solid #e5e7eb;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.15);padding:1.5rem;">
+          <div style="font-weight:900;font-size:.95rem;color:#111827;margin-bottom:.25rem;">📄 เปลี่ยนสถานะเป็น Offering</div>
+          <div style="font-size:.75rem;color:#6b7280;margin-bottom:1.1rem;">Software Engineer · Tech&amp;Products</div>
+          <div style="margin-bottom:1rem;">
+            <label style="font-size:.72rem;font-weight:700;color:#374151;display:block;margin-bottom:.3rem;">ชื่อผู้สมัคร <span style="color:#9ca3af;font-weight:500;">(optional)</span></label>
+            <div style="border:1.5px solid #d1d5db;border-radius:8px;padding:.45rem .75rem;font-size:.8rem;color:#9ca3af;background:#f9fafb;">กรอกชื่อผู้สมัครที่ได้รับ Offer...</div>
+          </div>
+          <div style="margin-bottom:1rem;">
+            <label style="font-size:.72rem;font-weight:700;color:#374151;display:block;margin-bottom:.3rem;">วันที่ Offer</label>
+            <div style="border:1.5px solid #d1d5db;border-radius:8px;padding:.45rem .75rem;font-size:.8rem;color:#374151;background:#f9fafb;">21/04/2026 <span style="color:#9ca3af;float:right;">📅</span></div>
+          </div>
+          <div style="display:flex;gap:.6rem;justify-content:flex-end;">
+            <div style="padding:.4rem .9rem;border-radius:8px;border:1.5px solid #e5e7eb;font-size:.75rem;font-weight:700;color:#6b7280;">ยกเลิก</div>
+            <div style="padding:.4rem .9rem;border-radius:8px;background:#008065;font-size:.75rem;font-weight:700;color:#fff;">Confirm</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-box firestore">
+        <span class="flow-tag">Firestore — hc_requests/{id}</span>
+        <ul>
+          <li><span class="flow-field"><span class="key">status</span>: <span class="val">"Offering"</span></span></li>
+          <li><span class="flow-field"><span class="key">offeringDate</span>: <span class="val">new
+                Date().toISOString()</span> ← บันทึกวันที่ offer อัตโนมัติ</span></li>
+          <li><span class="flow-field"><span class="key">candidateName</span>: ชื่อที่กรอก (ถ้ากรอก)</span></li>
+          <li><span class="flow-field"><span class="key">statusHistory</span>: arrayUnion</span></li>
+        </ul>
+      </div>
+
+      <div class="tip">
+        <strong>💡 SLA หยุดนับ:</strong> ทันทีที่ status เป็น Offering — <code>getDaysOpen()</code> จะ <strong>pause
+          timer</strong> ไม่นับวันเพิ่มอีก จนกว่าจะย้ายสถานะอีกครั้ง
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <!-- ──────────────────────────────────────────────────────────
+     4. ONBOARDING
+──────────────────────────────────────────────────────────── -->
+    <div class="sec" id="onboarding">
+      <div class="sec-title">
+        <div class="sec-icon">🚀</div>Action 4 — ยืนยัน Onboarding
+      </div>
+      <div class="sec-sub">เมื่อ offer ได้รับการยืนยัน — TA เปลี่ยนเป็น W.Onboarding พร้อมกรอกวันเริ่มงาน</div>
+
+      <div class="action-header">
+        <div class="action-num">4</div>
+        <div>
+          <div class="action-name">handleOfferingConfirm() → mode "onboarding"</div>
+          <div class="action-fn">RequestTable.jsx → offeringModal (mode='onboarding')</div>
+        </div>
+      </div>
+
+      <!-- ── UI Mockup: Onboarding modal ── -->
+      <div style="margin:1rem 0 1.25rem;">
+        <p style="font-size:.75rem;font-weight:700;color:var(--tx2);margin-bottom:.6rem;">🖥️ Popup ที่ขึ้นมาเมื่อเลือก W.Onboarding</p>
+        <div style="max-width:380px;background:#fff;border:1.5px solid #e5e7eb;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.15);padding:1.5rem;">
+          <div style="font-weight:900;font-size:.95rem;color:#111827;margin-bottom:.25rem;">🚀 เปลี่ยนสถานะเป็น W.Onboarding</div>
+          <div style="font-size:.75rem;color:#6b7280;margin-bottom:1.1rem;">Customer Success Executive · Customer Success</div>
+          <div style="margin-bottom:1rem;">
+            <label style="font-size:.72rem;font-weight:700;color:#374151;display:block;margin-bottom:.3rem;">ชื่อผู้สมัคร <span style="color:#9ca3af;font-weight:500;">(optional)</span></label>
+            <div style="border:1.5px solid #008065;border-radius:8px;padding:.45rem .75rem;font-size:.8rem;color:#111827;background:#f9fafb;">สมชาย ใจดี</div>
+          </div>
+          <div style="margin-bottom:1rem;">
+            <label style="font-size:.72rem;font-weight:700;color:#374151;display:block;margin-bottom:.3rem;">วันเริ่มงาน <span style="color:#ef4444;font-weight:700;">* บังคับกรอก</span></label>
+            <div style="border:1.5px solid #008065;border-radius:8px;padding:.45rem .75rem;font-size:.8rem;color:#111827;background:#f9fafb;">01/05/2026 <span style="color:#9ca3af;float:right;">📅</span></div>
+          </div>
+          <div style="display:flex;gap:.6rem;justify-content:flex-end;">
+            <div style="padding:.4rem .9rem;border-radius:8px;border:1.5px solid #e5e7eb;font-size:.75rem;font-weight:700;color:#6b7280;">ยกเลิก</div>
+            <div style="padding:.4rem .9rem;border-radius:8px;background:#008065;font-size:.75rem;font-weight:700;color:#fff;">Confirm ✓</div>
+          </div>
+          <p style="font-size:.65rem;color:#ef4444;margin-top:.6rem;font-weight:600;">⚠️ ถ้าไม่กรอกวันเริ่มงาน — ปุ่ม Confirm จะ disabled กดไม่ได้</p>
+        </div>
+      </div>
+
+      <div class="flow-box firestore">
+        <span class="flow-tag">Firestore — hc_requests/{id}</span>
+        <ul>
+          <li><span class="flow-field"><span class="key">status</span>: <span class="val">"Onboarding"</span></span>
+          </li>
+          <li><span class="flow-field"><span class="key">startDate</span>: <span class="val">วันที่กรอก (ISO
+                string)</span></span></li>
+          <li><span class="flow-field"><span class="key">candidateName</span>: <span
+                class="val">ชื่อผู้สมัคร</span></span></li>
+          <li><span class="flow-field"><span class="key">rejectReason</span>: <span class="val">""</span> ← ล้างเหตุผล
+              reject เก่า (ถ้ามี)</span></li>
+          <li><span class="flow-field"><span class="key">rejectedAt</span>: <span class="val">null</span></span></li>
+          <li><span class="flow-field"><span class="key">statusHistory</span>: arrayUnion</span></li>
+        </ul>
+      </div>
+
+      <div class="flow-box gas" style="margin-top:.5rem;">
+        <span class="flow-tag">GAS — Sheets</span>
+        <ul>
+          <li>Column K (Offered Candidate) = ชื่อผู้สมัคร</li>
+          <li>Column P (Onboard Date) = Start Date ที่กรอก</li>
+          <li>Column J (Status) = "Pending Onboard"</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <!-- ──────────────────────────────────────────────────────────
+     5. REJECT
+──────────────────────────────────────────────────────────── -->
+    <div class="sec" id="reject">
+      <div class="sec-title">
+        <div class="sec-icon">❌</div>Action 5 — ปฏิเสธ (Reject)
+      </div>
+      <div class="sec-sub">ผู้สมัครทุกคนไม่ผ่าน — TA กด Reject พร้อมระบุเหตุผล</div>
+
+      <div class="action-header">
+        <div class="action-num">5</div>
+        <div>
+          <div class="action-name">handleRejectConfirm()</div>
+          <div class="action-fn">RequestTable.jsx → rejectModal → handleRejectConfirm()</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:1rem;">
+        <h4>🖥️ สิ่งที่เห็นบนหน้าจอ</h4>
+        <p style="font-size:.85rem; color:var(--tx2);">เมื่อกดปุ่ม <span class="badge b-rej">Reject</span> — popup
+          จะขึ้นมาถาม:<br />
+          <strong>"เหตุผลการปฏิเสธ"</strong> — ถ้าไม่กรอก ระบบจะบันทึกเป็น "ไม่ระบุเหตุผล" อัตโนมัติ
+        </p>
+      </div>
+
+      <div class="flow-box firestore">
+        <span class="flow-tag">Firestore — hc_requests/{id}</span>
+        <ul>
+          <li><span class="flow-field"><span class="key">status</span>: <span class="val">"Rejected"</span></span></li>
+          <li><span class="flow-field"><span class="key">rejectReason</span>: <span class="val">เหตุผลที่กรอก</span>
+              (หรือ "ไม่ระบุเหตุผล")</span></li>
+          <li><span class="flow-field"><span class="key">rejectedAt</span>: <span
+                class="val">serverTimestamp()</span></span></li>
+          <li><span class="flow-field"><span class="key">startDate</span>: <span class="val">""</span> ← ล้าง start date
+              เดิม</span></li>
+          <li><span class="flow-field"><span class="key">statusHistory</span>: arrayUnion</span></li>
+        </ul>
+      </div>
+
+      <div class="flow-box audit" style="margin-top:.5rem;">
+        <span class="flow-tag">Audit Log</span>
+        <ul>
+          <li><span class="flow-field"><span class="key">action</span>: <span class="val">"Rejected"</span></span></li>
+          <li><span class="flow-field"><span class="key">note</span>: <span class="val">"Rejected
+                (เหตุผล...)"</span></span></li>
+        </ul>
+      </div>
+
+      <div class="warn">
+        <strong>⚠️ หมายเหตุ:</strong> request ที่ Rejected <strong>ยังแก้ไขได้</strong> — TA สามารถกด "เปิดใหม่" เพื่อ
+        Recruit ต่อ ดูขั้นตอนถัดไป
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <!-- ──────────────────────────────────────────────────────────
+     6. REOPEN
+──────────────────────────────────────────────────────────── -->
+    <div class="sec" id="reopen">
+      <div class="sec-title">
+        <div class="sec-icon">🔁</div>Action 6 — เปิดใหม่ (Reopen)
+      </div>
+      <div class="sec-sub">Rejected → Recruiting ใหม่ เมื่อต้องการหาผู้สมัครเพิ่ม</div>
+
+      <div class="action-header">
+        <div class="action-num">6</div>
+        <div>
+          <div class="action-name">handleReopen(id)</div>
+          <div class="action-fn">RequestTable.jsx → handleReopen()</div>
+        </div>
+      </div>
+
+      <div class="flow-box firestore">
+        <span class="flow-tag">Firestore — hc_requests/{id}</span>
+        <ul>
+          <li><span class="flow-field"><span class="key">status</span>: <span class="val">"Recruiting"</span></span>
+          </li>
+          <li><span class="flow-field"><span class="key">startDate</span>: <span class="val">""</span> ← ล้าง start
+              date</span></li>
+          <li><span class="flow-field"><span class="key">rejectedAt</span>: <span class="val">null</span></span></li>
+          <li><span class="flow-field"><span class="key">statusHistory</span>: arrayUnion({ status:"Recruiting", ...
+              })</span></li>
+        </ul>
+      </div>
+
+      <div class="flow-box audit" style="margin-top:.5rem;">
+        <span class="flow-tag">Audit Log</span>
+        <ul>
+          <li><span class="flow-field"><span class="key">action</span>: <span class="val">"Reopen"</span></span></li>
+          <li><span class="flow-field"><span class="key">note</span>: <span class="val">"Rejected → Recruiting
+                ใหม่"</span></span></li>
+        </ul>
+      </div>
+
+      <div class="tip">
+        <strong>🔄 SLA:</strong> เมื่อ Reopen จาก Rejected (ซึ่งเคยผ่าน Onboarding มาก่อน) — SLA counter จะ
+        <strong>รีเซ็ตเป็น 0</strong> และเริ่มนับใหม่
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <!-- ──────────────────────────────────────────────────────────
+     7. REASSIGN
+──────────────────────────────────────────────────────────── -->
+    <div class="sec" id="reassign">
+      <div class="sec-title">
+        <div class="sec-icon">🔀</div>Action 7 — โอนเคส (Reassign)
+      </div>
+      <div class="sec-sub">เมื่อต้องการเปลี่ยน TA ที่รับผิดชอบ — Admin หรือ TA คนปัจจุบัน</div>
+
+      <div class="action-header">
+        <div class="action-num">7</div>
+        <div>
+          <div class="action-name">handleReassign(id, newTAEmail, newTAName)</div>
+          <div class="action-fn">RequestTable.jsx → handleReassign()</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:1rem;">
+        <h4>🖥️ สิ่งที่เห็นบนหน้าจอ</h4>
+        <p style="font-size:.85rem; color:var(--tx2);">กดปุ่ม Reassign ข้าง ๆ ชื่อ TA → dropdown แสดงรายชื่อ TA
+          ทั้งหมดจาก Firestore collection <code>users</code> (role = 'ta' หรือ 'admin')</p>
+      </div>
+
+      <div class="flow-box firestore">
+        <span class="flow-tag">Firestore — hc_requests/{id}</span>
+        <ul>
+          <li><span class="flow-field"><span class="key">assignedTo</span>: <span class="val">newTAEmail</span></span>
+          </li>
+          <li><span class="flow-field"><span class="key">assignedToName</span>: <span
+                class="val">newTAName</span></span></li>
+          <li><span class="flow-field"><span class="key">assignedAt</span>: <span class="val">serverTimestamp()</span> ←
+              อัปเดตเวลาที่ assign</span></li>
+          <li style="opacity:.6; font-size:.78rem;">⚠️ status ไม่เปลี่ยน — เปลี่ยนแค่ TA</li>
+        </ul>
+      </div>
+
+      <div class="flow-box gas" style="margin-top:.5rem;">
+        <span class="flow-tag">GAS — Sheets</span>
+        <ul>
+          <li>Column I (PIC) อัปเดตเป็นชื่อ TA ใหม่</li>
+          <li>Status คงเดิม</li>
+        </ul>
+      </div>
+
+      <div class="flow-box audit" style="margin-top:.5rem;">
+        <span class="flow-tag">Audit Log</span>
+        <ul>
+          <li><span class="flow-field"><span class="key">action</span>: <span class="val">"Assign"</span></span></li>
+          <li><span class="flow-field"><span class="key">note</span>: <span class="val">"Reassigned from TA เดิม to TA
+                ใหม่"</span></span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <!-- ──────────────────────────────────────────────────────────
+     8. CV
+──────────────────────────────────────────────────────────── -->
+    <div class="sec" id="cv">
+      <div class="sec-title">
+        <div class="sec-icon">📎</div>Action 8 — จัดการ CV ผู้สมัคร
+      </div>
+      <div class="sec-sub">TA อัปโหลดหรือลบไฟล์ CV ในแต่ละ request</div>
+
+      <div class="action-header">
+        <div class="action-num">8A</div>
+        <div>
+          <div class="action-name">อัปโหลด CV — handleCVUpload(reqId, file)</div>
+          <div class="action-fn">RequestTable.jsx → handleCVUpload()</div>
+        </div>
+      </div>
+
+      <div class="flow-chain">
+        <div class="flow-box supabase">
+          <span class="flow-tag">Supabase Storage — cv-files</span>
+          <ul>
+            <li>path: <code>cv-files/{reqId}/{timestamp}_{filename}</code></li>
+            <li>รองรับ: PDF, Word, Image ทุกประเภท</li>
+            <li>return: <code>{ path, url }</code></li>
+          </ul>
+        </div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-box firestore">
+          <span class="flow-tag">Firestore — hc_requests/{reqId}</span>
+          <ul>
+            <li><span class="flow-field"><span class="key">cvFiles</span>: arrayUnion({ <span class="key">name</span>,
+                <span class="key">path</span>, <span class="key">uploadedBy</span>: user.email, <span
+                  class="key">uploadedAt</span> })</span></li>
+            <li>เก็บเป็น array — 1 request มีได้หลาย CV</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="action-header" style="margin-top:1.5rem;">
+        <div class="action-num">8B</div>
+        <div>
+          <div class="action-name">ลบ CV — handleDeleteCV(reqId, cvEntry)</div>
+          <div class="action-fn">RequestTable.jsx → handleDeleteCV()</div>
+        </div>
+      </div>
+
+      <div class="flow-chain">
+        <div class="flow-box supabase">
+          <span class="flow-tag">Supabase Storage</span>
+          <ul>
+            <li>ลบไฟล์ด้วย path จาก <code>cvEntry.path</code></li>
+          </ul>
+        </div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-box firestore">
+          <span class="flow-tag">Firestore</span>
+          <ul>
+            <li><span class="flow-field"><span class="key">cvFiles</span>: arrayRemove(cvEntry)</span> ← เอา object
+              นั้นออกจาก array</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <!-- ──────────────────────────────────────────────────────────
+     SLA
+──────────────────────────────────────────────────────────── -->
+    <div class="sec" id="sla">
+      <div class="sec-title">
+        <div class="sec-icon">⏱️</div>SLA — กลไกนับวันเปิด Request
+      </div>
+      <div class="sec-sub">ฟังก์ชัน <code>getDaysOpen(req)</code> ใน RequestTable.jsx — กฎครบ 3 ข้อ</div>
+
+      <div class="sla-bar">
+        <div class="sla-seg sla-count">▶️ นับปกติ<br /><small>Open/Recruiting/Interviewing</small></div>
+        <div class="sla-seg sla-pause">⏸️ PAUSE<br /><small>Offering/Onboarding</small></div>
+        <div class="sla-seg sla-reset">🔄 RESET<br /><small>Onboarding→Recruiting</small></div>
+        <div class="sla-seg sla-done">⏹️ หยุด<br /><small>Closed/Cancelled</small></div>
+      </div>
+
+      <div class="card">
+        <table class="mini-table">
+          <thead>
+            <tr>
+              <th>กรณี</th>
+              <th>กฎ</th>
+              <th>ผลลัพธ์</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Open → Recruiting → Interviewing</td>
+              <td>นับปกติตั้งแต่ createdAt</td>
+              <td>days = วันที่ผ่านมา</td>
+            </tr>
+            <tr>
+              <td>→ Offering</td>
+              <td>accumulated += (เวลา Offering - activeStart); activeStart = null</td>
+              <td>⏸️ หยุดนับ — badge สีเทา</td>
+            </tr>
+            <tr>
+              <td>Offering → Interviewing (reject offer)</td>
+              <td>activeStart = t (Interviewing) — นับต่อจากเดิม</td>
+              <td>▶️ Resume ต่อจากที่ค้างไว้</td>
+            </tr>
+            <tr>
+              <td>→ Onboarding</td>
+              <td>accumulated += ...; lastPauseWasOnboarding = <strong>true</strong></td>
+              <td>⏸️ หยุดนับ + mark flag</td>
+            </tr>
+            <tr>
+              <td>Onboarding → Recruiting (reject onboard)</td>
+              <td>lastPauseWasOnboarding = true → accumulated = 0; activeStart = t</td>
+              <td>🔄 <strong>รีเซ็ต</strong> 0 วัน เริ่มใหม่</td>
+            </tr>
+            <tr>
+              <td>→ Closed หรือ Cancelled</td>
+              <td>accumulated += ...; activeStart = null</td>
+              <td>⏹️ หยุดถาวร แสดง X days (gray)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card" style="margin-top:1rem;">
+        <h4>สีของ SLA Badge</h4>
+        <div style="display:flex; flex-wrap:wrap; gap:.75rem; margin-top:.5rem;">
+          <div style="display:flex;align-items:center;gap:.5rem;font-size:.82rem;"><span
+              style="background:#f0fdf4;color:#15803d;border:1.5px solid #86efac;padding:.25rem .7rem;border-radius:99px;font-weight:800;">🟢
+              12d</span> น้อยกว่า 15 วัน — ปกติ</div>
+          <div style="display:flex;align-items:center;gap:.5rem;font-size:.82rem;"><span
+              style="background:#fefce8;color:#a16207;border:1.5px solid #fde047;padding:.25rem .7rem;border-radius:99px;font-weight:800;">🟡
+              22d</span> 15–30 วัน — ควรเร่ง</div>
+          <div style="display:flex;align-items:center;gap:.5rem;font-size:.82rem;"><span
+              style="background:#fff1f2;color:#be123c;border:1.5px solid #fda4af;padding:.25rem .7rem;border-radius:99px;font-weight:800;">🔴
+              45d</span> มากกว่า 30 วัน — เกิน SLA</div>
+          <div style="display:flex;align-items:center;gap:.5rem;font-size:.82rem;"><span
+              style="background:#f8fafc;color:#475569;border:1.5px solid #cbd5e1;padding:.25rem .7rem;border-radius:99px;font-weight:800;">⏸
+              8d</span> Paused (Offering/Onboarding)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <!-- ──────────────────────────────────────────────────────────
+     REALTIME
+──────────────────────────────────────────────────────────── -->
+    <div class="sec" id="realtime">
+      <div class="sec-title">
+        <div class="sec-icon">⚡</div>Realtime &amp; Page Visibility
+      </div>
+      <div class="sec-sub">ระบบทำงานอย่างไรเบื้องหลัง — เพื่อประหยัด Firestore reads</div>
+
+      <div class="card">
+        <h4>🔴 onSnapshot — Realtime Listener</h4>
+        <p style="font-size:.85rem; color:var(--tx2); margin-bottom:.75rem;">ตาราง request ดึงข้อมูลจาก Firestore ด้วย
+          <code>onSnapshot()</code> — ทุกครั้งที่ใครในทีมแก้ไข request ข้อมูลจะ update ในหน้าของทุกคนทันที
+          <strong>โดยไม่ต้อง refresh</strong></p>
+        <div class="flow-box firestore" style="margin:0;">
+          <span class="flow-tag">Query</span>
+          <ul>
+            <li><code>collection("hc_requests") → orderBy("createdAt", "desc") → limit(500)</code></li>
+            <li>ดึงสูงสุด 500 records ล่าสุด</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:1rem;">
+        <h4>👁️ Page Visibility API — ประหยัด reads</h4>
+        <p style="font-size:.85rem; color:var(--tx2);">เมื่อ tab ถูกซ่อน (เปิด tab อื่น / minimize) → <strong>listener
+            จะหยุดทำงาน</strong><br />
+          เมื่อกลับมา tab นี้ → <strong>listener จะเริ่มใหม่</strong> และดึงข้อมูลล่าสุดมาทันที</p>
+        <div class="tip" style="margin:.75rem 0 0;">
+          <strong>💡 ทำไมต้องทำ:</strong> Firestore คิดค่าตาม reads — ถ้า listener ทำงานตลอดแม้ไม่ได้ดู จะเปลือง quota
+          โดยใช่เหตุ
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:1rem;">
+        <h4>📡 GAS Debounce 800ms</h4>
+        <p style="font-size:.85rem; color:var(--tx2);">เมื่อ TA เปลี่ยน status หลายครั้งเร็วๆ (เช่น ลืมกด กด 2 ครั้ง) —
+          ระบบจะ <strong>ยกเลิก call เก่า</strong> และส่งแค่ครั้งสุดท้ายไป GAS หลังจากหยุดกด 800ms เพื่อป้องกัน spam
+          request</p>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <!-- ──────────────────────────────────────────────────────────
+     SUMMARY TABLE
+──────────────────────────────────────────────────────────── -->
+    <div class="sec">
+      <div class="sec-title">
+        <div class="sec-icon">📊</div>สรุป — ทุก Action เชื่อมไปไหน
+      </div>
+
+      <div class="card">
+        <table class="mini-table">
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th style="color:#d97706">🔥 Firestore</th>
+              <th style="color:#059669">📊 GAS/Sheets</th>
+              <th style="color:#4f46e5">🗄️ Supabase</th>
+              <th style="color:#9d174d">📝 Audit Log</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Claim</strong></td>
+              <td>status, assignedTo, statusHistory</td>
+              <td>PIC + Status</td>
+              <td>—</td>
+              <td>action: Assign</td>
+            </tr>
+            <tr>
+              <td><strong>Status Change</strong></td>
+              <td>status, extras ตาม status, statusHistory</td>
+              <td>Status (mapped)</td>
+              <td>—</td>
+              <td>action: StatusChange</td>
+            </tr>
+            <tr>
+              <td><strong>Offering</strong></td>
+              <td>status, offeringDate, candidateName</td>
+              <td>Status + Candidate + OfferDate</td>
+              <td>—</td>
+              <td>action: StatusChange</td>
+            </tr>
+            <tr>
+              <td><strong>Onboarding</strong></td>
+              <td>status, startDate, candidateName, ล้าง rejectReason</td>
+              <td>Status + StartDate + Candidate</td>
+              <td>—</td>
+              <td>action: StatusChange + note</td>
+            </tr>
+            <tr>
+              <td><strong>Reject</strong></td>
+              <td>status, rejectReason, rejectedAt, ล้าง startDate</td>
+              <td>Status: Turndown</td>
+              <td>—</td>
+              <td>action: Rejected + note</td>
+            </tr>
+            <tr>
+              <td><strong>Reopen</strong></td>
+              <td>status=Recruiting, ล้าง rejectedAt/startDate</td>
+              <td>Status: Active Sourcing</td>
+              <td>—</td>
+              <td>action: Reopen</td>
+            </tr>
+            <tr>
+              <td><strong>Reassign</strong></td>
+              <td>assignedTo, assignedToName, assignedAt</td>
+              <td>PIC column</td>
+              <td>—</td>
+              <td>action: Assign + note</td>
+            </tr>
+            <tr>
+              <td><strong>Upload CV</strong></td>
+              <td>cvFiles: arrayUnion</td>
+              <td>—</td>
+              <td>cv-files/{reqId}/...</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td><strong>Delete CV</strong></td>
+              <td>cvFiles: arrayRemove</td>
+              <td>—</td>
+              <td>ลบไฟล์</td>
+              <td>—</td>
+            </tr>
+            <tr style="background:#fff1f2;">
+              <td><strong>Delete Request</strong> (Admin)</td>
+              <td>deleteDoc</td>
+              <td>deleteRow (HCID)</td>
+              <td>ลบ JD file</td>
+              <td>action: Delete</td>
+            </tr>
+            <tr>
+              <td><strong>Cancel</strong></td>
+              <td>status=Cancelled, statusHistory</td>
+              <td>Status: Job Cancelled</td>
+              <td>—</td>
+              <td>action: Cancel</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /wrap -->
+
+  <footer>
+    <strong>HC Request System — TA Technical Guide</strong><br />
+    อิงจาก Codebase จริง: RequestTable.jsx, auditLog.js, webhook.js, supabase.js<br />
+    สอบถาม: Slack #hr-ta · อัปเดตล่าสุด: เมษายน 2026
+  </footer>
+
+</body>
+
+</html>

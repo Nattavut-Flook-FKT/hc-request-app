@@ -4,15 +4,6 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  server: {
-    proxy: {
-      '/api/gas': {
-        target: 'http://127.0.0.1:5001',
-        changeOrigin: true,
-        rewrite: () => '/hcrequest/asia-southeast1/gasProxy',
-      },
-    },
-  },
   build: {
     rollupOptions: {
       output: {
@@ -20,8 +11,7 @@ export default defineConfig({
         manualChunks(id) {
           // Firebase — แยกออกเพราะหนักมาก
           if (id.includes('node_modules/firebase')) return 'vendor-firebase'
-          // Supabase
-          if (id.includes('node_modules/@supabase')) return 'vendor-supabase'
+          // Supabase ไม่ manual chunk — ให้อยู่กับ lazy-loaded pages แทน
           // Lucide icons
           if (id.includes('node_modules/lucide-react')) return 'vendor-lucide'
           // React core

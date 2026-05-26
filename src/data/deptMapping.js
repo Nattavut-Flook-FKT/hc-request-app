@@ -6,6 +6,7 @@ export const DEPT_MAINDATA_MAP = {
   'Strategic Finance':                 ['CEO Office'],
   'Corporate Lawyer':                  ['CEO Office'],
   'Strategy':                          ['CEO Office'],    // Strategy team อาจเก็บใน CEO Office
+  'Executive Driver':                  ['CEO Office'],
   // Procurement → ตรงกันใน Maindata แล้ว ไม่ต้อง map
 
   // Tech รวมกันใน Maindata

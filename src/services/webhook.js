@@ -1,44 +1,20 @@
 /**
- * webhook.js — Google Apps Script (GAS) Integration Layer
+ * webhook.js — Google Apps Script (GAS) Integration Layer (ชั้น integration กับ Google Sheets)
  * ─────────────────────────────────────────────────────────────────────────────
- * All GAS calls are routed through the Firebase Cloud Function proxy at /api/gas.
- * The GAS URL and secret token are stored server-side only — never in the bundle.
+ * บริการนี้ทำหน้าที่เชื่อมต่อระหว่าง Web App กับ Google Apps Script (GAS)
+ * ที่ทำงานบน Google Sheets เพื่อ sync ข้อมูล HC Request
  *
- * gasGet(action, params)  → POST /api/gas { type:'get', action, params }  → GAS doGet
- * gasPost(body)           → POST /api/gas { type:'post', body }            → GAS doPost
+ * sendToWebhook       → POST ข้อมูล HC Request ใหม่เข้า Google Sheets (doPost)
+ * sendStatusUpdate    → GET updateStatus เมื่อสถานะเปลี่ยนใน Web App (doGet)
+ * syncBatchToSheets   → POST batch upsert หลาย rows พร้อมกัน
+ * sendMaintenanceAlert→ แจ้งเตือน Slack ผ่าน GAS เมื่อ admin เปิด/ปิดระบบ
+ *
+ * หมายเหตุ: GAS ไม่รองรับ CORS preflight ดังนั้น POST ใช้ mode: 'no-cors'
  */
 
-import { getAuth } from 'firebase/auth'
-
-// Proxy endpoint — served by Firebase Hosting rewrite → Cloud Function gasProxy
-const GAS_PROXY = '/api/gas'
-
-// ── Auth token helper ────────────────────────────────────────────────────────
-async function getIdToken() {
-  const user = getAuth().currentUser
-  if (!user) throw new Error('Not authenticated')
-  return user.getIdToken()
-}
-
-// ── Core proxy helpers ───────────────────────────────────────────────────────
-async function gasGet(action, params = {}) {
-  const token = await getIdToken()
-  const res = await fetch(GAS_PROXY, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-    body: JSON.stringify({ type: 'get', action, params }),
-  })
-  return res.json()
-}
-
-async function gasPost(body) {
-  const token = await getIdToken()
-  await fetch(GAS_PROXY, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-    body: JSON.stringify({ type: 'post', body }),
-  })
-}
+const WEBHOOK_URL = import.meta.env.VITE_GAS_WEBHOOK_URL
+const DATA_URL    = import.meta.env.VITE_GAS_DATA_URL
+const GAS_SECRET  = import.meta.env.VITE_GAS_SECRET || ''
 
 // ── Date helper ──────────────────────────────────────────────────────────────
 function formatDateForSheets(isoDate) {
@@ -71,8 +47,11 @@ function debouncedStatusCall(docId, fn, delay = 800) {
 // ── Public API ───────────────────────────────────────────────────────────────
 
 export async function sendMaintenanceAlert(active) {
+  if (!DATA_URL) return
   try {
-    await gasGet('maintenance', { active: active.toString() })
+    const params = new URLSearchParams({ action: 'maintenance', active: active.toString() })
+    if (GAS_SECRET) params.set('secret', GAS_SECRET)
+    await fetch(`${DATA_URL}?${params.toString()}`)
   } catch (err) {
     console.error('[sendMaintenanceAlert] error:', err)
   }
@@ -85,26 +64,37 @@ export function sendStatusUpdate(
   hcId = null, offeringDate = null,
   clearInfo = false, cvUrl = null,
 ) {
+  if (!DATA_URL) {
+    console.error('[sendStatusUpdate] VITE_GAS_DATA_URL not configured')
+    return Promise.resolve()
+  }
   return debouncedStatusCall(docId, async () => {
     try {
-      const params = { id: docId, status }
-      if (assignedToName) params.assignedToName = assignedToName
-      if (assignedAt)     params.assignedAt     = assignedAt
-      if (startDate)      params.startDate      = startDate
-      if (candidateName)  params.candidateName  = candidateName
-      if (hcId)           params.hcId           = hcId
-      if (offeringDate)   params.offeringDate   = offeringDate
-      if (clearInfo)      params.clearInfo      = '1'
-      if (cvUrl)          params.cvUrl          = cvUrl
-      const json = await gasGet('updateStatus', params)
+      const params = new URLSearchParams({ action: 'updateStatus', id: docId, status })
+      if (assignedToName) params.set('assignedToName', assignedToName)
+      if (assignedAt)     params.set('assignedAt', assignedAt)
+      if (startDate)      params.set('startDate', startDate)
+      if (candidateName)  params.set('candidateName', candidateName)
+      if (hcId)           params.set('hcId', hcId)
+      if (offeringDate)   params.set('offeringDate', offeringDate)
+      if (clearInfo)      params.set('clearInfo', '1')
+      if (cvUrl)          params.set('cvUrl', cvUrl)
+      if (GAS_SECRET)     params.set('secret', GAS_SECRET)
+      const res  = await fetch(`${DATA_URL}?${params.toString()}`)
+      const json = await res.json()
       if (!json.success) console.error('[sendStatusUpdate] failed:', json.error)
-    } catch (err) {
-      console.error('[sendStatusUpdate] error:', err)
+    } catch (error) {
+      console.error('[sendStatusUpdate] error:', error)
     }
   })
 }
 
 export async function syncBatchToSheets(requests) {
+  if (!WEBHOOK_URL) {
+    console.warn('[syncBatchToSheets] VITE_GAS_WEBHOOK_URL not configured')
+    return
+  }
+
   function getIso(val) {
     if (!val) return ''
     if (val?.toDate) return val.toDate().toISOString()
@@ -144,7 +134,12 @@ export async function syncBatchToSheets(requests) {
   for (let i = 0; i < rows.length; i += CHUNK) {
     const chunk = rows.slice(i, i + CHUNK)
     try {
-      await gasPost({ action: 'syncBatch', rows: chunk })
+      await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'syncBatch', rows: chunk }),
+        mode: 'no-cors',
+      })
       console.log(`[syncBatchToSheets] chunk ${Math.floor(i/CHUNK)+1}: synced ${chunk.length} rows`)
     } catch (err) {
       console.error(`[syncBatchToSheets] chunk error:`, err)
@@ -163,15 +158,19 @@ export async function syncAllToSheets(onProgress) {
 }
 
 export async function sendDeleteToSheets(hcId) {
-  if (!hcId) return
+  if (!DATA_URL || !hcId) return
   try {
-    await gasGet('deleteRow', { hcId })
+    const params = new URLSearchParams({ action: 'deleteRow', hcId })
+    if (GAS_SECRET) params.set('secret', GAS_SECRET)
+    await fetch(`${DATA_URL}?${params.toString()}`)
   } catch (err) {
     console.error('[sendDeleteToSheets] error:', err)
   }
 }
 
 export async function syncFromSheets() {
+  if (!DATA_URL) return { success: false, error: 'VITE_GAS_DATA_URL not configured' }
+
   const SHEETS_TO_APP = {
     'To be confirmed': 'Open',   'Open':            'Open',
     'Active Sourcing': 'Recruiting', 'Interviewing':'Interviewing',
@@ -188,7 +187,10 @@ export async function syncFromSheets() {
     const { collection, query, where, getDocs, writeBatch } = await import('firebase/firestore')
     const { db } = await import('./firebase')
 
-    const gasJson = await gasGet('getSheetData')
+    const params = new URLSearchParams({ action: 'getSheetData' })
+    if (GAS_SECRET) params.set('secret', GAS_SECRET)
+    const gasRes  = await fetch(`${DATA_URL}?${params.toString()}`)
+    const gasJson = await gasRes.json()
     if (!gasJson.success) return { success: false, error: gasJson.error }
 
     const rows = gasJson.rows || []
@@ -263,8 +265,12 @@ export async function syncFromSheets() {
 }
 
 export async function getMaxHCIDFromSheets() {
+  if (!DATA_URL) return 0
   try {
-    const json = await gasGet('maxHCID')
+    const params = new URLSearchParams({ action: 'maxHCID' })
+    if (GAS_SECRET) params.set('secret', GAS_SECRET)
+    const res  = await fetch(`${DATA_URL}?${params.toString()}`)
+    const json = await res.json()
     if (json.success) return json.maxSeq || 0
   } catch (err) {
     console.error('[getMaxHCIDFromSheets] error:', err)
@@ -273,11 +279,20 @@ export async function getMaxHCIDFromSheets() {
 }
 
 export async function sendToWebhook(data) {
+  if (!WEBHOOK_URL) {
+    console.warn('GAS Webhook URL not configured')
+    return { success: false, message: 'Webhook URL not configured' }
+  }
   try {
-    await gasPost(data)
+    await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(data),
+      mode: 'no-cors',
+    })
     return { success: true, message: 'ส่งข้อมูลไป Google Sheets เรียบร้อย' }
-  } catch (err) {
-    console.error('Webhook error:', err)
-    return { success: false, message: err.message }
+  } catch (error) {
+    console.error('Webhook error:', error)
+    return { success: false, message: error.message }
   }
 }

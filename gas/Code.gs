@@ -24,8 +24,34 @@ var JG_LABELS = {
 }
 function getJGLabel_(jg) { return jg ? (JG_LABELS[jg] || jg) : '' }
 
-// ชื่อ sheet หลักที่ใช้เก็บข้อมูลทั้งหมด
+// ชื่อ sheet หลักที่ใช้เก็บข้อมูลทั้งหมด (ใช้ sheet เดียวต่อเนื่องไม่แยกปี)
 var JOB_OPENINGS_SHEET = 'Job Openings 2025'
+
+function resolveJobOpeningSheet_(_hcId) {
+  return JOB_OPENINGS_SHEET
+}
+
+/**
+ * setStatusSafe_ — เขียนค่า status ลงใน cell โดยรองรับ Sheets ที่มี strict validation
+ * ถ้า setValue() throw (validation reject) → ล้าง validation แล้ว retry
+ * จากนั้น reapply STATUS_DROPDOWN_LIST เพื่อรักษา chip display style
+ */
+var STATUS_DROPDOWN_LIST = [
+  'To be confirmed', 'Active Sourcing', 'Pending Offer', 'Pending Onboard',
+  'Onboard', 'Job Cancelled', 'Turndown', 'On hold', 'Internal Transfer', 'Confidential'
+]
+function setStatusSafe_(cell, value) {
+  try {
+    cell.setValue(value)
+  } catch (e) {
+    // validation ปัจจุบันของ cell ไม่รองรับค่านี้ — reset แล้ว retry
+    var rule = SpreadsheetApp.newDataValidation()
+      .requireValueInList(STATUS_DROPDOWN_LIST, true)
+      .setAllowInvalid(false).build()
+    cell.setDataValidation(rule)
+    cell.setValue(value)
+  }
+}
 
 // Columns ใน sheet "Job Openings YYYY" (1-based index)
 // ถ้า header เปลี่ยน ให้แก้ค่าตรงนี้
@@ -405,8 +431,9 @@ function doGet(e) {
     if (!isValidSecret_(e)) return responseJson_({ error: 'Unauthorized' })
     var delHcId = e.parameter.hcId
     if (!delHcId) return responseJson_({ error: 'missing hcId param' })
-    var delSheet = ss.getSheetByName(JOB_OPENINGS_SHEET)
-    if (!delSheet) return responseJson_({ error: 'sheet not found: ' + JOB_OPENINGS_SHEET })
+    var delSheetName = resolveJobOpeningSheet_(delHcId)
+    var delSheet = ss.getSheetByName(delSheetName)
+    if (!delSheet) return responseJson_({ error: 'sheet not found: ' + delSheetName })
     var delLastRow = delSheet.getLastRow()
     if (delLastRow < 2) return responseJson_({ success: false, error: 'sheet is empty' })
     var delHcids = delSheet.getRange(2, COL_HCID, delLastRow - 1, 1).getValues()
@@ -454,7 +481,7 @@ function doGet(e) {
 
       // ── อัพเดต JOB_OPENINGS_SHEET โดยใช้ HCID (ถ้ามี) ──────────────────────
       if (hcId) {
-        const jobSheet = ss.getSheetByName(JOB_OPENINGS_SHEET)
+        const jobSheet = ss.getSheetByName(resolveJobOpeningSheet_(hcId))
         if (jobSheet && jobSheet.getLastRow() > 1) {
           const hcidValues = jobSheet.getRange(2, COL_HCID, jobSheet.getLastRow() - 1, 1).getValues()
           for (let i = 0; i < hcidValues.length; i++) {
@@ -464,7 +491,7 @@ function doGet(e) {
               position  = jobSheet.getRange(rowNum, COL_POSITION).getValue()
               dept      = jobSheet.getRange(rowNum, COL_DEPT).getValue()
 
-              jobSheet.getRange(rowNum, COL_STATUS).setValue(sheetsStatus)
+              setStatusSafe_(jobSheet.getRange(rowNum, COL_STATUS), sheetsStatus)
               if (assignedToName) {
                 jobSheet.getRange(rowNum, COL_PIC).setValue(assignedToName)
               }
@@ -630,7 +657,7 @@ function doGet(e) {
     try {
       var mYear   = new Date().getFullYear()
       var mPrefix = 'REQ-' + mYear + '-'
-      var mSheet  = ss ? ss.getSheetByName(JOB_OPENINGS_SHEET) : null
+      var mSheet  = ss ? ss.getSheetByName(resolveJobOpeningSheet_(null)) : null
       var mMaxSeq = 0
       if (mSheet && mSheet.getLastRow() > 1) {
         // จำกัดที่ 1,000 แถวแรก — ตัด orphaned rows ที่อยู่แถว 1700+ ทิ้ง
@@ -1005,8 +1032,8 @@ function syncBatchHandler_(ss, rows) {
   rows.forEach(function(r) {
     if (!r.hcId) return
 
-    // ใช้ sheet เดียวสำหรับทุก record (ไม่แยกตามปี)
-    var ctx = getSheetContext(JOB_OPENINGS_SHEET)
+    // ใช้ sheet ตามปีของ HCID (REQ-2025-001 → 'Job Openings 2025', REQ-2026-411 → 'Job Openings 2026')
+    var ctx = getSheetContext(resolveJobOpeningSheet_(r.hcId))
 
     // ── แปลง dates ─────────────────────────────────────────────────────────
     var openDate = ''
@@ -1054,8 +1081,8 @@ function syncBatchHandler_(ss, rows) {
 
     if (existingRow) {
       // อัพเดต row ที่มีอยู่ทันที (scattered → ต้องทำทีละ row)
-      // ไม่ต้อง setDataValidation(null) — GAS scripts เขียนค่าได้โดยไม่สนใจ validation rules
-      // การล้าง validation จะทำให้ Chip display style หายไป
+      // ใช้ setStatusSafe_ ก่อน setValues เพื่อป้องกัน strict validation throw
+      setStatusSafe_(ctx.sheet.getRange(existingRow, COL_STATUS), rowData[COL_STATUS - 1])
       ctx.sheet.getRange(existingRow, 1, 1, rowData.length).setValues([rowData])
       synced++
     } else {

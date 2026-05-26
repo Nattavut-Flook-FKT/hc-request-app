@@ -36,7 +36,7 @@
  *   when this prop is absent.
  */
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { collection, onSnapshot, orderBy, query, where, limit } from 'firebase/firestore'
+import { collection, onSnapshot, orderBy, query, where, limit, getDoc, doc } from 'firebase/firestore'
 import { db } from '../../services/firebase'
 import { getJDSignedUrl, getCVSignedUrl } from '../../services/supabase'
 import { Loader2, FileText, File, UserCheck, Calendar, ChevronDown, ChevronUp, FilePlus } from 'lucide-react'
@@ -554,54 +554,72 @@ export default function ManagerRequestsView({ user }) {
   const navigate = useNavigate()
 
   /**
-   * Firestore realtime listener — subscribes to the manager's own requests.
+   * Firestore realtime listener — subscribes to requests ตามแผนกที่ Manager ดูแล
    *
-   * Query: hc_requests WHERE requesterEmail == user.email
-   *        ORDER BY createdAt DESC LIMIT 200
+   * Flow:
+   *   1. fetch settings/deptManagers → หาแผนกที่ user.email ถูก assign
+   *   2. query hc_requests WHERE department IN [myDepts] ORDER BY createdAt DESC
    *
-   * Page Visibility API integration:
-   *   The listener is torn down (`unsubscribe`) when the browser tab becomes
-   *   hidden (e.g. the user switches to another tab or minimises the window)
-   *   and re-established (`subscribe`) when the tab becomes visible again.
-   *   This avoids keeping an open WebSocket / long-poll connection while the
-   *   user is not looking at the page, reducing Firestore read costs and
-   *   preventing stale-snapshot issues on devices that aggressively sleep.
-   *
-   *   The `unsub` variable is kept in the closure (not in React state) so that
-   *   subscribe/unsubscribe can be called synchronously inside the visibility
-   *   handler without triggering a re-render.
-   *
-   * Cleanup: on unmount (or when `user.email` changes), the listener is
-   * cancelled and the visibilitychange event listener is removed.
-   *
-   * Dependency: [user?.email] — re-runs only when the signed-in user changes.
+   * Page Visibility API: pause listener เมื่อ tab ซ่อน, resume เมื่อกลับมา
+   * Dependency: [user?.email] — re-runs เมื่อ user เปลี่ยน
    */
   useEffect(() => {
     if (!user?.email) return
-    const q = query(
-      collection(db, 'hc_requests'),
-      where('requesterEmail', '==', user.email.toLowerCase()),
-      orderBy('createdAt', 'desc'),
-      limit(200)
-    )
-    // `unsub` holds the Firestore unsubscribe function, or null when not listening.
     let unsub = null
+    let cancelled = false
+    let handleVisibility = null
 
-    const subscribe = () => {
-      // Guard: only open one listener at a time.
-      if (!unsub) unsub = onSnapshot(q, snap => {
-        setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    async function init() {
+      // 1. โหลด dept mapping จาก settings/deptManagers
+      const settingsSnap = await getDoc(doc(db, 'settings', 'deptManagers'))
+      if (cancelled) return
+
+      const mapping = settingsSnap.exists() ? settingsSnap.data() : {}
+      const myDepts = Object.entries(mapping)
+        .filter(([, email]) => email === user.email.toLowerCase())
+        .map(([dept]) => dept)
+
+      // ถ้าไม่มีแผนก assign → แสดงว่าง
+      if (!myDepts.length) {
+        setRequests([])
         setLoading(false)
-      })
-    }
-    const unsubscribe = () => { if (unsub) { unsub(); unsub = null } }
+        return
+      }
 
-    // Start listening immediately on mount.
-    subscribe()
-    // Pause/resume the listener based on tab visibility to save Firestore reads.
-    const handleVisibility = () => document.hidden ? unsubscribe() : subscribe()
-    document.addEventListener('visibilitychange', handleVisibility)
-    return () => { unsubscribe(); document.removeEventListener('visibilitychange', handleVisibility) }
+      // 2. subscribe ตาม department IN myDepts
+      const q = query(
+        collection(db, 'hc_requests'),
+        where('department', 'in', myDepts),
+        orderBy('createdAt', 'desc'),
+        limit(500)
+      )
+
+      const subscribe = () => {
+        if (unsub) return
+        unsub = onSnapshot(
+          q,
+          snap => { setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false) },
+          err => {
+            console.error('[ManagerRequestsView] Firestore error:', err.message)
+            console.error('👉 ถ้าเป็น "requires an index" ให้กดลิงก์ด้านบนเพื่อสร้าง index ใน Firebase Console')
+            setLoading(false)
+          }
+        )
+      }
+
+      if (cancelled) return
+      subscribe()
+      handleVisibility = () => { if (document.hidden) { unsub?.(); unsub = null } else subscribe() }
+      document.addEventListener('visibilitychange', handleVisibility)
+    }
+
+    init()
+
+    return () => {
+      cancelled = true
+      unsub?.()
+      if (handleVisibility) document.removeEventListener('visibilitychange', handleVisibility)
+    }
   }, [user?.email])
 
   /**
@@ -640,8 +658,28 @@ export default function ManagerRequestsView({ user }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 size={20} className="animate-spin text-[#008065]" />
+      <div className="flex flex-col gap-4 animate-pulse">
+        {/* Scorecard skeleton — 5 cards */}
+        <div className="grid grid-cols-5 gap-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="flex items-stretch rounded-xl border border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden h-[68px]">
+              <div className="w-1 shrink-0 bg-gray-100 dark:bg-slate-800" />
+              <div className="flex-1 px-4 py-3.5 flex flex-col gap-2">
+                <div className="h-5 w-8 rounded bg-gray-100 dark:bg-slate-800" />
+                <div className="h-2 w-14 rounded bg-gray-100 dark:bg-slate-800" />
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* Tab skeleton */}
+        <div className="flex gap-2">
+          <div className="h-7 w-20 rounded-lg bg-gray-100 dark:bg-slate-800" />
+          <div className="h-7 w-16 rounded-lg bg-gray-100 dark:bg-slate-800" />
+        </div>
+        {/* Row skeletons */}
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="h-16 rounded-xl bg-gray-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-800" />
+        ))}
       </div>
     )
   }

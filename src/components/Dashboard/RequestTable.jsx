@@ -304,7 +304,7 @@ export default function RequestTable({
   // ─── Realtime listener: ดึง hc_requests จาก Firestore แบบ realtime ───
   // ใช้ Page Visibility API → หยุด listener เมื่อ tab ไม่ active เพื่อลด Firestore reads
   useEffect(() => {
-    const q = query(collection(db, 'hc_requests'), orderBy('createdAt', 'desc'), limit(2000))
+    const q = query(collection(db, 'hc_requests'), orderBy('createdAt', 'desc'), limit(500))
     let unsubscribe = null
 
     const handleSnapshot = (snapshot) => {

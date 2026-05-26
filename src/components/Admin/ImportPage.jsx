@@ -24,10 +24,10 @@
  */
 
 import { useState, useRef, useEffect } from 'react'
-import { doc, collection, writeBatch, getDocs, query, where, limit, getDoc, setDoc } from 'firebase/firestore'
+import { doc, collection, writeBatch, getDocs, query, where, limit, getDoc, setDoc, updateDoc } from 'firebase/firestore'
 import { db } from '../../services/firebase'
 import { syncBatchToSheets } from '../../services/webhook'
-import { FolderOpen, Plus, Settings2, RefreshCw, Link, Loader2 } from 'lucide-react'
+import { FolderOpen, Plus, Settings2, RefreshCw, Link, Loader2, Wrench } from 'lucide-react'
 import Layout from '../Shared/Layout'
 
 // ─── convertToCSVUrl — แปลง Google Sheets URL → CSV export URL ───────────────
@@ -160,6 +160,17 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
   const [urlLoading,  setUrlLoading]  = useState(false) // กำลัง fetch URL อยู่
   const [urlError,    setUrlError]    = useState('')  // error message จาก fetch URL
 
+  // ─── State: Patch Onboard Dates ───────────────────────────────────────────
+  const [patching,      setPatching]      = useState(false)
+  const [patchDone,     setPatchDone]     = useState(false)
+  const [patchCount,    setPatchCount]    = useState(0)
+  const [patchSkipped,  setPatchSkipped]  = useState(0)
+  const [patchNotFound, setPatchNotFound] = useState(0)
+
+  // ─── State: Find Extra REQ-2026 Closed ────────────────────────────────────
+  const [findingExtra,  setFindingExtra]  = useState(false)
+  const [extraResult,   setExtraResult]   = useState(null) // null | { firestoreIds, extra, csvIds }
+
   // ─── Refs ──────────────────────────────────────────────────────────────────
   const fileRef = useRef(null) // ref ของ hidden file input (ยังไม่ได้ใช้งาน แต่เตรียมไว้)
 
@@ -252,10 +263,25 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
       function toDate(val) {
         if (!val) return null
         let d
-        if (val instanceof Date)          d = val
-        else if (typeof val === 'number') d = new Date(Math.round((val - 25569) * 86400 * 1000))
-        else if (typeof val === 'string' && val.trim()) d = new Date(val.trim())
-        else return null
+        if (val instanceof Date) {
+          d = val
+        } else if (typeof val === 'number') {
+          d = new Date(Math.round((val - 25569) * 86400 * 1000))
+        } else if (typeof val === 'string' && val.trim()) {
+          const s = val.trim()
+          // handle "28-Oct-2024" หรือ "1-Jan-2025" (DD-MMM-YYYY / D-MMM-YYYY)
+          // new Date() ไม่ parse format นี้ได้ใน V8 → ต้อง parse explicit
+          const DMY = s.match(/^(\d{1,2})[/-]([A-Za-z]{3})[/-](\d{4})$/)
+          if (DMY) {
+            const MON = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11}
+            const mo = MON[DMY[2].toLowerCase()]
+            d = mo !== undefined ? new Date(+DMY[3], mo, +DMY[1], 12, 0, 0) : null
+          } else {
+            d = new Date(s)
+          }
+        } else {
+          return null
+        }
         if (!d || isNaN(d)) return null
         // ป้องกัน Excel serial ที่ไม่ใช่วันที่จริง (เช่น SLA=1899 → 1905)
         const yr = d.getFullYear()
@@ -433,14 +459,12 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
     setUrlLoading(true)
     setUrlError('')
     try {
-      const { getAuth } = await import('firebase/auth')
-      const idToken = await getAuth().currentUser?.getIdToken()
+      const gasDataUrl = import.meta.env.VITE_GAS_DATA_URL
+      const gasSecret  = import.meta.env.VITE_GAS_SECRET
       const gasProxy = async (action, params = {}) => {
-        const res = await fetch('/api/gas', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
-          body: JSON.stringify({ type: 'get', action, params }),
-        })
+        const p = new URLSearchParams({ action, ...params })
+        if (gasSecret) p.set('secret', gasSecret)
+        const res = await fetch(`${gasDataUrl}?${p.toString()}`)
         return res.json()
       }
 
@@ -615,6 +639,157 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
+  /**
+   * handlePatchDates — แก้ไข startDate + closedAt ใน Firestore โดย match กับ hcId
+   *
+   * ใช้เมื่อ import ครั้งก่อนไม่มี Onboard Date → closedAt ถูก fallback เป็น createdAt (ผิดปี)
+   * ทำให้ Dashboard crossover ปีไม่ทำงาน (เคสปี 2025 ที่ปิดปี 2026 ไม่แสดงใน filter 2026)
+   *
+   * ขั้นตอน:
+   *   1. กรอง rows ที่มี hcId + startDate (Onboard Date) + status Closed
+   *   2. Query Firestore ด้วย hcId
+   *   3. Update startDate + closedAt เฉพาะ record ที่ startDate ต่างจาก Firestore
+   */
+  async function handlePatchDates() {
+    // กรองเฉพาะ rows ที่มี hcId + status Closed (ไม่จำเป็นต้องมี startDate)
+    const patchable = rows.filter(r => r.hcId && r.status === 'Closed')
+    if (!patchable.length) return
+
+    setPatching(true)
+    setPatchDone(false)
+    let patched = 0
+    let skipped = 0
+    let notFound = 0
+
+    for (const r of patchable) {
+      try {
+        // ค้นหา document ใน Firestore ที่มี hcId ตรงกัน
+        const q = query(collection(db, 'hc_requests'), where('hcId', '==', r.hcId), limit(1))
+        const snap = await getDocs(q)
+
+        if (snap.empty) { notFound++; continue }
+
+        const docSnap = snap.docs[0]
+        const existing = docSnap.data()
+
+        const updates = {}
+
+        // อัปเดต startDate + closedAt ถ้า startDate ต่างกัน
+        if (r.startDate && existing.startDate !== r.startDate) {
+          const [sy, sm, sd] = r.startDate.split('-').map(Number)
+          updates.startDate = r.startDate
+          updates.closedAt  = new Date(sy, sm - 1, sd, 12, 0, 0, 0)
+        }
+
+        // อัปเดต createdAt ถ้าปีที่เก็บใน Firestore ≠ ปีที่ HCID บอก
+        // (เกิดจาก toDate() parse "DD-MMM-YYYY" ไม่ได้ → fallback เป็น new Date() ผิดปี)
+        const hcidYear = parseInt((r.hcId || '').split('-')[1], 10)
+        const storedCreatedYear = existing.createdAt?.toDate?.()?.getFullYear()
+        if (hcidYear >= 2020 && storedCreatedYear && storedCreatedYear !== hcidYear) {
+          // ใช้ createdAt จาก rows ที่ parse ใหม่ (ด้วย toDate ที่แก้แล้ว)
+          if (r.createdAt instanceof Date && r.createdAt.getFullYear() === hcidYear) {
+            updates.createdAt = r.createdAt
+          }
+        }
+
+        if (Object.keys(updates).length === 0) { skipped++; continue }
+
+        await updateDoc(docSnap.ref, updates)
+        patched++
+      } catch (err) {
+        console.error('[PatchDates] error on', r.hcId, err)
+        skipped++
+      }
+    }
+
+    setPatchCount(patched)
+    setPatchSkipped(skipped)
+    setPatchNotFound(notFound)
+    setPatching(false)
+    setPatchDone(true)
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  /**
+   * handleFindExtra — หา REQ-2026 Closed ที่อยู่ใน Firestore แต่ไม่อยู่ใน CSV ที่โหลดมา
+   * ถ้ายังไม่โหลด CSV → ดึง REQ-2026 Closed จาก Firestore ล้วนๆ แล้ว log ออกมา
+   */
+  async function handleFindExtra() {
+    setFindingExtra(true)
+    setExtraResult(null)
+    try {
+      // ดึง Closed ทั้งหมดจาก Firestore
+      const q = query(collection(db, 'hc_requests'), where('status', '==', 'Closed'))
+      const snap = await getDocs(q)
+      const firestoreAll = snap.docs.map(d => {
+        const data = d.data()
+        const closedAtDate = data.closedAt?.toDate?.() ?? null
+        const createdAtDate = data.createdAt?.toDate?.() ?? null
+        return {
+          hcId: data.hcId || '',
+          position: data.position || '',
+          startDate: data.startDate || '',
+          department: data.department || '',
+          candidateName: data.candidateName || '',
+          createdAt: createdAtDate?.toISOString?.()?.slice(0,10) ?? '',
+          closedAtYear: closedAtDate?.getFullYear() ?? null,
+          closedAtStr: closedAtDate?.toISOString?.()?.slice(0,10) ?? '',
+        }
+      })
+
+      // ── REQ-2026 ──────────────────────────────────────────────────────────
+      const firestore2026 = firestoreAll
+        .filter(r => r.hcId.startsWith('REQ-2026-'))
+        .sort((a, b) => a.hcId.localeCompare(b.hcId))
+
+      const csvSet2026 = new Set(
+        rows
+          .filter(r => r.hcId && r.hcId.startsWith('REQ-2026-') && r.status === 'Closed')
+          .map(r => r.hcId)
+      )
+
+      const extra2026 = rows.length > 0
+        ? firestore2026.filter(r => !csvSet2026.has(r.hcId))
+        : firestore2026
+
+      // ── REQ-2025 crossover (closedAt ปี 2026) ────────────────────────────
+      const firestore2025cross = firestoreAll
+        .filter(r => r.hcId.startsWith('REQ-2025-') && r.closedAtYear === 2026)
+        .sort((a, b) => a.hcId.localeCompare(b.hcId))
+
+      // CSV REQ-2025 ที่ startDate (Onboard Date) อยู่ในปี 2026
+      const csvSet2025cross = new Set(
+        rows
+          .filter(r => {
+            if (!r.hcId?.startsWith('REQ-2025-') || r.status !== 'Closed') return false
+            const yr = r.startDate ? parseInt(r.startDate.slice(0, 4), 10) : 0
+            return yr === 2026
+          })
+          .map(r => r.hcId)
+      )
+
+      // REQ-2025 ที่ Firestore นับว่า crossover แต่ CSV ไม่มี (หรือ CSV ไม่ถือว่า 2026)
+      const extra2025 = rows.length > 0
+        ? firestore2025cross.filter(r => !csvSet2025cross.has(r.hcId))
+        : firestore2025cross
+
+      setExtraResult({
+        firestoreIds: firestore2026,
+        extra: extra2026,
+        csvIds: csvSet2026,
+        // crossover
+        firestore2025cross,
+        csvSet2025cross,
+        extra2025,
+      })
+    } catch (err) {
+      console.error('[FindExtra]', err)
+      setExtraResult({ error: err.message })
+    }
+    setFindingExtra(false)
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────────
   return (
@@ -752,6 +927,59 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
           </div>
         )}
 
+        {/* ── Patch Onboard Dates ────────────────────────────────────────────
+         * แสดงเมื่อ load CSV แล้ว (rows มีข้อมูล)
+         * ใช้แก้ไข startDate + closedAt ของ records ที่ import ครั้งก่อนไม่มี Onboard Date
+         * → ทำให้ Dashboard crossover ปีทำงานถูกต้อง (เคสปี 2025 ที่ปิดปี 2026)
+         */}
+        {rows.length > 0 && (() => {
+          const patchable = rows.filter(r => r.hcId && r.status === 'Closed')
+          if (!patchable.length) return null
+          return (
+            <div className="mt-4 p-4 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/15">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <Wrench size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-black text-amber-800 dark:text-amber-300">Patch Onboard Dates</p>
+                    <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5">
+                      พบ <span className="font-black">{patchable.length}</span> records ที่มี Onboard Date —
+                      อัปเดต <code className="font-mono">startDate</code> + <code className="font-mono">closedAt</code> ใน Firestore โดย match กับ HCID
+                    </p>
+                    {patchDone && (
+                      <div className="mt-1 flex flex-col gap-0.5">
+                        <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                          ✓ อัปเดตแล้ว {patchCount} records
+                        </p>
+                        {patchSkipped > 0 && (
+                          <p className="text-xs text-amber-600 dark:text-amber-500">
+                            ข้าม {patchSkipped} (startDate เหมือนเดิม / createdAt ถูกแล้ว)
+                          </p>
+                        )}
+                        {patchNotFound > 0 && (
+                          <p className="text-xs text-red-500 dark:text-red-400 font-bold">
+                            ⚠ ไม่พบใน Firestore {patchNotFound} records (hcId ไม่ match)
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={handlePatchDates}
+                  disabled={patching}
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-black rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition-colors shadow-sm disabled:opacity-60 shrink-0"
+                >
+                  {patching
+                    ? <><Loader2 size={12} className="animate-spin" /> กำลัง Patch...</>
+                    : <><Wrench size={12} /> Patch {patchable.length} records</>
+                  }
+                </button>
+              </div>
+            </div>
+          )
+        })()}
+
         {/* ── Step 3: Success Screen ──────────────────────────────────────────
          * แสดงเมื่อ import เสร็จสมบูรณ์ (done = true)
          * แสดง: จำนวน rows ที่ import, Sheets sync status, error list (ถ้ามี)
@@ -799,6 +1027,247 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
             </div>
           </div>
         )}
+        {/* ── Find Extra REQ-2026 Closed ─────────────────────────────────────
+         * Diagnostic: หา record ที่อยู่ใน Firestore แต่ไม่อยู่ใน CSV (extra +1)
+         * โหลด CSV ก่อนเพื่อเทียบ — หรือถ้าไม่มี CSV จะแสดง REQ-2026 Closed ทั้งหมด
+         */}
+        <div className="mt-6 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30">
+          <div className="flex items-center justify-between gap-4 mb-3">
+            <div>
+              <p className="text-sm font-black text-slate-700 dark:text-slate-200">🔍 ค้นหา REQ-2026 Closed ที่ไม่อยู่ใน CSV</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {rows.length > 0
+                  ? `โหลด CSV แล้ว (${rows.filter(r => r.hcId?.startsWith('REQ-2026-') && r.status === 'Closed').length} REQ-2026 Closed ใน CSV) — กดเพื่อเทียบกับ Firestore`
+                  : 'ยังไม่โหลด CSV — กดเพื่อดึง REQ-2026 Closed ทั้งหมดจาก Firestore'}
+              </p>
+            </div>
+            <button
+              onClick={handleFindExtra}
+              disabled={findingExtra}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-black rounded-xl bg-slate-600 text-white hover:bg-slate-700 transition-colors shadow-sm disabled:opacity-60 shrink-0"
+            >
+              {findingExtra ? <><Loader2 size={12} className="animate-spin" /> กำลังค้นหา...</> : '🔍 ค้นหา'}
+            </button>
+          </div>
+
+          {extraResult && !extraResult.error && (
+            <div className="mt-2 space-y-3">
+              {/* Summary */}
+              <div className="flex gap-3 text-xs font-bold">
+                <span className="px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                  Firestore: {extraResult.firestoreIds.length} REQ-2026 Closed
+                </span>
+                {rows.length > 0 && (
+                  <span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                    CSV: {extraResult.csvIds.size} REQ-2026 Closed
+                  </span>
+                )}
+                <span className={`px-2 py-1 rounded-lg font-black ${extraResult.extra.length > 0 ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'}`}>
+                  Extra: {extraResult.extra.length} records
+                </span>
+              </div>
+
+              {/* CSV records NOT in Firestore */}
+              {rows.length > 0 && (() => {
+                const firestoreSet = new Set(extraResult.firestoreIds.map(r => r.hcId))
+                const missingInFirestore = rows.filter(r =>
+                  r.hcId?.startsWith('REQ-2026-') && r.status === 'Closed' && !firestoreSet.has(r.hcId)
+                )
+                if (!missingInFirestore.length) return null
+                return (
+                  <div className="rounded-xl border border-orange-200 dark:border-orange-800 overflow-hidden">
+                    <p className="px-3 py-2 text-xs font-black text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20">
+                      ⚠️ อยู่ใน CSV แต่ยังไม่อยู่ใน Firestore ({missingInFirestore.length} records) — ยังไม่ได้ import!
+                    </p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead className="bg-orange-50 dark:bg-orange-900/10">
+                          <tr>
+                            {['HCID','ตำแหน่ง','แผนก','Candidate','Onboard Date'].map(h => (
+                              <th key={h} className="px-3 py-1.5 text-left font-black text-orange-600 dark:text-orange-400 whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-orange-100 dark:divide-orange-900/20">
+                          {missingInFirestore.map(r => (
+                            <tr key={r.hcId} className="bg-white dark:bg-slate-900">
+                              <td className="px-3 py-2 font-black text-orange-700 dark:text-orange-400 whitespace-nowrap">{r.hcId}</td>
+                              <td className="px-3 py-2 text-gray-800 dark:text-gray-200 max-w-[180px] truncate">{r.position}</td>
+                              <td className="px-3 py-2 text-gray-600 dark:text-slate-400">{r.department}</td>
+                              <td className="px-3 py-2 text-gray-600 dark:text-slate-400 max-w-[140px] truncate">{r.candidateName}</td>
+                              <td className="px-3 py-2 text-gray-500 dark:text-slate-500 whitespace-nowrap">{r.startDate}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Extra records list */}
+              {extraResult.extra.length > 0 && (
+                <div className="rounded-xl border border-red-200 dark:border-red-800 overflow-hidden">
+                  <p className="px-3 py-2 text-xs font-black text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20">
+                    🚨 อยู่ใน Firestore แต่ไม่อยู่ใน CSV ({extraResult.extra.length} records)
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-red-50 dark:bg-red-900/10">
+                        <tr>
+                          {['HCID','ตำแหน่ง','แผนก','Candidate','Onboard Date','Created'].map(h => (
+                            <th key={h} className="px-3 py-1.5 text-left font-black text-red-600 dark:text-red-400 whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-red-100 dark:divide-red-900/20">
+                        {extraResult.extra.map(r => (
+                          <tr key={r.hcId} className="bg-white dark:bg-slate-900">
+                            <td className="px-3 py-2 font-black text-red-700 dark:text-red-400 whitespace-nowrap">{r.hcId}</td>
+                            <td className="px-3 py-2 text-gray-800 dark:text-gray-200 max-w-[180px] truncate">{r.position}</td>
+                            <td className="px-3 py-2 text-gray-600 dark:text-slate-400">{r.department}</td>
+                            <td className="px-3 py-2 text-gray-600 dark:text-slate-400 max-w-[140px] truncate">{r.candidateName}</td>
+                            <td className="px-3 py-2 text-gray-500 dark:text-slate-500 whitespace-nowrap">{r.startDate}</td>
+                            <td className="px-3 py-2 text-gray-400 dark:text-slate-600 whitespace-nowrap">{r.createdAt}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* ── REQ-2025 Crossover Section ──────────────────────────── */}
+              {extraResult.firestore2025cross && (
+                <div className="mt-1 space-y-2">
+                  <div className="flex gap-3 text-xs font-bold">
+                    <span className="px-2 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                      Firestore REQ-2025 crossover (closedAt 2026): {extraResult.firestore2025cross.length}
+                    </span>
+                    {rows.length > 0 && (
+                      <span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                        CSV REQ-2025 crossover: {extraResult.csvSet2025cross.size}
+                      </span>
+                    )}
+                    {rows.length > 0 && (
+                      <span className={`px-2 py-1 rounded-lg font-black ${extraResult.extra2025.length > 0 ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'}`}>
+                        Extra crossover: {extraResult.extra2025.length}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* REQ-2025 ที่ Firestore นับว่า crossover แต่ CSV ไม่นับ */}
+                  {extraResult.extra2025.length > 0 && (
+                    <div className="rounded-xl border border-purple-200 dark:border-purple-800 overflow-hidden">
+                      <p className="px-3 py-2 text-xs font-black text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20">
+                        🔎 REQ-2025 ที่ Firestore closedAt ปี 2026 แต่ CSV Onboard Date ไม่ตรง ({extraResult.extra2025.length} records)
+                      </p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead className="bg-purple-50 dark:bg-purple-900/10">
+                            <tr>
+                              {['HCID','ตำแหน่ง','แผนก','Candidate','startDate (Firestore)','closedAt (Firestore)','CSV startDate'].map(h => (
+                                <th key={h} className="px-3 py-1.5 text-left font-black text-purple-600 dark:text-purple-400 whitespace-nowrap">{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-purple-100 dark:divide-purple-900/20">
+                            {extraResult.extra2025.map(r => {
+                              const csvRow = rows.find(cr => cr.hcId === r.hcId)
+                              return (
+                                <tr key={r.hcId} className="bg-white dark:bg-slate-900">
+                                  <td className="px-3 py-2 font-black text-purple-700 dark:text-purple-400 whitespace-nowrap">{r.hcId}</td>
+                                  <td className="px-3 py-2 text-gray-800 dark:text-gray-200 max-w-[160px] truncate">{r.position}</td>
+                                  <td className="px-3 py-2 text-gray-600 dark:text-slate-400">{r.department}</td>
+                                  <td className="px-3 py-2 text-gray-600 dark:text-slate-400 max-w-[140px] truncate">{r.candidateName}</td>
+                                  <td className="px-3 py-2 text-gray-500 dark:text-slate-500 whitespace-nowrap">{r.startDate}</td>
+                                  <td className="px-3 py-2 font-bold text-purple-600 dark:text-purple-400 whitespace-nowrap">{r.closedAtStr}</td>
+                                  <td className="px-3 py-2 text-gray-400 dark:text-slate-600 whitespace-nowrap">{csvRow?.startDate ?? '—'}</td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* All REQ-2025 crossover in Firestore (collapsed) */}
+                  <details className="text-xs">
+                    <summary className="cursor-pointer text-slate-500 dark:text-slate-400 font-bold hover:text-slate-700 dark:hover:text-slate-300">
+                      ดู REQ-2025 crossover ทั้งหมดใน Firestore ({extraResult.firestore2025cross.length} records)
+                    </summary>
+                    <div className="mt-2 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                      <div className="overflow-x-auto max-h-64">
+                        <table className="w-full text-xs">
+                          <thead className="sticky top-0 bg-slate-100 dark:bg-slate-700">
+                            <tr>
+                              {['HCID','ตำแหน่ง','Candidate','startDate (Firestore)','closedAt (Firestore)','CSV startDate'].map(h => (
+                                <th key={h} className="px-3 py-1.5 text-left font-black text-slate-500 dark:text-slate-400 whitespace-nowrap">{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                            {extraResult.firestore2025cross.map(r => {
+                              const csvRow = rows.find(cr => cr.hcId === r.hcId)
+                              const isExtra = rows.length > 0 && !extraResult.csvSet2025cross.has(r.hcId)
+                              return (
+                                <tr key={r.hcId} className={isExtra ? 'bg-purple-50 dark:bg-purple-900/10' : ''}>
+                                  <td className={`px-3 py-1.5 font-bold whitespace-nowrap ${isExtra ? 'text-purple-600 dark:text-purple-400' : 'text-slate-700 dark:text-slate-300'}`}>{r.hcId}</td>
+                                  <td className="px-3 py-1.5 text-gray-600 dark:text-slate-400 max-w-[160px] truncate">{r.position}</td>
+                                  <td className="px-3 py-1.5 text-gray-500 dark:text-slate-500 max-w-[130px] truncate">{r.candidateName}</td>
+                                  <td className="px-3 py-1.5 text-gray-500 dark:text-slate-500 whitespace-nowrap">{r.startDate}</td>
+                                  <td className="px-3 py-1.5 text-purple-600 dark:text-purple-400 whitespace-nowrap">{r.closedAtStr}</td>
+                                  <td className="px-3 py-1.5 text-gray-400 dark:text-slate-600 whitespace-nowrap">{csvRow?.startDate ?? '—'}</td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </details>
+                </div>
+              )}
+
+              {/* All Firestore REQ-2026 list (collapsed) */}
+              <details className="text-xs">
+                <summary className="cursor-pointer text-slate-500 dark:text-slate-400 font-bold hover:text-slate-700 dark:hover:text-slate-300">
+                  ดู REQ-2026 Closed ทั้งหมดใน Firestore ({extraResult.firestoreIds.length} records)
+                </summary>
+                <div className="mt-2 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  <div className="overflow-x-auto max-h-64">
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-slate-100 dark:bg-slate-700">
+                        <tr>
+                          {['HCID','ตำแหน่ง','แผนก','Candidate','Onboard Date'].map(h => (
+                            <th key={h} className="px-3 py-1.5 text-left font-black text-slate-500 dark:text-slate-400 whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {extraResult.firestoreIds.map(r => (
+                          <tr key={r.hcId} className={`${rows.length > 0 && !extraResult.csvIds.has(r.hcId) ? 'bg-red-50 dark:bg-red-900/10' : ''}`}>
+                            <td className={`px-3 py-1.5 font-bold whitespace-nowrap ${rows.length > 0 && !extraResult.csvIds.has(r.hcId) ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300'}`}>{r.hcId}</td>
+                            <td className="px-3 py-1.5 text-gray-600 dark:text-slate-400 max-w-[180px] truncate">{r.position}</td>
+                            <td className="px-3 py-2 text-gray-500 dark:text-slate-500">{r.department}</td>
+                            <td className="px-3 py-2 text-gray-500 dark:text-slate-500 max-w-[140px] truncate">{r.candidateName}</td>
+                            <td className="px-3 py-2 text-gray-400 dark:text-slate-600 whitespace-nowrap">{r.startDate}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </details>
+            </div>
+          )}
+
+          {extraResult?.error && (
+            <p className="text-xs font-bold text-red-500 mt-2">⚠ Error: {extraResult.error}</p>
+          )}
+        </div>
+
       </div>
     </Layout>
   )

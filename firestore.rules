@@ -49,11 +49,12 @@ service cloud.firestore {
 
     // ── HC Logs ────────────────────────────────────────────────────────────────
     // อ่านได้ admin + TA, เขียน (append only) ได้ freshket user
-    // Note: ไม่อนุญาต delete/update เพื่อป้องกัน log tampering
+    // delete ได้เฉพาะ admin (bulk clear ผ่าน Admin Tools)
     match /hc_logs/{logId} {
       allow read:   if isTA();
       allow create: if isFreshket();
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     // ── Audit Logs ─────────────────────────────────────────────────────────────
@@ -70,6 +71,14 @@ service cloud.firestore {
       allow read:           if isFreshket();
       allow create:         if isFreshket();
       allow update, delete: if isAdmin();
+    }
+
+    // ── JD Library ─────────────────────────────────────────────────────────────
+    // อ่านได้ทุก freshket user (Manager ใช้ดู JD suggestion ตอนยื่นคำขอ)
+    // เขียน/แก้ไข/ลบ ได้เฉพาะ admin เท่านั้น
+    match /jd_library/{docId} {
+      allow read:               if isFreshket();
+      allow create, update, delete: if isAdmin();
     }
 
     // ── Settings (Maintenance Mode etc.) ──────────────────────────────────────

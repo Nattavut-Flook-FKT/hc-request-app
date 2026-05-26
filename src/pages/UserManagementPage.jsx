@@ -21,10 +21,10 @@
  *   - VALID_ROLES ถูก validate ทั้งฝั่ง client ก่อน write Firestore
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import { useEffect, useState } from 'react'
-import { doc, onSnapshot, collection, setDoc, deleteDoc, query, limit, orderBy } from 'firebase/firestore'
+import { useEffect, useState, useRef } from 'react'
+import { doc, onSnapshot, collection, setDoc, deleteDoc, getDoc, getDocs, query, limit, orderBy } from 'firebase/firestore'
 import { db } from '../services/firebase'
-import { UserPlus, Trash2 } from 'lucide-react'
+import { UserPlus, Trash2, Building2, ChevronDown, ChevronUp, X } from 'lucide-react'
 import Layout from '../components/Shared/Layout'
 import ConfirmModal from '../components/Shared/ConfirmModal'
 
@@ -51,6 +51,16 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
 
   // ข้อความ error ที่แสดงบนหน้า (จะหายอัตโนมัติใน 4 วินาที)
   const [pageError, setPageError] = useState('')
+
+  // ── Department assignment ─────────────────────────────────────────────────
+  const [allDepts,    setAllDepts]    = useState([])   // unique depts จาก hc_requests
+  const [deptMapping, setDeptMapping] = useState({})   // settings/deptManagers { dept: email }
+  const [selectedDepts, setSelectedDepts] = useState([]) // เลือกแผนกในฟอร์ม
+  const [deptOpen,    setDeptOpen]    = useState(false) // toggle dropdown เลือกแผนก
+  const [editDeptFor, setEditDeptFor] = useState(null) // email ของ row ที่กำลัง edit dept
+  const [editDeptOpen, setEditDeptOpen] = useState(false)
+  const deptRef = useRef(null)
+  const editDeptRef = useRef(null)
 
   /**
    * useEffect — ตั้ง realtime listener สำหรับ `users` collection
@@ -87,6 +97,42 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
     return () => { unsubscribe(); document.removeEventListener('visibilitychange', handleVisibility) }
   }, [])
 
+  /** โหลด departments ทั้งหมด + deptMapping เมื่อ component mount */
+  useEffect(() => {
+    async function loadDeptData() {
+      const [reqSnap, settingsSnap] = await Promise.all([
+        getDocs(query(collection(db, 'hc_requests'), limit(3000))),
+        getDoc(doc(db, 'settings', 'deptManagers')),
+      ])
+      const deptSet = new Set()
+      reqSnap.docs.forEach(d => { if (d.data().department) deptSet.add(d.data().department) })
+      setAllDepts([...deptSet].sort((a, b) => a.localeCompare(b, 'th')))
+      setDeptMapping(settingsSnap.exists() ? settingsSnap.data() : {})
+    }
+    loadDeptData()
+
+    // ปิด dropdown เมื่อคลิกนอก
+    const handleClick = (e) => {
+      if (deptRef.current && !deptRef.current.contains(e.target)) setDeptOpen(false)
+      if (editDeptRef.current && !editDeptRef.current.contains(e.target)) { setEditDeptFor(null); setEditDeptOpen(false) }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  /** รับ dept list ของ manager email นั้นๆ จาก deptMapping */
+  function getManagerDepts(email) {
+    return Object.entries(deptMapping)
+      .filter(([, v]) => v === email.toLowerCase())
+      .map(([dept]) => dept)
+  }
+
+  /** อัปเดต deptMapping ใน Firestore + local state */
+  async function saveDeptMapping(newMapping) {
+    await setDoc(doc(db, 'settings', 'deptManagers'), newMapping)
+    setDeptMapping(newMapping)
+  }
+
   /**
    * handleAdd — เพิ่มหรืออัพเดต user ใน Firestore
    * ใช้ setDoc (upsert) โดยมี email เป็น document ID
@@ -119,7 +165,17 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
         role: roleSelect,
         updatedAt: new Date()
       })
-      setEmailInput(''); setNameInput(''); setRoleSelect('manager')
+
+      // ถ้าเป็น manager และเลือกแผนกไว้ → อัปเดต deptMapping
+      if (roleSelect === 'manager' && selectedDepts.length > 0) {
+        const newMapping = { ...deptMapping }
+        // ลบ mapping เดิมของ email นี้ก่อน (กรณี re-assign)
+        Object.keys(newMapping).forEach(k => { if (newMapping[k] === email) delete newMapping[k] })
+        selectedDepts.forEach(dept => { newMapping[dept] = email })
+        await saveDeptMapping(newMapping)
+      }
+
+      setEmailInput(''); setNameInput(''); setRoleSelect('manager'); setSelectedDepts([])
     } catch (e) {
       setPageError('เพิ่มผู้ใช้ไม่สำเร็จ: ' + e.message)
       setTimeout(() => setPageError(''), 4000)
@@ -175,33 +231,83 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
           <h2 className="text-sm font-black text-[#008065] dark:text-emerald-500 uppercase tracking-widest mb-4 flex items-center gap-2">
             <UserPlus size={16} /> กำหนด Role ใหม่
           </h2>
-          <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <input
-              id="user-email" name="user-email"
-              type="email" required placeholder="User Email (freshket.co)"
-              value={emailInput} onChange={e => setEmailInput(e.target.value)}
-              className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-            />
-            <input
-              id="user-name" name="user-name"
-              type="text" placeholder="Full Name"
-              value={nameInput} onChange={e => setNameInput(e.target.value)}
-              className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-            />
-            <select
-              value={roleSelect} onChange={e => setRoleSelect(e.target.value)}
-              className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-            >
-              <option value="manager">Manager</option>
-              <option value="ta">TA / People Experience</option>
-              <option value="admin">Admin</option>
-            </select>
-            <button
-              type="submit" disabled={isBusy}
-              className="bg-[#008065] text-white font-bold rounded-xl py-2 shadow-lg shadow-emerald-500/20 transition-all hover:bg-[#006651] disabled:opacity-50"
-            >
-              บันทึกสิทธิ์
-            </button>
+          <form onSubmit={handleAdd} className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <input
+                id="user-email" name="user-email"
+                type="email" required placeholder="User Email (freshket.co)"
+                value={emailInput} onChange={e => setEmailInput(e.target.value)}
+                className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              />
+              <input
+                id="user-name" name="user-name"
+                type="text" placeholder="Full Name"
+                value={nameInput} onChange={e => setNameInput(e.target.value)}
+                className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              />
+              <select
+                value={roleSelect} onChange={e => { setRoleSelect(e.target.value); setSelectedDepts([]) }}
+                className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              >
+                <option value="manager">Manager</option>
+                <option value="ta">TA / People Experience</option>
+                <option value="admin">Admin</option>
+              </select>
+              <button
+                type="submit" disabled={isBusy}
+                className="bg-[#008065] text-white font-bold rounded-xl py-2 shadow-lg shadow-emerald-500/20 transition-all hover:bg-[#006651] disabled:opacity-50"
+              >
+                บันทึกสิทธิ์
+              </button>
+            </div>
+
+            {/* Dept selector — แสดงเฉพาะเมื่อ role = manager */}
+            {roleSelect === 'manager' && (
+              <div className="flex items-start gap-3">
+                <Building2 size={15} className="text-orange-400 mt-2.5 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5">แผนกที่ดูแล</p>
+                  {/* Selected chips */}
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {selectedDepts.map(d => (
+                      <span key={d} className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400">
+                        {d}
+                        <button type="button" onClick={() => setSelectedDepts(s => s.filter(x => x !== d))}>
+                          <X size={10} />
+                        </button>
+                      </span>
+                    ))}
+                    {selectedDepts.length === 0 && (
+                      <span className="text-[11px] text-gray-400 italic">ยังไม่ได้เลือกแผนก</span>
+                    )}
+                  </div>
+                  {/* Dropdown */}
+                  <div ref={deptRef} className="relative inline-block">
+                    <button
+                      type="button"
+                      onClick={() => setDeptOpen(v => !v)}
+                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border border-orange-200 dark:border-orange-800 bg-white dark:bg-slate-900 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                    >
+                      <Building2 size={12}/> เลือกแผนก {deptOpen ? <ChevronUp size={11}/> : <ChevronDown size={11}/>}
+                    </button>
+                    {deptOpen && (
+                      <div className="absolute top-full left-0 mt-1 z-20 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-xl py-2 min-w-56 max-h-60 overflow-y-auto">
+                        {allDepts.map(d => (
+                          <button
+                            key={d} type="button"
+                            onClick={() => setSelectedDepts(s => s.includes(d) ? s.filter(x => x !== d) : [...s, d])}
+                            className={`w-full text-left px-4 py-2 text-xs font-medium flex items-center justify-between gap-2 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors ${selectedDepts.includes(d) ? 'text-orange-600 dark:text-orange-400 font-bold' : 'text-gray-700 dark:text-gray-300'}`}
+                          >
+                            {d}
+                            {selectedDepts.includes(d) && <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </form>
         </div>
 
@@ -213,11 +319,15 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
                 <tr>
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">User</th>
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Current Role</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">แผนกที่ดูแล</th>
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-slate-800/50">
-                {users.map(u => (
+                {users.map(u => {
+                  const managerDepts = u.role === 'manager' ? getManagerDepts(u.email) : []
+                  const isEditingDept = editDeptFor === u.email
+                  return (
                   <tr key={u.email} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/30 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
@@ -241,6 +351,56 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
                         <option value="admin">Admin</option>
                       </select>
                     </td>
+                    <td className="px-6 py-4">
+                      {u.role === 'manager' ? (
+                        <div ref={isEditingDept ? editDeptRef : null} className="relative">
+                          {/* แสดง dept chips + ปุ่ม edit */}
+                          <div className="flex flex-wrap gap-1 items-center">
+                            {managerDepts.length > 0
+                              ? managerDepts.map(d => (
+                                  <span key={d} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">{d}</span>
+                                ))
+                              : <span className="text-[10px] text-gray-400 italic">ยังไม่ได้กำหนด</span>
+                            }
+                            <button
+                              onClick={() => { setEditDeptFor(u.email); setEditDeptOpen(true) }}
+                              className="text-[10px] text-gray-400 hover:text-orange-500 ml-1 flex items-center gap-0.5"
+                            >
+                              <Building2 size={11}/> แก้ไข
+                            </button>
+                          </div>
+                          {/* Dropdown edit แผนก */}
+                          {isEditingDept && editDeptOpen && (
+                            <div className="absolute top-full left-0 mt-1 z-20 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-xl py-2 min-w-56 max-h-60 overflow-y-auto">
+                              {allDepts.map(d => {
+                                const checked = managerDepts.includes(d)
+                                return (
+                                  <button
+                                    key={d}
+                                    onClick={async () => {
+                                      const newMapping = { ...deptMapping }
+                                      if (checked) {
+                                        delete newMapping[d]
+                                      } else {
+                                        // ถ้า dept นี้มี manager อื่นอยู่แล้ว ให้ override
+                                        newMapping[d] = u.email.toLowerCase()
+                                      }
+                                      await saveDeptMapping(newMapping)
+                                    }}
+                                    className={`w-full text-left px-4 py-2 text-xs font-medium flex items-center justify-between gap-2 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors ${checked ? 'text-orange-600 dark:text-orange-400 font-bold' : 'text-gray-700 dark:text-gray-300'}`}
+                                  >
+                                    {d}
+                                    {checked && <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-gray-300 dark:text-slate-600">—</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-right">
                       {/* ปุ่มลบ — เปิด confirm modal ก่อนลบจริง */}
                       <button
@@ -251,7 +411,8 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
                       </button>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
                 {/* แสดงข้อความเมื่อยังไม่มี user ในระบบ (โหลดเสร็จแล้วแต่ list ว่าง) */}
                 {users.length === 0 && !loading && (
                   <tr>

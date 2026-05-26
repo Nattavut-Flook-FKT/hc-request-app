@@ -46,7 +46,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import { useEffect, useState, lazy } from 'react'
+import { useEffect, useState, lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth, db } from './services/firebase'
@@ -60,21 +60,20 @@ import Login from './components/Auth/Login'
 // นำเข้า Shared Components
 import { RoleSwitcher, RoleGuard, MaintenancePage } from './components/Shared/AppHelpers'
 
-// นำเข้า Pages
-import DashboardPage from './pages/DashboardPage'
-import FormPage from './pages/FormPage'
-import MyRequestsPage from './pages/MyRequestsPage'
-import AllRequestsPage from './pages/AllRequestsPage'
-import MyCasesPage from './pages/MyCasesPage'
-import UserManagementPage from './pages/UserManagementPage'
-import JDFilesPage from './pages/JDFilesPage'
-import AuditLogPage from './pages/AuditLogPage'
-import CustomPositionsPage from './pages/CustomPositionsPage'
-import AdminToolsPage from './pages/AdminToolsPage'
+// Eager — หน้าหลักที่ user เข้าทันทีหลัง login (Firestore query ต้องเริ่มโดยไม่ delay)
+import MyRequestsPage from './pages/MyRequestsPage'   // Manager landing page
+import FormPage       from './pages/FormPage'          // Manager submit form
 
-// Lazy load — โหลด ImportPage แยกต่างหากเพื่อลด initial bundle size
-// เพราะ ImportPage ใช้งานเฉพาะ admin และไม่จำเป็นสำหรับ user ทั่วไป
-const ImportPage = lazy(() => import('./components/Admin/ImportPage'))
+// Lazy — โหลดเฉพาะเมื่อ navigate ไปจริงๆ (ลด initial bundle)
+const DashboardPage       = lazy(() => import('./pages/DashboardPage'))
+const AllRequestsPage     = lazy(() => import('./pages/AllRequestsPage'))
+const MyCasesPage         = lazy(() => import('./pages/MyCasesPage'))
+const UserManagementPage  = lazy(() => import('./pages/UserManagementPage'))
+const JDFilesPage         = lazy(() => import('./pages/JDFilesPage'))
+const AuditLogPage        = lazy(() => import('./pages/AuditLogPage'))
+const CustomPositionsPage = lazy(() => import('./pages/CustomPositionsPage'))
+const AdminToolsPage      = lazy(() => import('./pages/AdminToolsPage'))
+const ImportPage          = lazy(() => import('./components/Admin/ImportPage'))
 
 // DEV_EMAIL — email ที่กำหนดใน .env (VITE_DEV_EMAIL)
 // ใช้เพื่อตรวจสอบว่าควรแสดง RoleSwitcher (dev tool) หรือไม่
@@ -281,9 +280,17 @@ export default function App() {
   // รวม user info, role, dark mode state/toggle ไว้ด้วยกันเพื่อความสะดวก
   const pageProps = { user, role, department, isDarkMode, toggleDarkMode }
 
+  // Suspense fallback — spinner เดียวกับตอนโหลด auth
+  const pageLoader = (
+    <div className="min-h-screen flex items-center justify-center bg-[#f5f7f6] dark:bg-slate-950">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#008065]" />
+    </div>
+  )
+
   return (
     <>
       {/* ─── Route Definitions ─────────────────────────────────────────────── */}
+      <Suspense fallback={pageLoader}>
       <Routes>
 
         {/* /request — ฟอร์มสร้าง HC request
@@ -417,6 +424,7 @@ export default function App() {
         {/* Catch-all: redirect path ที่ไม่รู้จัก → defaultRoute ตาม role */}
         <Route path="*" element={<Navigate to={defaultRoute} replace />} />
       </Routes>
+      </Suspense>
 
       {/* ─── RoleSwitcher (Dev Only) ──────────────────────────────────────────
           แสดงเฉพาะเมื่อ email ของ user ที่ login อยู่ตรงกับ VITE_DEV_EMAIL

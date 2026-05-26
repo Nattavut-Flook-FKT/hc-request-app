@@ -83,19 +83,15 @@ export async function fetchSheetsData() {
   //    ป้องกัน App.jsx + HCRequestForm ยิง GAS พร้อมกัน 2 ครั้งในการ load ครั้งแรก
   if (pendingPromise) return pendingPromise
 
+  const url = import.meta.env.VITE_GAS_DATA_URL
+  if (!url) {
+    console.warn('VITE_GAS_DATA_URL not set')
+    return { managers: {}, positions: [], employees: {} }
+  }
+
   pendingPromise = (async () => {
     try {
-      const { getAuth } = await import('firebase/auth')
-      const token = await getAuth().currentUser?.getIdToken()
-      const headers = token
-        ? { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
-        : { 'Content-Type': 'application/json' }
-      const res = await fetch('/api/gas', {
-        method: 'POST',
-        headers,
-        // action '' → GAS falls through to default HR data handler
-        body: JSON.stringify({ type: 'get', action: '', params: {} }),
-      })
+      const res = await fetch(url)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
 

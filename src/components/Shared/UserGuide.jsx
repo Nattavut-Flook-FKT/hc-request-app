@@ -1,0 +1,314 @@
+/**
+ * UserGuide.jsx — Interactive Onboarding Slides (คู่มือการใช้งาน)
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Modal slide-deck แสดงวิธีใช้งานระบบ HC Request สำหรับ Manager
+ * เปิดได้จากปุ่ม "?" ใน Sidebar
+ *
+ * Props:
+ *   onClose  {fn}  callback ปิด modal
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+import { useState, useEffect, useCallback } from 'react'
+import { X, ChevronLeft, ChevronRight } from 'lucide-react'
+
+// ─── Slide content ────────────────────────────────────────────────────────────
+const SLIDES = [
+  // ── Slide 1: Overview ──────────────────────────────────────────────────────
+  {
+    step: '01',
+    tag: 'ภาพรวม',
+    title: 'HC Request คืออะไร?',
+    body: 'ระบบสำหรับยื่นคำขออัตรากำลังพนักงานให้ทีม People Experience รับทราบและดำเนินการสรรหา ทุกคำขอถูกติดตามสถานะแบบ Real-time',
+    visual: (
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg text-3xl"
+          style={{ background: 'linear-gradient(135deg,#008065,#00ce7c)' }}>
+          <span className="text-white font-black text-xl">HC</span>
+        </div>
+        <div className="flex gap-3 mt-1">
+          {['Manager','→ People Exp.','→ พนักงานใหม่'].map((t, i) => (
+            <div key={i} className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border ${
+              i === 0 ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+              : i === 1 ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300'
+              : 'bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-700 text-purple-700 dark:text-purple-300'
+            }`}>{t}</div>
+          ))}
+        </div>
+        <div className="text-[10px] text-gray-400 dark:text-slate-500 text-center mt-1">
+          ยื่นคำขอ → TA รับเรื่อง → สรรหา → ปิดงาน
+        </div>
+      </div>
+    ),
+  },
+
+  // ── Slide 2: Form walkthrough ──────────────────────────────────────────────
+  {
+    step: '02',
+    tag: 'ยื่นคำขอ',
+    title: 'วิธีกรอกฟอร์มยื่นคำขอ',
+    body: 'เข้าเมนู "ยื่นคำขอ" แล้วกรอกข้อมูลตามลำดับ 4 ขั้นตอน ระบบจะ Auto-fill แผนกของคุณอัตโนมัติ',
+    visual: (
+      <div className="w-full flex flex-col gap-2 text-[11px]">
+        {[
+          { n: '1', label: 'เลือกประเภทคำขอ', sub: 'Replacement หรือ New HC', color: 'bg-blue-500' },
+          { n: '2', label: 'เลือก Division → Department → ตำแหน่ง', sub: 'ระบบ Cascade อัตโนมัติ', color: 'bg-indigo-500' },
+          { n: '3', label: 'กรอก Job Grade + เหตุผล', sub: 'ระบุเหตุผลให้ชัดเจน', color: 'bg-emerald-500' },
+          { n: '4', label: 'แนบ JD (optional) แล้วกด ยื่นคำขอ', sub: 'รับแจ้งเตือนทาง Slack ทันที', color: 'bg-[#008065]' },
+        ].map(s => (
+          <div key={s.n} className="flex items-start gap-2.5 bg-gray-50 dark:bg-slate-800/60 rounded-xl px-3 py-2">
+            <span className={`w-5 h-5 rounded-full ${s.color} text-white text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5`}>{s.n}</span>
+            <div>
+              <p className="font-bold text-gray-800 dark:text-gray-100">{s.label}</p>
+              <p className="text-gray-400 dark:text-slate-500 text-[10px]">{s.sub}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    ),
+  },
+
+  // ── Slide 3: Request types ─────────────────────────────────────────────────
+  {
+    step: '03',
+    tag: 'ประเภทคำขอ',
+    title: 'Replacement vs New HC',
+    body: 'เลือกประเภทให้ถูกต้อง ข้อมูลที่ต้องกรอกจะต่างกัน',
+    visual: (
+      <div className="grid grid-cols-2 gap-3 w-full text-[11px]">
+        {/* Replacement */}
+        <div className="flex flex-col gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700/40 rounded-2xl">
+          <div className="flex items-center gap-1.5">
+            <span className="text-lg">🔄</span>
+            <span className="font-black text-orange-700 dark:text-orange-400">Replacement</span>
+          </div>
+          <p className="text-gray-600 dark:text-slate-400 text-[10px]">ทดแทนพนักงานที่ลาออก</p>
+          <div className="flex flex-col gap-1 mt-1">
+            {['ระบุชื่อพนักงานเดิม','วันสุดท้ายที่ทำงาน (LWD)'].map(t => (
+              <div key={t} className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-slate-400">
+                <span className="text-orange-400">•</span> {t}
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* New HC */}
+        <div className="flex flex-col gap-2 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700/40 rounded-2xl">
+          <div className="flex items-center gap-1.5">
+            <span className="text-lg">✨</span>
+            <span className="font-black text-emerald-700 dark:text-emerald-400">New HC</span>
+          </div>
+          <p className="text-gray-600 dark:text-slate-400 text-[10px]">เพิ่มอัตรากำลังใหม่</p>
+          <div className="flex flex-col gap-1 mt-1">
+            {['ระบุจำนวน HC ที่ต้องการ','วันที่ต้องการเริ่มงาน'].map(t => (
+              <div key={t} className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-slate-400">
+                <span className="text-emerald-400">•</span> {t}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    ),
+  },
+
+  // ── Slide 4: Preset ────────────────────────────────────────────────────────
+  {
+    step: '04',
+    tag: 'Preset',
+    title: 'Preset — บันทึกสูตรที่ใช้บ่อย',
+    body: 'ถ้าต้องยื่นตำแหน่งเดิมซ้ำๆ ให้บันทึกเป็น Preset ครั้งถัดไปกด Load ได้เลย ประหยัดเวลามาก',
+    visual: (
+      <div className="w-full flex flex-col gap-3 text-[11px]">
+        {/* How to save */}
+        <div className="flex items-start gap-2.5 bg-gray-50 dark:bg-slate-800/60 rounded-xl px-3 py-2.5">
+          <span className="w-6 h-6 rounded-full bg-[#008065] text-white text-[10px] font-black flex items-center justify-center shrink-0">1</span>
+          <div>
+            <p className="font-bold text-gray-800 dark:text-gray-100">กรอกฟอร์มให้ครบ</p>
+            <p className="text-gray-400 dark:text-slate-500 text-[10px]">Division, Department, ตำแหน่ง, JG, ประเภทจ้าง</p>
+          </div>
+        </div>
+        <div className="flex items-start gap-2.5 bg-gray-50 dark:bg-slate-800/60 rounded-xl px-3 py-2.5">
+          <span className="w-6 h-6 rounded-full bg-[#008065] text-white text-[10px] font-black flex items-center justify-center shrink-0">2</span>
+          <div>
+            <p className="font-bold text-gray-800 dark:text-gray-100">กดปุ่ม <span className="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 rounded-lg font-black">Preset</span> มุมขวาบนของฟอร์ม</p>
+            <p className="text-gray-400 dark:text-slate-500 text-[10px]">ตั้งชื่อ เช่น "Daily-DC" หรือ "Sales-Monthly"</p>
+          </div>
+        </div>
+        <div className="flex items-start gap-2.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700/40 rounded-xl px-3 py-2.5">
+          <span className="w-6 h-6 rounded-full bg-emerald-500 text-white text-[10px] font-black flex items-center justify-center shrink-0">3</span>
+          <div>
+            <p className="font-bold text-gray-800 dark:text-gray-100">ครั้งถัดไป — กดชื่อ Preset</p>
+            <p className="text-gray-400 dark:text-slate-500 text-[10px]">ฟอร์มจะ fill ทุก field อัตโนมัติ เหลือแค่กรอก เหตุผล</p>
+          </div>
+        </div>
+      </div>
+    ),
+  },
+
+  // ── Slide 5: Track status ──────────────────────────────────────────────────
+  {
+    step: '05',
+    tag: 'ติดตามสถานะ',
+    title: 'ดูสถานะคำขอของฉัน',
+    body: 'เข้าเมนู "คำขอของฉัน" เพื่อดูรายการคำขอทั้งหมดและสถานะปัจจุบันของแต่ละรายการ',
+    visual: (
+      <div className="w-full flex flex-col gap-2 text-[11px]">
+        {/* Mock request list */}
+        {[
+          { hcId: 'REQ-2026-045', pos: 'Sales Executive', status: 'Recruiting', color: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' },
+          { hcId: 'REQ-2026-038', pos: 'Logistics Officer', status: 'Offering', color: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400' },
+          { hcId: 'REQ-2026-031', pos: 'Merchandiser', status: 'Closed', color: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400' },
+        ].map(r => (
+          <div key={r.hcId} className="flex items-center justify-between bg-gray-50 dark:bg-slate-800/60 rounded-xl px-3 py-2">
+            <div>
+              <p className="font-bold text-gray-700 dark:text-gray-200">{r.pos}</p>
+              <p className="text-gray-400 dark:text-slate-500 text-[10px]">{r.hcId}</p>
+            </div>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${r.color}`}>{r.status}</span>
+          </div>
+        ))}
+        <p className="text-center text-[10px] text-gray-400 dark:text-slate-500 mt-1">
+          เห็นสถานะ Real-time ทุกครั้งที่ TA อัปเดต
+        </p>
+      </div>
+    ),
+  },
+
+  // ── Slide 6: Status flow ───────────────────────────────────────────────────
+  {
+    step: '06',
+    tag: 'ขั้นตอน TA',
+    title: 'สถานะการดำเนินงาน',
+    body: 'หลังจากยื่นคำขอ TA จะดำเนินการตามขั้นตอนนี้ คุณสามารถติดตามได้ตลอดเวลา',
+    visual: (
+      <div className="w-full">
+        {/* Status flow */}
+        <div className="flex flex-col gap-1.5">
+          {[
+            { s: 'Open',         label: 'Open',          desc: 'คำขอเข้าระบบ รอ TA รับเรื่อง',         dot: 'bg-yellow-400' },
+            { s: 'Recruiting',   label: 'Recruiting',    desc: 'TA กำลังสรรหาและคัดกรองผู้สมัคร',      dot: 'bg-emerald-500' },
+            { s: 'Interviewing', label: 'Interviewing',  desc: 'อยู่ระหว่างนัดสัมภาษณ์',               dot: 'bg-orange-400' },
+            { s: 'Offering',     label: 'Offering',      desc: 'เสนอเงินเดือน รอผู้สมัครตอบรับ',       dot: 'bg-indigo-500' },
+            { s: 'Onboarding',   label: 'W.Onboarding',  desc: 'ผู้สมัครตอบรับแล้ว รอวันเริ่มงาน',     dot: 'bg-teal-500' },
+            { s: 'Closed',       label: 'Closed ✓',      desc: 'พนักงานเริ่มงานแล้ว — ปิดคำขอ',        dot: 'bg-slate-400' },
+          ].map((item, i) => (
+            <div key={item.s} className="flex items-start gap-2.5">
+              {/* Timeline line */}
+              <div className="flex flex-col items-center shrink-0 mt-1">
+                <span className={`w-2.5 h-2.5 rounded-full ${item.dot}`} />
+                {i < 5 && <span className="w-px h-3 bg-gray-200 dark:bg-slate-700 mt-0.5" />}
+              </div>
+              <div className="flex items-baseline gap-2 text-[11px]">
+                <span className="font-black text-gray-700 dark:text-gray-200 w-24 shrink-0">{item.label}</span>
+                <span className="text-gray-400 dark:text-slate-500">{item.desc}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    ),
+  },
+]
+
+// ─── Component ────────────────────────────────────────────────────────────────
+export default function UserGuide({ onClose }) {
+  const [slide, setSlide] = useState(0)
+  const total = SLIDES.length
+
+  const prev = useCallback(() => setSlide(s => Math.max(0, s - 1)), [])
+  const next = useCallback(() => setSlide(s => Math.min(total - 1, s + 1)), [total])
+
+  // Keyboard navigation
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next()
+      if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   prev()
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [next, prev, onClose])
+
+  const current = SLIDES[slide]
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+
+      <div className="relative bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 dark:border-slate-800 flex flex-col"
+        style={{ maxHeight: '90vh' }}>
+
+        {/* ── Header ────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between px-6 pt-6 pb-0 shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+              style={{ background: 'linear-gradient(135deg,#008065,#00ce7c)' }}>
+              <span className="text-white text-[10px] font-black">HC</span>
+            </div>
+            <span className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">คู่มือการใช้งาน</span>
+          </div>
+          <button onClick={onClose}
+            className="w-7 h-7 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-all">
+            <X size={14} strokeWidth={2.5} />
+          </button>
+        </div>
+
+        {/* ── Slide content ─────────────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+
+          {/* Step tag */}
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-[10px] font-black text-[#008065] dark:text-emerald-400 tracking-widest uppercase">{current.step}</span>
+            <span className="w-px h-3 bg-gray-200 dark:bg-slate-700" />
+            <span className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">{current.tag}</span>
+          </div>
+
+          {/* Title + body */}
+          <h2 className="text-xl font-black text-gray-900 dark:text-white mb-2 leading-tight">{current.title}</h2>
+          <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed mb-6">{current.body}</p>
+
+          {/* Visual area */}
+          <div className="w-full">
+            {current.visual}
+          </div>
+        </div>
+
+        {/* ── Footer: dots + nav buttons ────────────────────────── */}
+        <div className="shrink-0 border-t border-gray-100 dark:border-slate-800 px-6 py-4 flex items-center justify-between bg-gray-50/50 dark:bg-slate-800/30">
+
+          {/* Dot indicators */}
+          <div className="flex items-center gap-1.5">
+            {SLIDES.map((_, i) => (
+              <button key={i} onClick={() => setSlide(i)}
+                className={`rounded-full transition-all duration-200 ${
+                  i === slide
+                    ? 'w-5 h-2 bg-[#008065]'
+                    : 'w-2 h-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600'
+                }`}
+              />
+            ))}
+          </div>
+
+          {/* Navigation buttons */}
+          <div className="flex items-center gap-2">
+            <button onClick={prev} disabled={slide === 0}
+              className="w-8 h-8 flex items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 text-gray-400 dark:text-slate-500 disabled:opacity-30 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-600 dark:hover:text-gray-300 transition-all">
+              <ChevronLeft size={14} strokeWidth={2.5} />
+            </button>
+
+            {slide < total - 1 ? (
+              <button onClick={next}
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#008065] text-white text-[11px] font-bold rounded-xl hover:bg-emerald-700 transition-all shadow-md shadow-emerald-900/20">
+                ถัดไป <ChevronRight size={12} strokeWidth={2.5} />
+              </button>
+            ) : (
+              <button onClick={onClose}
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#008065] text-white text-[11px] font-bold rounded-xl hover:bg-emerald-700 transition-all shadow-md shadow-emerald-900/20">
+                เริ่มใช้งาน ✓
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -30,8 +30,10 @@ import TAWorkloadPanel from '../components/Dashboard/TAWorkloadPanel'
 import ReportPanel from '../components/Dashboard/ReportPanel'
 import YoYChart from '../components/Dashboard/YoYChart'
 import ManpowerPivot from '../components/Dashboard/ManpowerPivot'
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { BarChart2, List, ChevronDown, ChevronUp } from 'lucide-react'
+import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore'
+import { db } from '../services/firebase'
 
 /**
  * คำนวณ stat ทั้ง 7 ตัวที่ StatCards ต้องการ
@@ -199,12 +201,57 @@ function ClosedBreakdown({ requests, yearFilter }) {
   )
 }
 
+/**
+ * StatsListener — Firestore listener น้ำหนักเบา ไม่มี DOM rendering
+ * ─────────────────────────────────────────────────────────────────
+ * ทำหน้าที่แทน hidden <RequestTable> เดิม:
+ *   - subscribe onSnapshot บน hc_requests (limit 2000) แบบ realtime
+ *   - หยุด listener เมื่อ browser tab ซ่อน → เปิดใหม่เมื่อกลับมา
+ *   - ส่ง data ทั้งหมดขึ้นไปให้ DashboardPage ผ่าน onData callback
+ *
+ * ข้อดีเหนือ hidden RequestTable:
+ *   - ไม่ render DOM เลย (return null)
+ *   - ไม่มี filter/sort/pagination state
+ *   - ไม่ต้องโหลด component หนักๆ ของ RequestTable
+ */
+function StatsListener({ onData }) {
+  useEffect(() => {
+    const q = query(collection(db, 'hc_requests'), orderBy('createdAt', 'desc'), limit(2000))
+    let unsub = null
+
+    const subscribe = () => {
+      if (unsub) return
+      unsub = onSnapshot(q, snap => {
+        onData(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+      })
+    }
+
+    const unsubscribe = () => {
+      unsub?.()
+      unsub = null
+    }
+
+    subscribe()
+
+    // หยุด listener เมื่อ tab ซ่อน → ประหยัด Firestore reads
+    const onVisibility = () => document.hidden ? unsubscribe() : subscribe()
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      unsubscribe()
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [onData])
+
+  return null
+}
+
 // ════════════════════════════════════════════════════════════════
 export default function DashboardPage({ user, role, department, isDarkMode, toggleDarkMode }) {
   // แท็บที่เลือกอยู่ 'overview' | 'list'
   const [tab, setTab]                     = useState('overview')
 
-  // request ทั้งหมด — ถูก feed มาจาก RequestTable ผ่าน onStatsChange
+  // request ทั้งหมด — feed มาจาก StatsListener โดยตรง
   const [requests, setRequests]           = useState([])
 
   // TA ที่กดเลือกใน TAWorkloadPanel เพื่อกรองข้อมูล
@@ -216,12 +263,6 @@ export default function DashboardPage({ user, role, department, isDarkMode, togg
   // กรองตามปี: null = ทั้งหมด, 2025, 2026
   const [yearFilter, setYearFilter]       = useState(null)
 
-  /** รับ requests ทั้งหมดจาก RequestTable (hidden mount)
-   *  ต้อง useCallback เพื่อให้ reference stable — ถ้าไม่ stable จะทำให้
-   *  RequestTable useEffect([onStatsChange]) re-run → unsubscribe/resubscribe Firestore ทุก render */
-  const handleStatsChange = useCallback((_stats, allRequests) => {
-    if (allRequests) setRequests(allRequests)
-  }, [])
 
   /**
    * requests กรองตามปีที่เลือก
@@ -414,34 +455,21 @@ export default function DashboardPage({ user, role, department, isDarkMode, togg
             TAB: รายการ — Full request table
             RequestTable มี filter ครบ (status, dept, search, sort)
         ══════════════════════════════════════════════════════════ */}
+        {/* StatsListener: Firestore listener สำหรับ analytics เท่านั้น
+            ทำงานตลอดไม่ว่าจะอยู่ tab ไหน — ไม่มี DOM rendering */}
+        <StatsListener onData={setRequests} />
+
+        {/* RequestTable: แสดงเฉพาะเมื่ออยู่ tab รายการ
+            limit(500) — ใช้แค่ display ไม่ต้อง feed analytics */}
         {tab === 'list' && (
           <RequestTable
             user={user}
             role={role}
             department={department}
-            onStatsChange={handleStatsChange}
             focusTA={selectedTA}
             focusMonth={selectedMonth}
             showFilters={true}
           />
-        )}
-
-        {/* ── Hidden RequestTable mount ─────────────────────────────
-            เหตุผล: Firestore onSnapshot listener ต้องทำงานตลอดเพื่อให้
-            stats และ analytics ข้างบนเป็น realtime แม้ user อยู่ tab ภาพรวม
-            (ถ้าไม่ mount ไว้ listener จะถูก detach เมื่อสลับ tab) */}
-        {tab !== 'list' && (
-          <div className="hidden">
-            <RequestTable
-              user={user}
-              role={role}
-              department={department}
-              onStatsChange={handleStatsChange}
-              focusTA={null}
-              focusMonth={null}
-              showFilters={false}
-            />
-          </div>
         )}
 
       </div>

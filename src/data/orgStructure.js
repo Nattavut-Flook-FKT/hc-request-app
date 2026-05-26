@@ -6,6 +6,7 @@ export const ORG_STRUCTURE = {
     'Strategic Finance': {},
     'Corporate Lawyer': {},
     'Procurement': {},
+    'Executive Driver': {},
   },
   'Commercial': {
     'Marketing': {
