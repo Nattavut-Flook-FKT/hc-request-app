@@ -319,11 +319,18 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode 
         return
       }
 
-      // หา counter ปัจจุบัน
       const currentYear = new Date().getFullYear()
       const counterRef  = doc(db, 'counters', `hcId_${currentYear}`)
       const counterSnap = await getDoc(counterRef)
-      let   nextSeq     = counterSnap.exists() ? (counterSnap.data().value || 0) : 0
+
+      // คำนวณ nextSeq จาก numeric max ของ hcId ทั้งหมดที่มีอยู่จริง
+      // เพื่อป้องกันกรณี counter ยังไม่ถูก seed หรือมีค่าผิด
+      const allSeqs = snap.docs
+        .map(d => { const m = String(d.data().hcId ?? '').match(/(\d+)$/); return m ? parseInt(m[1], 10) : 0 })
+        .filter(n => n > 0)
+      const firestoreMax = allSeqs.length ? Math.max(...allSeqs) : 0
+      const counterVal   = counterSnap.exists() ? (counterSnap.data().value || 0) : 0
+      let   nextSeq      = Math.max(firestoreMax, counterVal)
 
       // เก็บ doc ที่ต้อง reassign
       const toReassign = [] // { docRef, data, newHcId }
