@@ -80,8 +80,10 @@ export function sendStatusUpdate(
       if (clearInfo)      params.set('clearInfo', '1')
       if (cvUrl)          params.set('cvUrl', cvUrl)
       if (GAS_SECRET)     params.set('secret', GAS_SECRET)
+      console.log('[sendStatusUpdate]', { status, startDate, hcId, candidateName })
       const res  = await fetch(`${DATA_URL}?${params.toString()}`)
       const json = await res.json()
+      console.log('[sendStatusUpdate] response:', json)
       if (!json.success) console.error('[sendStatusUpdate] failed:', json.error)
     } catch (error) {
       console.error('[sendStatusUpdate] error:', error)
@@ -155,6 +157,25 @@ export async function syncAllToSheets(onProgress) {
   if (onProgress) onProgress({ loaded: docs.length, total: docs.length })
   await syncBatchToSheets(docs)
   return { total: docs.length }
+}
+
+/**
+ * updateOpenDateInSheets — อัปเดต Column A "Open Jobs" ใน Sheets สำหรับ record ที่ fix SLA ย้อนหลัง
+ * @param {string} hcId      - เช่น "REQ-2026-411"
+ * @param {string} openDate  - ISO date string เช่น "2025-03-15" หรือ null เพื่อ clear
+ */
+export async function updateOpenDateInSheets(hcId, openDate) {
+  if (!DATA_URL || !hcId) return
+  try {
+    const params = new URLSearchParams({ action: 'updateOpenDate', hcId })
+    if (openDate) params.set('openDate', openDate)
+    if (GAS_SECRET) params.set('secret', GAS_SECRET)
+    const res = await fetch(`${DATA_URL}?${params.toString()}`)
+    const json = await res.json()
+    if (!json.success) console.warn('[updateOpenDateInSheets]', json.error || json.row || 'not found in sheet')
+  } catch (err) {
+    console.error('[updateOpenDateInSheets] error:', err)
+  }
 }
 
 export async function sendDeleteToSheets(hcId) {

@@ -37,18 +37,21 @@ function resolveJobOpeningSheet_(_hcId) {
  * จากนั้น reapply STATUS_DROPDOWN_LIST เพื่อรักษา chip display style
  */
 var STATUS_DROPDOWN_LIST = [
-  'To be confirmed', 'Active Sourcing', 'Pending Offer', 'Pending Onboard',
+  'To be confirmed', 'Active Sourcing', 'Pending Offer', 'Offer Accepted',
   'Onboard', 'Job Cancelled', 'Turndown', 'On hold', 'Internal Transfer', 'Confidential'
 ]
 function setStatusSafe_(cell, value) {
   try {
     cell.setValue(value)
   } catch (e) {
-    // validation ปัจจุบันของ cell ไม่รองรับค่านี้ — reset แล้ว retry
-    var rule = SpreadsheetApp.newDataValidation()
-      .requireValueInList(STATUS_DROPDOWN_LIST, true)
-      .setAllowInvalid(false).build()
-    cell.setDataValidation(rule)
+    // validation ปัจจุบันของ cell ไม่รองรับค่านี้ — ล้าง validation แล้ว retry
+    try { cell.clearDataValidations() } catch(_) {}
+    try {
+      var rule = SpreadsheetApp.newDataValidation()
+        .requireValueInList(STATUS_DROPDOWN_LIST, true)
+        .setAllowInvalid(true).build()
+      cell.setDataValidation(rule)
+    } catch(_) {}
     cell.setValue(value)
   }
 }
@@ -220,7 +223,7 @@ function updateFirestoreByHcId_(hcId, data) {
   var SHEETS_TO_APP_STATUS = {
     'To be confirmed':   'Open',              'Open':              'Open',
     'Active Sourcing':   'Recruiting',        'Interviewing':      'Interviewing',
-    'Pending Offer':     'Offering',          'Pending Onboard':   'Onboarding',
+    'Pending Offer':     'Offering',          'Pending Onboard':   'Onboarding',  'Offer Accepted':    'Onboarding',
     'Onboard':           'Closed',            'Job Cancelled':     'Cancelled',
     'Turndown':          'Rejected',          'On hold':           'OnHold',
     'Internal Transfer': 'InternalTransfer',  'Confidential':      'Confidential',
@@ -583,6 +586,37 @@ function doGet(e) {
     }
   }
 
+  // ── UPDATE OPEN DATE: แก้ Column A (Open Jobs) ย้อนหลัง ─────────────────────
+  // เรียกด้วย ?action=updateOpenDate&hcId=REQ-2026-XXX&openDate=ISO_STRING&secret=XXX
+  if (e.parameter.action === 'updateOpenDate') {
+    if (!isValidSecret_(e)) return responseJson_({ error: 'Unauthorized' })
+    var hcIdParam   = e.parameter.hcId     || ''
+    var openDateParam = e.parameter.openDate || ''
+    if (!hcIdParam || !openDateParam) return responseJson_({ success: false, error: 'Missing hcId or openDate' })
+    try {
+      var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+      var d = new Date(openDateParam)
+      if (isNaN(d)) return responseJson_({ success: false, error: 'Invalid openDate: ' + openDateParam })
+      var openDateFmt = d.getDate() + '-' + months[d.getMonth()] + '-' + d.getFullYear()
+
+      var jobSheet = ss.getSheetByName(resolveJobOpeningSheet_(hcIdParam))
+      if (!jobSheet || jobSheet.getLastRow() <= 1) return responseJson_({ success: false, error: 'Sheet not found or empty' })
+
+      var hcidVals = jobSheet.getRange(2, COL_HCID, jobSheet.getLastRow() - 1, 1).getValues()
+      var updated = false
+      for (var i = 0; i < hcidVals.length; i++) {
+        if (hcidVals[i][0].toString().trim() === hcIdParam.toString().trim()) {
+          jobSheet.getRange(i + 2, COL_OPEN_JOBS).setValue(openDateFmt)
+          updated = true
+          break
+        }
+      }
+      return responseJson_({ success: updated, row: updated ? 'updated' : 'not found', openDate: openDateFmt })
+    } catch(err) {
+      return responseJson_({ success: false, error: err.message })
+    }
+  }
+
   // ── FETCH CSV PROXY: ดึง CSV จาก URL ผ่าน GAS (ไม่มีปัญหา CORS) ─────────────
   // เรียกด้วย ?action=fetchCSV&url=ENCODED_URL&secret=XXX
   // GAS ใช้ UrlFetchApp ซึ่งทำงาน server-side ไม่ถูก browser CORS block
@@ -940,14 +974,15 @@ function toSheetsStatus_(appStatus) {
     'Recruiting':     'Active Sourcing',
     'Interviewing':   'Active Sourcing',   // Interviewing ไม่มีใน dropdown
     'Offering':       'Pending Offer',
-    'Onboarding':     'Pending Onboard',
+    'Onboarding':     'Offer Accepted',
     'Closed':         'Onboard',
     'Rejected':       'Job Cancelled',     // Turndown ไม่มีใน dropdown
     'Cancelled':      'Job Cancelled',
     // pass-through (ค่าที่เขียนใน Sheets อยู่แล้ว)
     'Active Sourcing':  'Active Sourcing',
     'Pending Offer':    'Pending Offer',
-    'Pending Onboard':  'Pending Onboard',
+    'Pending Onboard':  'Offer Accepted',
+    'Offer Accepted':   'Offer Accepted',
     'To be confirmed':  'To be confirmed',
     'Job Cancelled':    'Job Cancelled',
     'On hold':          'On hold',
@@ -1225,7 +1260,7 @@ function applySheetValidation_(sheet) {
         'To be confirmed',
         'Active Sourcing',
         'Pending Offer',
-        'Pending Onboard',
+        'Offer Accepted',
         'Onboard',
         'Job Cancelled',
         'Turndown',

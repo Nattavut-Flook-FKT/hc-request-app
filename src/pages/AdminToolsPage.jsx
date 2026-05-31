@@ -19,11 +19,13 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 import { useState, useRef, useCallback } from 'react'
-import { collection, getDocs, getDoc, setDoc, writeBatch, doc } from 'firebase/firestore'
+import { collection, getDocs, getDoc, setDoc, writeBatch, doc, runTransaction, updateDoc, query, where, orderBy, limit } from 'firebase/firestore'
 import { db } from '../services/firebase'
-import { Clock, Tag, FileText, Trash2, DatabaseZap, Settings2, AlertTriangle, RefreshCw, CheckCircle2, AlertCircle, UserCog, Users, ChevronDown, ChevronUp } from 'lucide-react'
+import { Clock, Tag, FileText, Trash2, DatabaseZap, Settings2, AlertTriangle, RefreshCw, CheckCircle2, AlertCircle, UserCog, Users, ChevronDown, ChevronUp, Lock, Eye, EyeOff } from 'lucide-react'
+
+const ADMIN_PIN = import.meta.env.VITE_ADMIN_TOOLS_PIN || 'Admin2025'
 import { listJDFiles, deleteJDFile } from '../services/supabase'
-import { syncFromSheets } from '../services/webhook'
+import { syncFromSheets, syncBatchToSheets } from '../services/webhook'
 import Layout from '../components/Shared/Layout'
 
 /** ตัดนามสกุลออก เหลือแค่ "ชื่อ (nickname)" — เหมือน RequestTable.shortName */
@@ -34,8 +36,25 @@ function shortName(fullName) {
 }
 
 export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode }) {
-  // สถานะการทำงานของแต่ละ tool: key → { state: 'idle'|'running'|'done'|'error', count }
-  // state จะอัพเดตแบบ partial (เฉพาะ key ที่เกี่ยวข้อง ไม่ overwrite key อื่น)
+  // ── Password Gate ─────────────────────────────────────────────────────────
+  const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem('adminToolsUnlocked') === '1')
+  const [pinInput, setPinInput] = useState('')
+  const [pinError, setPinError] = useState(false)
+  const [showPin, setShowPin] = useState(false)
+
+  function handlePinSubmit(e) {
+    e.preventDefault()
+    if (pinInput === ADMIN_PIN) {
+      sessionStorage.setItem('adminToolsUnlocked', '1')
+      setUnlocked(true)
+      setPinError(false)
+    } else {
+      setPinError(true)
+      setPinInput('')
+    }
+  }
+
+  // ── สถานะการทำงานของแต่ละ tool ────────────────────────────────────────────
   const [status, setStatus] = useState({})
 
   // key ของ tool ที่กำลังรอการยืนยันจาก confirm modal (null = ไม่มี modal เปิด)
@@ -265,6 +284,96 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode 
     setTimeout(() => { setSyncState('idle'); setSyncResult(null) }, 6000)
   }
 
+  // ── Fix Duplicate HCIDs state ─────────────────────────────────────────────
+  const [fixDupState,  setFixDupState]  = useState('idle') // 'idle'|'running'|'done'|'error'
+  const [fixDupResult, setFixDupResult] = useState(null)
+
+  /**
+   * fixDuplicateHCIDs — หา hcId ที่ซ้ำใน Firestore แล้วกำหนด ID ใหม่ให้ doc ที่เกิน
+   * doc เก่าที่สุด (createdAt น้อยสุด) ต่อ hcId = ตรงกับ Sheets → เก็บไว้
+   * doc ที่เหลือ = reassign ID ใหม่ → update Firestore + push ไป Sheets
+   */
+  async function fixDuplicateHCIDs() {
+    if (fixDupState === 'running') return
+    setFixDupState('running')
+    setFixDupResult(null)
+    try {
+      const snap = await getDocs(collection(db, 'hc_requests'))
+
+      // จัดกลุ่มตาม hcId
+      const groups = {}
+      snap.docs.forEach(d => {
+        const hcId = d.data().hcId
+        if (!hcId) return
+        if (!groups[hcId]) groups[hcId] = []
+        groups[hcId].push(d)
+      })
+
+      // กรองเฉพาะกลุ่มที่ซ้ำ
+      const dupeGroups = Object.entries(groups).filter(([, docs]) => docs.length > 1)
+
+      if (dupeGroups.length === 0) {
+        setFixDupResult({ fixed: 0, message: 'ไม่พบ hcId ซ้ำในระบบ' })
+        setFixDupState('done')
+        setTimeout(() => { setFixDupState('idle'); setFixDupResult(null) }, 6000)
+        return
+      }
+
+      // หา counter ปัจจุบัน
+      const currentYear = new Date().getFullYear()
+      const counterRef  = doc(db, 'counters', `hcId_${currentYear}`)
+      const counterSnap = await getDoc(counterRef)
+      let   nextSeq     = counterSnap.exists() ? (counterSnap.data().value || 0) : 0
+
+      // เก็บ doc ที่ต้อง reassign
+      const toReassign = [] // { docRef, data, newHcId }
+
+      dupeGroups.forEach(([, docs]) => {
+        // เรียงจากเก่าสุด → เก็บตัวแรก (ตรงกับ Sheets), reassign ที่เหลือ
+        const sorted = [...docs].sort((a, b) => {
+          const at = a.data().createdAt?.toMillis?.() ?? 0
+          const bt = b.data().createdAt?.toMillis?.() ?? 0
+          return at - bt
+        })
+        sorted.slice(1).forEach(d => {
+          nextSeq++
+          toReassign.push({ docRef: d.ref, data: d.data(), newHcId: `REQ-${currentYear}-${nextSeq}` })
+        })
+      })
+
+      // อัพเดต Firestore doc + counter ด้วย batch
+      const CHUNK = 400
+      for (let i = 0; i < toReassign.length; i += CHUNK) {
+        const batch = writeBatch(db)
+        toReassign.slice(i, i + CHUNK).forEach(({ docRef, newHcId }) => {
+          batch.update(docRef, { hcId: newHcId })
+        })
+        await batch.commit()
+      }
+
+      // อัพเดต counter
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(counterRef)
+        const current = snap.exists() ? (snap.data().value || 0) : 0
+        if (nextSeq > current) tx.set(counterRef, { value: nextSeq })
+      })
+
+      // Push docs ที่ reassign ไปยัง Sheets เป็น row ใหม่
+      if (toReassign.length > 0) {
+        const reassignedRequests = toReassign.map(({ data, newHcId }) => ({ ...data, hcId: newHcId }))
+        await syncBatchToSheets(reassignedRequests)
+      }
+
+      setFixDupResult({ fixed: toReassign.length, groups: dupeGroups.length })
+      setFixDupState('done')
+    } catch (err) {
+      console.error('[fixDuplicateHCIDs]', err)
+      setFixDupResult({ error: err.message })
+      setFixDupState('error')
+    }
+    setTimeout(() => { setFixDupState('idle'); setFixDupResult(null) }, 8000)
+  }
+
   /**
    * bulkDeleteCollection — ลบทุก document ใน Firestore collection ที่กำหนด
    * แบ่ง batch ทีละ 400 docs เพื่อไม่เกิน limit ของ Firestore (500 per batch)
@@ -357,6 +466,61 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode 
       border: 'border-rose-300 dark:border-rose-800',
     },
   ]
+
+  // ── Password Gate Screen ──────────────────────────────────────────────────
+  if (!unlocked) {
+    return (
+      <Layout user={user} role={role} isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode}>
+        <div className="min-h-[70vh] flex items-center justify-center px-4">
+          <div className="w-full max-w-sm">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-200 dark:border-slate-800 shadow-xl p-8">
+              <div className="flex flex-col items-center gap-4 mb-8">
+                <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                  <Lock size={24} className="text-slate-500 dark:text-slate-400" />
+                </div>
+                <div className="text-center">
+                  <h2 className="text-lg font-black text-gray-900 dark:text-gray-100">Admin Tools</h2>
+                  <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">กรอกรหัสผ่านเพื่อเข้าถึง</p>
+                </div>
+              </div>
+              <form onSubmit={handlePinSubmit} className="flex flex-col gap-3">
+                <div className="relative">
+                  <input
+                    type={showPin ? 'text' : 'password'}
+                    value={pinInput}
+                    onChange={(e) => { setPinInput(e.target.value); setPinError(false) }}
+                    placeholder="รหัสผ่าน"
+                    autoFocus
+                    className={`w-full px-4 py-3 pr-10 rounded-xl border text-sm font-bold focus:outline-none focus:ring-2 transition-all bg-white dark:bg-slate-950 dark:text-gray-100
+                      ${pinError
+                        ? 'border-red-400 dark:border-red-600 focus:ring-red-500/20 text-red-600 dark:text-red-400'
+                        : 'border-gray-200 dark:border-slate-700 focus:ring-emerald-500/20 focus:border-emerald-500'
+                      }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPin(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-slate-300"
+                  >
+                    {showPin ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+                {pinError && (
+                  <p className="text-xs font-bold text-red-500 text-center">รหัสผ่านไม่ถูกต้อง</p>
+                )}
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-xl bg-[#008065] hover:bg-[#006d56] text-white text-sm font-black transition-colors shadow-md shadow-emerald-500/20"
+                >
+                  เข้าถึง Admin Tools
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    )
+  }
 
   return (
     <Layout user={user} role={role} isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode}>
@@ -610,6 +774,43 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode 
               )}
             </div>
           )}
+        </div>
+
+        {/* Fix Duplicate HCIDs */}
+        <div className="rounded-2xl border p-5 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-amber-600 dark:text-amber-400"><DatabaseZap size={20}/></span>
+              <div>
+                <p className="text-sm font-black text-amber-600 dark:text-amber-400">Fix Duplicate HC IDs</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                  หา hcId ที่ซ้ำ → เก็บ doc เก่าสุดไว้ (ตรงกับ Sheets) → กำหนด ID ใหม่ให้ที่เหลือ + push ไป Sheets
+                </p>
+              </div>
+            </div>
+            {fixDupState === 'done' ? (
+              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1 rounded-full whitespace-nowrap">
+                {fixDupResult?.fixed === 0
+                  ? '✓ ไม่มีซ้ำ'
+                  : `✓ แก้ไขแล้ว ${fixDupResult?.fixed} รายการ`}
+              </span>
+            ) : fixDupState === 'running' ? (
+              <span className="text-xs font-bold text-gray-500 dark:text-slate-400 flex items-center gap-1.5 whitespace-nowrap">
+                <Settings2 size={13} className="animate-spin"/> กำลังตรวจสอบ...
+              </span>
+            ) : fixDupState === 'error' ? (
+              <span className="text-xs font-bold text-red-600 dark:text-red-400 whitespace-nowrap">
+                {fixDupResult?.error || 'เกิดข้อผิดพลาด'}
+              </span>
+            ) : (
+              <button
+                onClick={fixDuplicateHCIDs}
+                className="flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors shadow-sm whitespace-nowrap"
+              >
+                <RefreshCw size={12}/> Fix Now
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-col gap-4">

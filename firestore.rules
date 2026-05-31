@@ -88,7 +88,7 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // ── Meta (HCID Counter) ────────────────────────────────────────────────────
+    // ── Meta (HCID Counter — legacy) ──────────────────────────────────────────
     // freshket user ทุกคนต้องเขียนได้ เพราะ generateHCID() ใช้ transaction
     // แต่ limit ให้เฉพาะ document 'hcid_counter'
     match /meta/hcid_counter {
@@ -99,6 +99,13 @@ service cloud.firestore {
     match /meta/{docId} {
       allow read:  if isFreshket();
       allow write: if isAdmin();
+    }
+
+    // ── Counters (HCID per-year atomic counter) ───────────────────────────────
+    // ใช้โดย generateHCID() (transaction) และ fixDuplicateHCIDs() (admin)
+    // freshket user ทุกคนอ่าน/เขียนได้ เพราะ Manager ยื่นฟอร์มใช้ generateHCID()
+    match /counters/{docId} {
+      allow read, write: if isFreshket();
     }
   }
 }

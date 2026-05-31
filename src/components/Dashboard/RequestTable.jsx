@@ -81,7 +81,7 @@
 import { useEffect, useState, useMemo, useCallback, Fragment } from 'react'
 import { collection, onSnapshot, orderBy, query, doc, updateDoc, getDocs, where, deleteDoc, serverTimestamp, arrayUnion, arrayRemove, limit, Timestamp } from 'firebase/firestore'
 import { db } from '../../services/firebase'
-import { sendStatusUpdate, sendDeleteToSheets } from '../../services/webhook'
+import { sendStatusUpdate, sendDeleteToSheets, updateOpenDateInSheets } from '../../services/webhook'
 import { getJGLabel } from '../../data/jobGrades'
 import { logAudit } from '../../services/auditLog'
 import { Loader2, UserCheck, XCircle, ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, X, FileText, Search, ChevronRight, Users, Calendar, AlignLeft, ClipboardList, Pencil, Trash2, Upload, File } from 'lucide-react'
@@ -147,12 +147,30 @@ function StatusBadge({ status }) {
 //   - Offering / Onboarding → pause (ไม่นับเวลาช่วงนี้)
 //   - กลับจาก Offering → Recruiting/Interviewing → resume ต่อ (ไม่ reset)
 //   - กลับจาก Onboarding → Recruiting → RESET เริ่มนับใหม่
+//
+// slaStartDate (optional override):
+//   - ถ้า admin แก้ SLA ย้อนหลัง จะเซ็ต slaStartDate แทนการแก้ createdAt
+//   - ใช้ slaStartDate ถ้ามี (ไม่มี year check) — ใช้ createdAt ถ้าไม่มี (2026+ เท่านั้น)
 function getDaysOpen(req) {
-  const createdAt = req.createdAt?.toDate?.()
-  if (!createdAt) return null
-  // นับ SLA เฉพาะ request ที่เปิดในปี 2026 เป็นต้นไป
-  if (createdAt.getFullYear() < 2026) return null
+  // slaStartDate override → admin ตั้งด้วยตัวเอง → นับตรงๆ ไม่มี pause/reset logic
+  if (req.slaStartDate) {
+    const start = new Date(req.slaStartDate)
+    if (isNaN(start)) return null
+    // หาวัน Closed จาก statusHistory หรือ closedAt
+    const closedEntry = [...(req.statusHistory ?? [])]
+      .map(e => ({ status: e.status, t: new Date(e.changedAt) }))
+      .filter(e => !isNaN(e.t) && (e.status === 'Closed' || e.status === 'Cancelled'))
+      .sort((a, b) => b.t - a.t)[0]
+    const end = closedEntry ? closedEntry.t
+      : req.closedAt?.toDate?.() ?? new Date()
+    return Math.max(0, Math.floor((end - start) / (1000 * 60 * 60 * 24)))
+  }
 
+  // auto mode — ใช้ createdAt (2026+ เท่านั้น) พร้อม pause/reset logic เดิม
+  const effectiveStart = req.createdAt?.toDate?.() ?? null
+  if (!effectiveStart || effectiveStart.getFullYear() < 2026) return null
+
+  const createdAt = effectiveStart   // alias ให้ logic เดิมใช้ได้ต่อ
   const DONE = new Set(['Closed', 'Cancelled'])
 
   const history = [...(req.statusHistory ?? [])]
@@ -279,11 +297,12 @@ export default function RequestTable({
   const [candidateEditVal, setCandidateEditVal] = useState('')   // ค่าที่กำลังพิมพ์
   const [offeringCandidateName, setOfferingCandidateName] = useState('')
   const [offeringCvUrl, setOfferingCvUrl] = useState('')
+  const [offeringCustomDate, setOfferingCustomDate] = useState('') // optional: วัน Offering ย้อนหลัง
   // Reject modal: กรอกเหตุผลก่อน Reject
   const [rejectModal, setRejectModal] = useState({ isOpen: false, id: null })
   const [rejectReason, setRejectReason] = useState('')
   // Admin: แก้ createdAt เพื่อทดสอบ SLA
-  const [slaTestModal, setSlaTestModal] = useState({ isOpen: false, id: null })
+  const [slaTestModal, setSlaTestModal] = useState({ isOpen: false, id: null, hcId: null, originalCreatedAt: null })
   const [slaTestDate, setSlaTestDate] = useState('')
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 50
@@ -413,7 +432,13 @@ export default function RequestTable({
       if (newStatus === 'Rejected') updateData.rejectedAt = serverTimestamp()
       if (newStatus === 'Closed') updateData.closedAt = serverTimestamp()
       if (newStatus === 'Onboarding') { updateData.rejectReason = ''; updateData.rejectedAt = null }
-      if (newStatus === 'Offering' && !req.offeringDate) updateData.offeringDate = new Date().toISOString()
+      if (newStatus === 'Offering' && !req.offeringDate) {
+        // ใช้วันที่ระบุมา (ย้อนหลัง) หรือ fallback เป็นวันนี้
+        const customDate = extraData.offeringDate ? new Date(extraData.offeringDate) : null
+        updateData.offeringDate = (customDate && !isNaN(customDate))
+          ? customDate.toISOString()
+          : new Date().toISOString()
+      }
       // กลับไปก่อน Offering → ล้าง offeringDate
       const PRE_OFFERING = ['Open', 'Recruiting', 'Interviewing']
       if (PRE_OFFERING.includes(newStatus) && req.offeringDate) updateData.offeringDate = ''
@@ -463,10 +488,11 @@ export default function RequestTable({
   async function handleOfferingConfirm() {
     if (!offeringModal.id) return
     if (offeringModal.mode === 'offering') {
-      // Offering: กรอกชื่อ candidate (optional) + CV URL (optional)
+      // Offering: กรอกชื่อ candidate (optional) + CV URL (optional) + วันที่ (optional)
       const extra = {}
-      if (offeringCandidateName.trim()) extra.candidateName = offeringCandidateName.trim()
-      if (offeringCvUrl.trim())         extra.cvUrl         = offeringCvUrl.trim()
+      if (offeringCandidateName.trim()) extra.candidateName  = offeringCandidateName.trim()
+      if (offeringCvUrl.trim())         extra.cvUrl          = offeringCvUrl.trim()
+      if (offeringCustomDate)           extra.offeringDate   = offeringCustomDate
       await handleStatusChange(offeringModal.id, 'Offering', extra)
     } else {
       // Onboarding: ต้องมี startDate
@@ -479,6 +505,7 @@ export default function RequestTable({
     setOfferingStartDate('')
     setOfferingCandidateName('')
     setOfferingCvUrl('')
+    setOfferingCustomDate('')
   }
 
   // Reject confirm: บันทึก Rejected (หยุดที่ Rejected → TA กด "Recruit ใหม่" เองเมื่อพร้อม)
@@ -514,16 +541,27 @@ export default function RequestTable({
     setRejectReason('')
   }
 
-  // Admin: เปลี่ยน createdAt เพื่อทดสอบ SLA
-  async function handleSlaTestSave() {
-    if (!slaTestModal.id || !slaTestDate) return
+  // Admin: แก้ SLA ย้อนหลัง — เซ็ต slaStartDate (ไม่แตะ createdAt จริง)
+  // dateOverride: ถ้าส่งมา ใช้ค่านั้นแทน slaTestDate state (หลีกเลี่ยง async setState race)
+  async function handleSlaFixSave(dateOverride) {
+    if (!slaTestModal.id) return
     try {
-      const ts = Timestamp.fromDate(new Date(slaTestDate))
-      await updateDoc(doc(db, 'hc_requests', slaTestModal.id), { createdAt: ts })
-      setSlaTestModal({ isOpen: false, id: null })
+      const dateVal = dateOverride !== undefined ? dateOverride : slaTestDate
+      const parsed  = dateVal ? new Date(dateVal) : null
+      const isoDate = parsed && !isNaN(parsed) ? parsed.toISOString() : null
+      console.log('[SLA fix] dateVal:', dateVal, '| parsed:', parsed, '| isoDate:', isoDate)
+      await updateDoc(doc(db, 'hc_requests', slaTestModal.id), {
+        slaStartDate: isoDate,  // null = reset กลับ auto
+      })
+      // sync Column A "Open Jobs" ใน Sheets ด้วย
+      if (slaTestModal.hcId) {
+        const effectiveDate = isoDate || slaTestModal.originalCreatedAt
+        if (effectiveDate) updateOpenDateInSheets(slaTestModal.hcId, effectiveDate)
+      }
+      setSlaTestModal({ isOpen: false, id: null, hcId: null, originalCreatedAt: null })
       setSlaTestDate('')
     } catch (err) {
-      console.error('[handleSlaTestSave]', err)
+      console.error('[handleSlaFixSave]', err)
     }
   }
 
@@ -1183,10 +1221,36 @@ export default function RequestTable({
                             </button>
                           )}
                           {isAdmin && (
-                            <button onClick={(e) => { e.stopPropagation(); setSlaTestDate(req.createdAt?.toDate?.().toISOString().slice(0,10) ?? ''); setSlaTestModal({ isOpen: true, id: req.id }) }} disabled={isBusy}
-                              className="flex items-center gap-1.5 px-2.5 py-1 text-purple-700 bg-purple-100 dark:bg-purple-900/40 dark:text-purple-300 text-[10px] font-bold rounded-lg hover:bg-purple-200 dark:hover:bg-purple-800/50 disabled:opacity-50 transition-all uppercase tracking-tight shadow-sm"
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                // รองรับทั้ง Firestore Timestamp (.toDate()) และ ISO string
+                                const toJS = (v) => {
+                                  if (!v) return null
+                                  const d = v?.toDate?.() ?? new Date(v)
+                                  return isNaN(d) ? null : d
+                                }
+                                const slaD     = toJS(req.slaStartDate)
+                                const createdD = toJS(req.createdAt)
+                                const existing = slaD
+                                  ? slaD.toISOString().slice(0,10)
+                                  : createdD ? createdD.toISOString().slice(0,10) : ''
+                                setSlaTestDate(existing)
+                                setSlaTestModal({
+                                  isOpen: true,
+                                  id: req.id,
+                                  hcId: req.hcId || null,
+                                  originalCreatedAt: createdD ? createdD.toISOString() : null,
+                                })
+                              }}
+                              disabled={isBusy}
+                              className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-lg disabled:opacity-50 transition-all uppercase tracking-tight shadow-sm
+                                ${req.slaStartDate
+                                  ? 'text-amber-700 bg-amber-100 dark:bg-amber-900/40 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800/50'
+                                  : 'text-purple-700 bg-purple-100 dark:bg-purple-900/40 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-800/50'
+                                }`}
                             >
-                              🧪 SLA
+                              ⏱ SLA{req.slaStartDate ? ' ✓' : ''}
                             </button>
                           )}
                           {isAdmin && (
@@ -1576,33 +1640,43 @@ export default function RequestTable({
         </div>
       )}
 
-      {/* ── Admin SLA Test Modal ── */}
+      {/* ── Admin: แก้ SLA ย้อนหลัง Modal ── */}
       {slaTestModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-sm mx-4 p-6">
-            <h3 className="text-lg font-black text-gray-800 dark:text-gray-100 mb-1">🧪 ทดสอบ SLA</h3>
-            <p className="text-sm text-gray-500 dark:text-slate-400 mb-5">เปลี่ยนวันที่ยื่นคำขอเพื่อทดสอบ SLA Badge (Admin only)</p>
-            <label className="block text-[10px] font-black text-gray-500 dark:text-slate-500 uppercase tracking-widest mb-2">วันที่ยื่น (createdAt)</label>
+            <h3 className="text-base font-black text-gray-800 dark:text-gray-100 mb-1">⏱ แก้ SLA ย้อนหลัง</h3>
+            <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">
+              กำหนดวันเปิดเคส (SLA Start) สำหรับ record นี้<br/>
+              <span className="text-amber-600 dark:text-amber-400">createdAt จริงไม่ถูกแก้</span> — ใช้ field แยก <code className="text-[10px] bg-gray-100 dark:bg-slate-800 px-1 rounded">slaStartDate</code>
+            </p>
+            <label className="block text-[10px] font-black text-gray-500 dark:text-slate-500 uppercase tracking-widest mb-2">วันเปิดเคส (SLA Start)</label>
             <input
-              id="sla-test-date" name="sla-test-date"
+              id="sla-fix-date" name="sla-fix-date"
               type="date"
               value={slaTestDate}
               onChange={(e) => setSlaTestDate(e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500/30 text-sm font-medium"
+              className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500/30 text-sm font-medium"
               autoFocus
             />
-            <div className="flex gap-2 mt-3 text-[11px] text-gray-400">
-              <button onClick={() => setSlaTestDate(new Date(Date.now() - 5*24*60*60*1000).toISOString().slice(0,10))} className="px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-lg font-bold">🟢 5 วัน</button>
-              <button onClick={() => setSlaTestDate(new Date(Date.now() - 20*24*60*60*1000).toISOString().slice(0,10))} className="px-2 py-1 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 rounded-lg font-bold">🟡 20 วัน</button>
-              <button onClick={() => setSlaTestDate(new Date(Date.now() - 35*24*60*60*1000).toISOString().slice(0,10))} className="px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg font-bold">🔴 35 วัน</button>
-            </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => { setSlaTestModal({ isOpen: false, id: null }); setSlaTestDate('') }}
-                className="flex-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+              <button
+                onClick={() => { setSlaTestModal({ isOpen: false, id: null }); setSlaTestDate('') }}
+                className="flex-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+              >
                 ยกเลิก
               </button>
-              <button onClick={handleSlaTestSave} disabled={!slaTestDate}
-                className="flex-1 px-4 py-2.5 text-sm font-bold rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition-colors shadow-md shadow-purple-500/20 disabled:opacity-50">
+              <button
+                onClick={() => handleSlaFixSave('')}  // '' = reset → slaStartDate = null
+                className="px-3 py-2.5 text-xs font-bold rounded-xl border border-red-200 dark:border-red-800 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                title="ล้าง slaStartDate กลับไปใช้ createdAt auto"
+              >
+                รีเซ็ต
+              </button>
+              <button
+                onClick={() => handleSlaFixSave()}
+                disabled={!slaTestDate}
+                className="flex-1 px-4 py-2.5 text-sm font-bold rounded-xl bg-amber-500 hover:bg-amber-600 text-white transition-colors shadow-md shadow-amber-500/20 disabled:opacity-50"
+              >
                 บันทึก
               </button>
             </div>
@@ -1646,6 +1720,16 @@ export default function RequestTable({
                   placeholder="https://drive.google.com/..."
                   className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-sm font-medium mb-4"
                 />
+                <label className="block text-[10px] font-black text-gray-500 dark:text-slate-500 uppercase tracking-widest mb-2">
+                  วัน Offering <span className="text-gray-400 font-normal normal-case">(optional — ปล่อยว่าง = วันนี้)</span>
+                </label>
+                <input
+                  id="offering-custom-date" name="offering-custom-date"
+                  type="date"
+                  value={offeringCustomDate}
+                  onChange={(e) => setOfferingCustomDate(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-sm font-medium mb-4"
+                />
               </>
             )}
 
@@ -1664,7 +1748,7 @@ export default function RequestTable({
 
             <div className="flex gap-3 mt-6">
               <button
-                onClick={() => { setOfferingModal({ isOpen: false, id: null, mode: 'onboarding' }); setOfferingStartDate(''); setOfferingCandidateName(''); setOfferingCvUrl('') }}
+                onClick={() => { setOfferingModal({ isOpen: false, id: null, mode: 'onboarding' }); setOfferingStartDate(''); setOfferingCandidateName(''); setOfferingCvUrl(''); setOfferingCustomDate('') }}
                 className="flex-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
               >
                 ยกเลิก

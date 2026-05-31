@@ -26,9 +26,9 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { collection, addDoc, updateDoc, doc, serverTimestamp, getDocs, query, where, orderBy, limit } from 'firebase/firestore'
+import { collection, addDoc, updateDoc, doc, serverTimestamp, getDocs, query, where, orderBy, limit, getDoc, setDoc, runTransaction } from 'firebase/firestore'
 import { db } from '../../services/firebase'
-import { sendToWebhook, getMaxHCIDFromSheets } from '../../services/webhook'
+import { sendToWebhook } from '../../services/webhook'
 import { logAudit } from '../../services/auditLog'
 import { uploadJDFile, getJDSignedUrl } from '../../services/supabase'
 import { Loader2, CheckCircle, ChevronDown, X, Paperclip, FileText, ExternalLink } from 'lucide-react'
@@ -515,23 +515,16 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   }, [])
 
   // ─── generateHCID ─────────────────────────────────────────────────────────
-  // สร้าง HCID ในรูปแบบ REQ-YYYY-NNN โดยอิง max HCID จาก Google Sheets เป็นหลัก
-  // และเปรียบเทียบกับ max จาก Firestore hc_requests เพื่อป้องกันการซ้ำ
+  // สร้าง HCID ในรูปแบบ REQ-YYYY-NNN โดยใช้ Firestore transaction บน counter doc
+  // เพื่อป้องกัน race condition เมื่อมีการ submit พร้อมกันหลาย session
   async function generateHCID() {
     const currentYear = new Date().getFullYear()
-    const prefix      = `REQ-${currentYear}-`
+    const counterRef  = doc(db, 'counters', `hcId_${currentYear}`)
 
-    // ── อ่าน max seq จาก Google Sheets (source of truth) ────────────────────
-    // ถ้า Sheets ตอบกลับได้ → ใช้ค่าจาก Sheets อย่างเดียว
-    // ไม่รวม Firestore เพื่อป้องกัน ghost doc ทำให้ HCID กระโดดข้ามเลข
-    const sheetsMax = await getMaxHCIDFromSheets()
-    if (sheetsMax > 0) {
-      return `REQ-${currentYear}-${sheetsMax + 1}`
-    }
-
-    // ── Fallback: ใช้ Firestore เฉพาะเมื่อ GAS ไม่ตอบสนอง (sheetsMax = 0) ──
-    let firestoreMax = 0
-    try {
+    // ── Seed counter ถ้ายังไม่มี doc (ครั้งแรก) ────────────────────────────
+    const counterSnap = await getDoc(counterRef)
+    if (!counterSnap.exists()) {
+      const prefix = `REQ-${currentYear}-`
       const q = query(
         collection(db, 'hc_requests'),
         where('hcId', '>=', prefix),
@@ -540,12 +533,20 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
         limit(1)
       )
       const snap = await getDocs(q)
-      if (!snap.empty) {
-        firestoreMax = parseInt(snap.docs[0].data().hcId.split('-')[2]) || 0
-      }
-    } catch (_) {}
+      const currentMax = snap.empty ? 0 : (parseInt(snap.docs[0].data().hcId.split('-')[2]) || 0)
+      // merge:true ป้องกัน overwrite ถ้า concurrent init เกิดขึ้น
+      await setDoc(counterRef, { value: currentMax }, { merge: true })
+    }
 
-    return `REQ-${currentYear}-${firestoreMax + 1}`
+    // ── Atomic increment ผ่าน transaction → ป้องกัน duplicate ─────────────
+    const newSeq = await runTransaction(db, async (tx) => {
+      const snap = await tx.get(counterRef)
+      const next = (snap.data()?.value ?? 0) + 1
+      tx.set(counterRef, { value: next })
+      return next
+    })
+
+    return `REQ-${currentYear}-${newSeq}`
   }
 
   // ─── handleSubmit ──────────────────────────────────────────────────────────
