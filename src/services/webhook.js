@@ -121,7 +121,7 @@ export async function syncBatchToSheets(requests) {
       position:        r.position || '',
       jg:              r.jg || '',
       department:      r.department || '',
-      division:        r.businessUnit || r.division || '',
+      division:        r.division || r.businessUnit || '',
       assignedToName:  r.assignedToName || '',
       status:          STATUS_MAP[r.status] || r.status || '',
       candidateName:   r.candidateName || '',

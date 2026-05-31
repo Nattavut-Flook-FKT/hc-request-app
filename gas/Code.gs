@@ -1097,7 +1097,7 @@ function syncBatchHandler_(ss, rows) {
       r.position       || '',
       getJGLabel_(r.jg),
       r.department     || '',
-      r.businessUnit   || '',
+      r.division       || r.businessUnit || '',
       r.assignedToName || '',
       toSheetsStatus_(r.status || ''),
       r.candidateName  || '',
