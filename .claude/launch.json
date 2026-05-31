@@ -2,16 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "HC Request App (Vite Dev)",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "name": "hc-request-app",
+      "runtimeExecutable": "/tmp/vite-hc.sh",
+      "runtimeArgs": [],
       "port": 5173
-    },
-    {
-      "name": "HC Request App (Vite Preview)",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "preview"],
-      "port": 4173
     }
   ]
 }
