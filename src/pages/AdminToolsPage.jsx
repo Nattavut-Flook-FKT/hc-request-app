@@ -21,11 +21,11 @@
 import { useState, useRef, useCallback } from 'react'
 import { collection, getDocs, getDoc, setDoc, writeBatch, doc, runTransaction, updateDoc, query, where, orderBy, limit } from 'firebase/firestore'
 import { db } from '../services/firebase'
-import { Clock, Tag, FileText, Trash2, DatabaseZap, Settings2, AlertTriangle, RefreshCw, CheckCircle2, AlertCircle, UserCog, Users, ChevronDown, ChevronUp, Lock, Eye, EyeOff } from 'lucide-react'
+import { Clock, Tag, FileText, Trash2, DatabaseZap, Settings2, AlertTriangle, RefreshCw, CheckCircle2, AlertCircle, UserCog, Users, ChevronDown, ChevronUp, Lock, Eye, EyeOff, Upload, Power, PowerOff, X } from 'lucide-react'
 
 const ADMIN_PIN = import.meta.env.VITE_ADMIN_TOOLS_PIN || 'Admin2025'
 import { listJDFiles, deleteJDFile } from '../services/supabase'
-import { syncFromSheets, syncBatchToSheets } from '../services/webhook'
+import { syncFromSheets, syncBatchToSheets, syncAllToSheets } from '../services/webhook'
 import Layout from '../components/Shared/Layout'
 
 /** ตัดนามสกุลออก เหลือแค่ "ชื่อ (nickname)" — เหมือน RequestTable.shortName */
@@ -35,7 +35,7 @@ function shortName(fullName) {
   return match ? match[0].trim() : fullName
 }
 
-export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode }) {
+export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode, maintenanceMode, toggleMaintenance, togglingMaintenance }) {
   // ── Password Gate ─────────────────────────────────────────────────────────
   const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem('adminToolsUnlocked') === '1')
   const [pinInput, setPinInput] = useState('')
@@ -63,6 +63,12 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode 
   // ── Sync from Sheets state ────────────────────────────────────────────────
   const [syncState,  setSyncState]  = useState('idle')  // 'idle'|'running'|'done'|'error'
   const [syncResult, setSyncResult] = useState(null)
+
+  // ── App → Sheets state ────────────────────────────────────────────────────
+  const [pushState,  setPushState]  = useState('idle')
+  const [pushResult, setPushResult] = useState(null)
+  const [pushModal,  setPushModal]  = useState(false)
+  const [pushIds,    setPushIds]    = useState('')
 
   // ── Fix TA Names state ────────────────────────────────────────────────────
   const [fixNamesState,  setFixNamesState]  = useState('idle') // 'idle'|'running'|'done'|'error'
@@ -282,6 +288,32 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode 
       setSyncState('error')
     }
     setTimeout(() => { setSyncState('idle'); setSyncResult(null) }, 6000)
+  }
+
+  async function handlePushAll() {
+    setPushModal(false); setPushState('running'); setPushResult(null)
+    try {
+      const res = await syncAllToSheets()
+      setPushResult(`Pushed ${res.total} rows`); setPushState('done')
+    } catch (err) { setPushResult(err.message); setPushState('error') }
+    setTimeout(() => { setPushState('idle'); setPushResult(null) }, 5000)
+  }
+
+  async function handlePushSelected() {
+    const ids = pushIds.split(/[\s,]+/).map(s => s.trim()).filter(Boolean)
+    if (!ids.length) return
+    setPushModal(false); setPushState('running'); setPushResult(null)
+    try {
+      const CHUNK = 30; const docs = []
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const snap = await getDocs(query(collection(db, 'hc_requests'), where('hcId', 'in', ids.slice(i, i + CHUNK))))
+        snap.forEach(d => docs.push({ id: d.id, ...d.data() }))
+      }
+      if (!docs.length) { setPushResult('ไม่พบ hcId ที่ระบุ'); setPushState('error'); return }
+      await syncBatchToSheets(docs)
+      setPushResult(`Pushed ${docs.length} rows`); setPushState('done')
+    } catch (err) { setPushResult(err.message); setPushState('error') }
+    setTimeout(() => { setPushState('idle'); setPushResult(null) }, 5000)
   }
 
   // ── Fix Duplicate HCIDs state ─────────────────────────────────────────────
@@ -588,6 +620,60 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode 
           )}
         </div>
 
+        {/* ── App → Sheets card ───────────────────────────────────────────────── */}
+        <div className="rounded-2xl border p-5 bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800 mb-2">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-emerald-600 dark:text-emerald-400"><Upload size={20} /></span>
+              <div>
+                <p className="text-sm font-black text-emerald-700 dark:text-emerald-400">App → Google Sheets</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Push ข้อมูลจาก Firestore ขึ้น Sheets — ทั้งหมดหรือระบุ ID</p>
+              </div>
+            </div>
+            {pushState === 'done' ? (
+              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-800/40 px-3 py-1.5 rounded-xl shrink-0">✓ {pushResult}</span>
+            ) : pushState === 'running' ? (
+              <span className="text-xs font-bold text-gray-400 flex items-center gap-1.5 shrink-0"><Settings2 size={13} className="animate-spin"/> กำลัง Push...</span>
+            ) : pushState === 'error' ? (
+              <span className="text-xs font-bold text-red-500 shrink-0">{pushResult || 'Error'}</span>
+            ) : (
+              <button onClick={() => setPushModal(true)}
+                className="flex items-center gap-2 text-xs font-black px-4 py-2 rounded-xl border bg-white dark:bg-slate-800 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-800/40 transition-all shrink-0 shadow-sm">
+                <Upload size={13}/> Push to Sheets
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ── Maintenance Toggle card ──────────────────────────────────────────── */}
+        {toggleMaintenance && (
+          <div className={`rounded-2xl border p-5 mb-2 ${maintenanceMode
+            ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800'
+            : 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800'}`}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <span className={maintenanceMode ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-500 dark:text-orange-400'}>
+                  {maintenanceMode ? <Power size={20}/> : <PowerOff size={20}/>}
+                </span>
+                <div>
+                  <p className={`text-sm font-black ${maintenanceMode ? 'text-emerald-700 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                    {maintenanceMode ? '🔴 ระบบปิดอยู่' : 'ระบบเปิดอยู่'}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                    {maintenanceMode ? 'ผู้ใช้ทั่วไปไม่สามารถเข้าใช้งานได้' : 'ผู้ใช้ทุกคนเข้าใช้งานได้ตามปกติ'}
+                  </p>
+                </div>
+              </div>
+              <button onClick={toggleMaintenance} disabled={togglingMaintenance}
+                className={`flex items-center gap-2 text-xs font-black px-4 py-2 rounded-xl text-white transition-all shrink-0 shadow-sm disabled:opacity-50
+                  ${maintenanceMode ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-orange-500 hover:bg-orange-600'}`}>
+                {togglingMaintenance ? <Settings2 size={13} className="animate-spin"/> : maintenanceMode ? <Power size={13}/> : <PowerOff size={13}/>}
+                {togglingMaintenance ? 'กำลังดำเนินการ...' : maintenanceMode ? 'เปิดระบบ' : 'ปิดระบบ'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── Fix TA Names card ───────────────────────────────────────────────── */}
         <div className="rounded-2xl border p-5 bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800 mb-2">
           <div className="flex items-center justify-between gap-4">
@@ -888,6 +974,44 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode 
           )
         })()}
       </div>
+
+      {/* App → Sheets modal */}
+      {pushModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="font-black text-gray-900 dark:text-gray-100 text-sm">App → Sheets</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">เลือก push เฉพาะ ID หรือทั้งหมด</p>
+              </div>
+              <button onClick={() => setPushModal(false)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-400">
+                <X size={16}/>
+              </button>
+            </div>
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                HC IDs — คั่นด้วยจุลภาคหรือ Enter (ว่างไว้ = push ทั้งหมด)
+              </label>
+              <textarea value={pushIds} onChange={e => setPushIds(e.target.value)}
+                placeholder={"REQ-2026-455\nREQ-2026-456"} rows={4}
+                className="w-full text-sm font-mono border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2.5 bg-gray-50 dark:bg-slate-800 text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-slate-600 focus:outline-none focus:border-emerald-400 resize-none"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setPushModal(false)} className="flex-1 px-4 py-2 text-sm font-bold rounded-xl border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">ยกเลิก</button>
+              {pushIds.trim() ? (
+                <button onClick={handlePushSelected} className="flex-1 px-4 py-2 text-sm font-black rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-md">
+                  Push {pushIds.split(/[\s,]+/).filter(Boolean).length} ID
+                </button>
+              ) : (
+                <button onClick={handlePushAll} className="flex-1 px-4 py-2 text-sm font-black rounded-xl bg-gray-700 text-white hover:bg-gray-800 transition-colors">
+                  Push ทั้งหมด
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   )
 }

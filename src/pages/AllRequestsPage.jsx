@@ -127,16 +127,6 @@ export default function AllRequestsPage({ user, role, department, isDarkMode, to
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">รายการคำขออัตรากำลังทั้งหมดในระบบ</p>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <SyncBtn state={syncState} result={syncResult} onClick={handleSyncSheets}
-              icon={RefreshCw} label="Sheets → App"
-              title="ดึง Status/PIC จาก Google Sheets → Firestore" />
-            {role === 'admin' && (
-              <SyncBtn state={pushState} result={pushResult} onClick={() => setPushModal(true)}
-                icon={Upload} label="App → Sheets"
-                title="Push ข้อมูลจาก Firestore → Google Sheets" />
-            )}
-          </div>
         </div>
 
         {/* showFilters=true เปิด filter bar ให้กรองตาม status, แผนก, ช่วงวันที่ ฯลฯ */}

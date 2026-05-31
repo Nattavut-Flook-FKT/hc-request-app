@@ -404,7 +404,7 @@ export default function App() {
           path="/admin-tools"
           element={
             <RoleGuard role={role} allowed={['admin']} redirectTo="/dashboard">
-              <AdminToolsPage {...pageProps} />
+              <AdminToolsPage {...pageProps} maintenanceMode={maintenanceMode} toggleMaintenance={toggleMaintenance} togglingMaintenance={togglingMaintenance} />
             </RoleGuard>
           }
         />
@@ -439,33 +439,6 @@ export default function App() {
         />
       )}
 
-      {/* ─── Maintenance Toggle Button (Admin Only) ───────────────────────────
-          ปุ่ม fixed position ที่มุมล่างซ้าย แสดงเฉพาะ admin
-          สีเขียว = ระบบปิดอยู่ (กดเพื่อเปิด) | สีส้ม = ระบบเปิดอยู่ (กดเพื่อปิด)
-          disabled ระหว่าง togglingMaintenance เพื่อป้องกัน race condition */}
-      {role === 'admin' && (
-        <div className="fixed bottom-6 left-6 z-[100]">
-          <button
-            onClick={toggleMaintenance}
-            disabled={togglingMaintenance}
-            title={maintenanceMode ? 'เปิดระบบ' : 'ปิดระบบเพื่อปรับปรุง'}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold shadow-xl transition-all disabled:opacity-50 ${
-              maintenanceMode
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/30'  // ระบบปิดอยู่ → ปุ่มสีเขียว "เปิดระบบ"
-                : 'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/30'      // ระบบเปิดอยู่ → ปุ่มสีส้ม "ปิดระบบ"
-            }`}
-          >
-            {/* ไอคอน: Power = เปิดระบบ, PowerOff = ปิดระบบ */}
-            {maintenanceMode ? <Power size={15} /> : <PowerOff size={15} />}
-            {/* ข้อความ: แสดง loading text ระหว่าง toggle, หรือ action text ปกติ */}
-            {togglingMaintenance ? 'กำลังดำเนินการ...' : maintenanceMode ? 'เปิดระบบ' : 'ปิดระบบ'}
-          </button>
-          {/* badge เตือน admin ว่าระบบปิดอยู่ในขณะนี้ */}
-          {maintenanceMode && (
-            <p className="text-[10px] text-orange-500 font-bold mt-1.5 text-center">ระบบปิดอยู่</p>
-          )}
-        </div>
-      )}
     </>
   )
 }
