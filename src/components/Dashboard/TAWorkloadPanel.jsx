@@ -20,13 +20,13 @@
 import { useMemo } from 'react'
 import { Users } from 'lucide-react'
 
-// Style ของ status badge แต่ละแบบ
+// Style ของ status badge แต่ละแบบ — DS Light-variant recipe
 const STATUS_CFG = {
-  Recruiting:   { label: 'Recruiting',   dot: 'bg-emerald-500', badge: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20' },
-  Interviewing: { label: 'Interviewing', dot: 'bg-orange-500',  badge: 'bg-orange-50 dark:bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-500/20' },
-  Offering:     { label: 'Offering',     dot: 'bg-indigo-500',  badge: 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-500/20' },
-  Onboarding:   { label: 'W.Onboarding', dot: 'bg-teal-500',   badge: 'bg-teal-50 dark:bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-200 dark:border-teal-500/20' },
-  Open:         { label: 'Open',         dot: 'bg-yellow-400',  badge: 'bg-yellow-50 dark:bg-yellow-500/10 text-yellow-700 dark:text-yellow-500 border-yellow-200 dark:border-yellow-500/20' },
+  Recruiting:   { label: 'Recruiting',   dot: 'bg-blue-500',       badge: 'bg-blue-50 text-blue-900 border-blue-100' },
+  Interviewing: { label: 'Interviewing', dot: 'bg-orange-500',     badge: 'bg-orange-50 text-orange-900 border-orange-100' },
+  Offering:     { label: 'Offering',     dot: 'bg-purple-500',     badge: 'bg-purple-50 text-purple-900 border-purple-100' },
+  Onboarding:   { label: 'W.Onboarding', dot: 'bg-teal-500',       badge: 'bg-teal-50 text-teal-900 border-teal-100' },
+  Open:         { label: 'Open',         dot: 'bg-yellow-400',     badge: 'bg-yellow-50 text-yellow-900 border-yellow-100' },
 }
 
 // สถานะที่ถือว่า "active" (ยังทำงานอยู่)
@@ -67,14 +67,14 @@ export default function TAWorkloadPanel({ requests, selectedTA, onSelectTA }) {
     <div className="flex flex-col gap-3">
       {/* ── Section header ─────────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <p className="text-[11px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
-          <Users size={12} strokeWidth={3} /> TA Workload
+        <p className="flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
+          <Users size={12} strokeWidth={1} absoluteStrokeWidth /> TA Workload
         </p>
         {/* ปุ่มล้าง filter — แสดงเฉพาะตอนที่กำลัง filter อยู่ */}
         {selectedTA && (
           <button
             onClick={() => onSelectTA(null)}
-            className="text-[10px] font-black text-gray-400 hover:text-[#008065] dark:text-slate-500 dark:hover:text-emerald-400 uppercase tracking-wider transition-colors"
+            className="text-[11px] font-bold text-neutral-400 transition-colors hover:text-dark-green-700"
           >
             ✕ ล้างตัวกรอง
           </button>
@@ -91,24 +91,24 @@ export default function TAWorkloadPanel({ requests, selectedTA, onSelectTA }) {
             <button
               key={ta.name}
               onClick={() => onSelectTA(isSelected ? null : ta.name)}
-              className={`flex flex-col gap-2.5 p-4 rounded-2xl border-2 text-left transition-all min-w-[160px] ${
+              className={`flex min-w-[160px] flex-col gap-2.5 rounded-2xl border p-4 text-left transition-colors ${
                 isSelected
-                  ? 'border-[#008065] bg-emerald-50/60 dark:bg-emerald-900/20 shadow-lg shadow-emerald-900/10'
-                  : 'border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-md'
+                  ? 'border-dark-green-100 bg-dark-green-50'
+                  : 'border-neutral-100 bg-white hover:border-dark-green-100 hover:bg-dark-green-50/40'
               }`}
             >
               {/* ชื่อ TA + จำนวนรวม */}
               <div className="flex items-start justify-between gap-2">
-                <p className={`text-sm font-black leading-tight ${
-                  isSelected ? 'text-[#008065] dark:text-emerald-400' : 'text-gray-800 dark:text-gray-200'
+                <p className={`text-sm font-bold leading-tight ${
+                  isSelected ? 'text-dark-green-900' : 'text-neutral-900'
                 } ${
-                  isUnassigned ? 'italic text-gray-400 dark:text-slate-500' : ''
+                  isUnassigned ? 'italic text-neutral-400' : ''
                 }`}>
                   {ta.name}
                 </p>
                 {/* Badge จำนวนรวม */}
-                <span className={`shrink-0 text-xs font-black px-2 py-0.5 rounded-full ${
-                  isSelected ? 'bg-[#008065] text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${
+                  isSelected ? 'bg-dark-green-600 text-neutral-50' : 'bg-neutral-100 text-neutral-600'
                 }`}>
                   {ta.total}
                 </span>
@@ -123,9 +123,9 @@ export default function TAWorkloadPanel({ requests, selectedTA, onSelectTA }) {
                   return (
                     <span
                       key={status}
-                      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-black border ${cfg.badge}`}
+                      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-bold ${cfg.badge}`}
                     >
-                      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} shrink-0`} />
+                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${cfg.dot}`} />
                       {cfg.label} {count}
                     </span>
                   )

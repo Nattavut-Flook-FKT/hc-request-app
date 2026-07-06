@@ -5,12 +5,12 @@
  * ข้อมูลถูกเก็บใน Firestore collection `custom_positions`
  * รองรับการเพิ่ม, ค้นหา, กรองตามแผนก และลบตำแหน่ง
  *
+ * UI: FKT Design System v1.0 (token-only · no dark mode · weight 400/700 ·
+ *     sentence case · Lucide strokeWidth 1) — pilot page for DS rollout
+ *
  * Props / Features:
- *   - user        — ข้อมูล user ที่ล็อกอิน (ใช้บันทึก createdBy เมื่อเพิ่ม position)
- *   - role        — บทบาทของ user (ส่งต่อไปยัง Layout)
- *   - isDarkMode  — สถานะ dark mode ปัจจุบัน
- *   - toggleDarkMode — ฟังก์ชันสลับ dark/light mode
- *   - ฟอร์มเพิ่ม position รองรับ department, orgTrack (HQ/OPERATION) และชื่อตำแหน่ง
+ *   - user / role / isDarkMode / toggleDarkMode — ส่งต่อให้ Layout
+ *   - ฟอร์มเพิ่ม position รองรับ division, department, section, orgTrack (HQ/OPERATION), ชื่อตำแหน่ง
  *   - normalizedPosition (lowercase) ถูกบันทึกควบคู่กันเพื่อรองรับการค้นหาแบบ case-insensitive
  *   - การลบใช้ ConfirmModal ยืนยันก่อนทุกครั้ง
  *
@@ -23,9 +23,14 @@
 import { useEffect, useState } from 'react'
 import { query, collection, orderBy, getDocs, deleteDoc, doc, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../services/firebase'
-import { Plus, Search, Tag, Trash2, Settings2 } from 'lucide-react'
+import { Plus, Search, Tag, Trash2, Loader2 } from 'lucide-react'
 import Layout from '../components/Shared/Layout'
 import ConfirmModal from '../components/Shared/ConfirmModal'
+import { DIVISIONS } from '../data/orgStructure'
+
+// ── DS class recipes (07-input · 09-dropdown · 05-button) ──
+const FIELD = 'h-10 w-full rounded-lg border border-neutral-100 bg-white px-3 text-sm text-neutral-900 placeholder:text-neutral-400 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none'
+const LABEL = 'mb-1 block text-[13px] font-bold text-neutral-900'
 
 export default function CustomPositionsPage({ user, role, isDarkMode, toggleDarkMode }) {
   // รายการ positions ทั้งหมดที่โหลดจาก Firestore
@@ -50,7 +55,7 @@ export default function CustomPositionsPage({ user, role, isDarkMode, toggleDark
   const [pageError, setPageError] = useState('')
 
   // ข้อมูลในฟอร์มสำหรับเพิ่ม position ใหม่
-  const [addForm, setAddForm] = useState({ department: '', orgTrack: 'HQ', position: '' })
+  const [addForm, setAddForm] = useState({ division: '', department: '', section: '', orgTrack: 'HQ', position: '' })
 
   // สถานะว่ากำลัง submit ฟอร์มเพิ่ม position อยู่ (ป้องกัน double submit)
   const [isAdding, setIsAdding] = useState(false)
@@ -97,24 +102,27 @@ export default function CustomPositionsPage({ user, role, isDarkMode, toggleDark
     setIsAdding(true)
     try {
       const docRef = await addDoc(collection(db, 'custom_positions'), {
+        division:   addForm.division,
         department: addForm.department.trim(),
-        orgTrack: addForm.orgTrack,
-        position: addForm.position.trim(),
-        normalizedPosition: addForm.position.trim().toLowerCase(), // สำหรับ case-insensitive search
+        section:    addForm.section.trim(),
+        orgTrack:   addForm.orgTrack,
+        position:   addForm.position.trim(),
+        normalizedPosition: addForm.position.trim().toLowerCase(),
         createdBy: user.email,
         createdAt: serverTimestamp(),
       })
-      // Prepend เข้า local state โดยใช้ new Date() แทน serverTimestamp ที่ยังไม่ resolve
       setPositions(prev => [{
         id: docRef.id,
+        division:   addForm.division,
         department: addForm.department.trim(),
-        orgTrack: addForm.orgTrack,
-        position: addForm.position.trim(),
+        section:    addForm.section.trim(),
+        orgTrack:   addForm.orgTrack,
+        position:   addForm.position.trim(),
         normalizedPosition: addForm.position.trim().toLowerCase(),
         createdBy: user.email,
         createdAt: new Date(),
       }, ...prev])
-      setAddForm({ department: '', orgTrack: 'HQ', position: '' })
+      setAddForm({ division: '', department: '', section: '', orgTrack: 'HQ', position: '' })
     } catch (e) {
       setPageError('เพิ่ม position ไม่สำเร็จ: ' + e.message)
       setTimeout(() => setPageError(''), 4000)
@@ -134,116 +142,180 @@ export default function CustomPositionsPage({ user, role, isDarkMode, toggleDark
   return (
     <Layout user={user} role={role} isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode}>
       <div className="flex flex-col gap-6">
-        <div>
-          <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100 italic tracking-tight">Custom Positions</h1>
-          <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 mt-0.5 uppercase tracking-widest">ตำแหน่งที่สร้างเพิ่มเติมโดยผู้ใช้งาน</p>
+        {/* ── Section header (13-section-header §2) ── */}
+        <div className="flex items-center gap-2">
+          <Tag size={20} strokeWidth={1} absoluteStrokeWidth className="text-neutral-600" />
+          <div>
+            <h1 className="text-xl font-bold text-neutral-900">Custom positions</h1>
+            <p className="mt-0.5 text-sm text-neutral-500">ตำแหน่งที่สร้างเพิ่มเติมโดยผู้ใช้งาน</p>
+          </div>
         </div>
 
-        {/* แสดง error banner เมื่อมีข้อผิดพลาด */}
+        {/* ── Error alert (semantic · red-50 + red-700 · DS-#096) ── */}
         {pageError && (
-          <div className="flex items-center gap-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 rounded-2xl px-5 py-3 text-sm font-bold animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 animate-in fade-in slide-in-from-top-2">
             {pageError}
           </div>
         )}
 
-        {/* Add form */}
-        <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-6 rounded-3xl shadow-xl shadow-gray-200/40 dark:shadow-none">
-          <h2 className="text-sm font-black text-[#008065] dark:text-emerald-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-            <Plus size={16} /> เพิ่ม Position ใหม่
-          </h2>
-          <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <input
-              id="pos-department" name="pos-department"
-              type="text" placeholder="ชื่อแผนก"
-              value={addForm.department} onChange={e => setAddForm(f => ({ ...f, department: e.target.value }))}
-              className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-            />
-            {/* orgTrack กำหนดว่าตำแหน่งนี้อยู่ในสายงาน HQ หรือ OPERATION */}
-            <select
-              value={addForm.orgTrack} onChange={e => setAddForm(f => ({ ...f, orgTrack: e.target.value }))}
-              className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-            >
-              <option value="HQ">HQ</option>
-              <option value="OPERATION">OPERATION</option>
-            </select>
-            <input
-              id="pos-position" name="pos-position"
-              type="text" placeholder="ชื่อตำแหน่ง" required
-              value={addForm.position} onChange={e => setAddForm(f => ({ ...f, position: e.target.value }))}
-              className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-            />
-            <button
-              type="submit" disabled={isAdding}
-              className="bg-[#008065] text-white font-bold rounded-xl py-2 shadow-lg shadow-emerald-500/20 transition-all hover:bg-[#006651] disabled:opacity-50"
-            >
-              เพิ่ม
-            </button>
+        {/* ── Add form (panel · r-lg · token-only) ── */}
+        <div className="rounded-[14px] border border-neutral-100 bg-white p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <Plus size={16} strokeWidth={1} absoluteStrokeWidth className="text-neutral-500" />
+            <h2 className="text-base font-bold text-neutral-900">เพิ่ม position ใหม่</h2>
+          </div>
+
+          <form onSubmit={handleAdd} className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Division */}
+              <div>
+                <label className={LABEL}>Division</label>
+                <select
+                  value={addForm.division} onChange={e => setAddForm(f => ({ ...f, division: e.target.value }))}
+                  className={`${FIELD} cursor-pointer`}
+                >
+                  <option value="">เลือก division</option>
+                  {DIVISIONS.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+
+              {/* แผนก (required) */}
+              <div>
+                <label className={LABEL}>แผนก <span className="text-red-600">*</span></label>
+                <input
+                  id="pos-department" name="pos-department"
+                  type="text" placeholder="ชื่อแผนก" required
+                  value={addForm.department} onChange={e => setAddForm(f => ({ ...f, department: e.target.value }))}
+                  className={FIELD}
+                />
+              </div>
+
+              {/* Section */}
+              <div>
+                <label className={LABEL}>Section</label>
+                <input
+                  id="pos-section" name="pos-section"
+                  type="text" placeholder="ชื่อ section"
+                  value={addForm.section} onChange={e => setAddForm(f => ({ ...f, section: e.target.value }))}
+                  className={FIELD}
+                />
+              </div>
+
+              {/* Location (orgTrack) */}
+              <div>
+                <label className={LABEL}>Location</label>
+                <select
+                  value={addForm.orgTrack} onChange={e => setAddForm(f => ({ ...f, orgTrack: e.target.value }))}
+                  className={`${FIELD} cursor-pointer`}
+                >
+                  <option value="HQ">HQ</option>
+                  <option value="OPERATION">Operation</option>
+                </select>
+              </div>
+
+              {/* ชื่อตำแหน่ง (required) */}
+              <div>
+                <label className={LABEL}>ชื่อตำแหน่ง <span className="text-red-600">*</span></label>
+                <input
+                  id="pos-position" name="pos-position"
+                  type="text" placeholder="ชื่อตำแหน่ง" required
+                  value={addForm.position} onChange={e => setAddForm(f => ({ ...f, position: e.target.value }))}
+                  className={FIELD}
+                />
+              </div>
+            </div>
+
+            {/* Form → submit (s6 gap) · Primary button M · no shadow */}
+            <div className="flex justify-end">
+              <button
+                type="submit" disabled={isAdding}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-dark-green-600 px-5 text-sm font-bold text-neutral-50 transition-colors hover:bg-dark-green-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-dark-green-100 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-300"
+              >
+                {isAdding && <Loader2 size={16} strokeWidth={1} absoluteStrokeWidth className="animate-spin" />}
+                เพิ่ม
+              </button>
+            </div>
           </form>
         </div>
 
-        {/* Filters — search text และ dropdown กรองแผนก */}
+        {/* ── Filter bar — search + dept dropdown ── */}
         <div className="flex flex-wrap gap-3">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <div className="relative min-w-[200px] flex-1">
+            <Search size={16} strokeWidth={1} absoluteStrokeWidth className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
             <input
               id="pos-search" name="pos-search"
-              type="text" placeholder="ค้นหา position หรือ แผนก..."
+              type="text" placeholder="ชื่อตำแหน่ง, ชื่อแผนก"
               value={search} onChange={e => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className={`${FIELD} pl-9`}
             />
           </div>
           {/* depts มาจาก unique departments ของ positions ที่โหลดมา */}
           <select
             value={deptFilter} onChange={e => setDeptFilter(e.target.value)}
-            className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+            className={`${FIELD} w-auto cursor-pointer`}
           >
             <option value="">ทุกแผนก</option>
             {depts.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
         </div>
 
-        {/* ผลลัพธ์: loading state → empty state → ตาราง positions */}
+        {/* ── Results: loading → empty → table ── */}
         {loading ? (
-          <div className="text-center py-20 text-gray-400 animate-pulse">กำลังดึงข้อมูล...</div>
+          <div className="py-16 text-center text-sm text-neutral-500">กำลังดึงข้อมูล...</div>
         ) : filtered.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 p-20 flex flex-col items-center gap-4 text-center shadow-xl shadow-gray-200/40 dark:shadow-none">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-50 dark:bg-emerald-500/5 flex items-center justify-center text-emerald-500"><Tag size={32} /></div>
-            <p className="text-sm font-bold text-gray-500 dark:text-slate-400">ไม่พบตำแหน่งที่ตรงกัน</p>
+          // Empty state — Section variant (13-section-header §4)
+          <div className="flex flex-col items-center gap-2 rounded-[14px] border border-neutral-100 bg-white py-12 text-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-neutral-50 text-neutral-400">
+              <Tag size={40} strokeWidth={1} absoluteStrokeWidth />
+            </div>
+            <p className="text-base font-bold text-neutral-900">ไม่พบตำแหน่งที่ตรงกัน</p>
+            <p className="text-sm text-neutral-500">ลองปรับคำค้นหา หรือเพิ่ม position ใหม่ด้านบน</p>
           </div>
         ) : (
-          <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-3xl shadow-xl shadow-gray-200/40 dark:shadow-none overflow-hidden">
+          // Table — Variant B Outline (17-table)
+          <div className="overflow-hidden rounded-[14px] border border-neutral-100 bg-white">
             <div className="overflow-x-auto">
               <table className="w-full text-left">
-                <thead className="bg-[#fcfdfd] dark:bg-slate-800/30 border-b border-gray-50 dark:border-slate-800/50">
-                  <tr>
-                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">ตำแหน่ง</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">แผนก</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Location</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">สร้างโดย</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">วันที่</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
+                <thead>
+                  <tr className="border-b border-neutral-100">
+                    <th className="px-4 py-3 text-[11px] font-bold text-neutral-500">ตำแหน่ง</th>
+                    <th className="px-4 py-3 text-[11px] font-bold text-neutral-500">Division</th>
+                    <th className="px-4 py-3 text-[11px] font-bold text-neutral-500">แผนก</th>
+                    <th className="px-4 py-3 text-[11px] font-bold text-neutral-500">Section</th>
+                    <th className="px-4 py-3 text-[11px] font-bold text-neutral-500">Location</th>
+                    <th className="px-4 py-3 text-[11px] font-bold text-neutral-500">สร้างโดย</th>
+                    <th className="px-4 py-3 text-[11px] font-bold text-neutral-500">วันที่</th>
+                    <th className="px-4 py-3 text-right text-[11px] font-bold text-neutral-500">จัดการ</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50 dark:divide-slate-800/50">
+                <tbody>
                   {filtered.map(pos => (
-                    <tr key={pos.id} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/20 transition-colors">
-                      <td className="px-6 py-4 text-sm font-bold text-gray-800 dark:text-gray-100">{pos.position}</td>
-                      <td className="px-6 py-4 text-sm text-gray-500 dark:text-slate-400">{pos.department}</td>
-                      <td className="px-6 py-4">
-                        {/* orgTrack badge — สี emerald สำหรับทั้ง HQ และ OPERATION */}
-                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 uppercase">{pos.orgTrack || '—'}</span>
+                    <tr key={pos.id} className="border-b border-neutral-100 transition-colors last:border-0 hover:bg-neutral-50">
+                      <td className="px-4 py-3.5 text-sm font-bold text-neutral-900">{pos.position}</td>
+                      <td className="px-4 py-3.5 text-sm text-neutral-700">{pos.division || '—'}</td>
+                      <td className="px-4 py-3.5 text-sm text-neutral-700">{pos.department}</td>
+                      <td className="px-4 py-3.5 text-sm text-neutral-700">{pos.section || '—'}</td>
+                      <td className="px-4 py-3.5">
+                        {/* Location badge — light chip · dark-green family · no border */}
+                        <span className="inline-flex items-center rounded-full bg-dark-green-50 px-2 py-0.5 text-xs font-bold text-dark-green-900">
+                          {pos.orgTrack === 'OPERATION' ? 'Operation' : (pos.orgTrack || '—')}
+                        </span>
                       </td>
-                      <td className="px-6 py-4 text-xs text-gray-400 dark:text-slate-500">{pos.createdBy}</td>
+                      <td className="px-4 py-3.5 text-sm text-neutral-500">{pos.createdBy}</td>
                       {/* createdAt เป็น Firestore Timestamp — ต้องเรียก .toDate() ก่อน format */}
-                      <td className="px-6 py-4 text-xs text-gray-400 dark:text-slate-500">{pos.createdAt?.toDate?.().toLocaleDateString('th-TH') || '—'}</td>
-                      <td className="px-6 py-4 text-right">
-                        {/* ปุ่มลบ — แสดง spinner ขณะกำลัง delete document นี้ */}
+                      <td className="px-4 py-3.5 text-sm text-neutral-500">{pos.createdAt?.toDate?.().toLocaleDateString('th-TH') || '—'}</td>
+                      <td className="px-4 py-3.5 text-right">
+                        {/* ปุ่มลบ — ghost icon · neutral rest → red hover · spinner ขณะลบ */}
                         <button
                           onClick={() => setConfirmState({ isOpen: true, id: pos.id })}
                           disabled={deletingId === pos.id}
-                          className="p-2 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50"
+                          aria-label="ลบตำแหน่ง"
+                          title="ลบตำแหน่ง"
+                          className="rounded-lg p-2 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
                         >
-                          {deletingId === pos.id ? <Settings2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                          {deletingId === pos.id
+                            ? <Loader2 size={16} strokeWidth={1} absoluteStrokeWidth className="animate-spin" />
+                            : <Trash2 size={16} strokeWidth={1} absoluteStrokeWidth />}
                         </button>
                       </td>
                     </tr>
@@ -252,13 +324,13 @@ export default function CustomPositionsPage({ user, role, isDarkMode, toggleDark
               </table>
             </div>
             {/* Footer แสดงจำนวน positions ที่ผ่าน filter */}
-            <div className="px-6 py-3 border-t border-gray-50 dark:border-slate-800/50 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+            <div className="border-t border-neutral-100 px-4 py-3 text-xs text-neutral-500">
               {filtered.length} รายการ
             </div>
           </div>
         )}
 
-        {/* Confirm modal — ยืนยันก่อนลบ position */}
+        {/* Confirm modal — ยืนยันก่อนลบ position (shared component · ยังไม่ restyle ใน pilot นี้) */}
         <ConfirmModal
           isOpen={confirmState.isOpen}
           onClose={() => setConfirmState({ isOpen: false, id: '' })}

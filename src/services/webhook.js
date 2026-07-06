@@ -12,20 +12,11 @@
  * หมายเหตุ: GAS ไม่รองรับ CORS preflight ดังนั้น POST ใช้ mode: 'no-cors'
  */
 
+import { toast } from '../components/Shared/Toast'
+
 const WEBHOOK_URL = import.meta.env.VITE_GAS_WEBHOOK_URL
 const DATA_URL    = import.meta.env.VITE_GAS_DATA_URL
 const GAS_SECRET  = import.meta.env.VITE_GAS_SECRET || ''
-
-// ── Date helper ──────────────────────────────────────────────────────────────
-function formatDateForSheets(isoDate) {
-  if (!isoDate || typeof isoDate !== 'string') return isoDate
-  const parts = isoDate.split('-')
-  if (parts.length !== 3) return isoDate
-  const [year, month, day] = parts
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-  const m = months[parseInt(month, 10) - 1]
-  return m ? `${parseInt(day, 10)}-${m}-${year}` : isoDate
-}
 
 // ── Rate Limiting (Debounce) ─────────────────────────────────────────────────
 const _pending = new Map()
@@ -57,6 +48,14 @@ export async function sendMaintenanceAlert(active) {
   }
 }
 
+// แปลง internal app status → Sheets display status (ใช้ร่วมกันทั้ง sendStatusUpdate และ syncBatchToSheets)
+const STATUS_MAP = {
+  Open: 'Open', Recruiting: 'Active Sourcing', Interviewing: 'Interviewing',
+  Offering: 'Pending Offer', Onboarding: 'Pending Onboard', Closed: 'Onboard',
+  Rejected: 'Turndown', Cancelled: 'Job Cancelled', OnHold: 'On hold',
+  Confidential: 'Confidential', InternalTransfer: 'Internal Transfer',
+}
+
 export function sendStatusUpdate(
   docId, status,
   assignedToName = null, assignedAt = null,
@@ -66,10 +65,14 @@ export function sendStatusUpdate(
 ) {
   if (!DATA_URL) {
     console.error('[sendStatusUpdate] VITE_GAS_DATA_URL not configured')
-    return Promise.resolve()
+    return Promise.resolve({ success: false, error: 'GAS URL not configured' })
   }
+  // คืนผลจริงจาก GAS เสมอ ({success, error}) เพื่อให้ caller โชว์ toast เตือนได้
+  // ยกเว้น call ที่ถูก debounce ทับ — resolve เป็น 'cancelled' (caller ไม่ต้อง alert)
   return debouncedStatusCall(docId, async () => {
     try {
+      // ส่ง internal status ตรงๆ ไป GAS — GAS มี toSheetsStatus_() แปลงเองอีกทีหนึ่ง
+      // (เดิมเคยส่ง Sheets display name เช่น 'Active Sourcing' แต่ GAS VALID list ต้องการ internal name)
       const params = new URLSearchParams({ action: 'updateStatus', id: docId, status })
       if (assignedToName) params.set('assignedToName', assignedToName)
       if (assignedAt)     params.set('assignedAt', assignedAt)
@@ -84,9 +87,15 @@ export function sendStatusUpdate(
       const res  = await fetch(`${DATA_URL}?${params.toString()}`)
       const json = await res.json()
       console.log('[sendStatusUpdate] response:', json)
-      if (!json.success) console.error('[sendStatusUpdate] failed:', json.error)
+      if (!json.success) {
+        console.error('[sendStatusUpdate] failed:', json.error)
+        toast(`อัปเดตสถานะใน Sheets ไม่สำเร็จ${hcId ? ` (${hcId})` : ''}`, { type: 'error', sub: json.error })
+      }
+      return json
     } catch (error) {
       console.error('[sendStatusUpdate] error:', error)
+      toast(`เชื่อมต่อ Sheets ไม่ได้ — สถานะ${hcId ? ` ${hcId}` : ''} อาจไม่ถูก sync`, { type: 'error', sub: error.message })
+      return { success: false, error: error.message }
     }
   })
 }
@@ -102,13 +111,6 @@ export async function syncBatchToSheets(requests) {
     if (val?.toDate) return val.toDate().toISOString()
     if (val instanceof Date) return val.toISOString()
     return String(val)
-  }
-
-  const STATUS_MAP = {
-    Open: 'Open', Recruiting: 'Active Sourcing', Interviewing: 'Interviewing',
-    Offering: 'Pending Offer', Onboarding: 'Pending Onboard', Closed: 'Onboard',
-    Rejected: 'Turndown', Cancelled: 'Job Cancelled', OnHold: 'On hold',
-    Confidential: 'Confidential', InternalTransfer: 'Internal Transfer',
   }
 
   const rows = requests
@@ -165,27 +167,48 @@ export async function syncAllToSheets(onProgress) {
  * @param {string} openDate  - ISO date string เช่น "2025-03-15" หรือ null เพื่อ clear
  */
 export async function updateOpenDateInSheets(hcId, openDate) {
-  if (!DATA_URL || !hcId) return
+  if (!DATA_URL || !hcId) return { success: false, error: 'GAS URL or hcId missing' }
   try {
     const params = new URLSearchParams({ action: 'updateOpenDate', hcId })
     if (openDate) params.set('openDate', openDate)
     if (GAS_SECRET) params.set('secret', GAS_SECRET)
     const res = await fetch(`${DATA_URL}?${params.toString()}`)
     const json = await res.json()
-    if (!json.success) console.warn('[updateOpenDateInSheets]', json.error || json.row || 'not found in sheet')
+    if (!json.success) {
+      console.warn('[updateOpenDateInSheets]', json.error || json.row || 'not found in sheet')
+      toast(`แก้ Open date ใน Sheets ไม่สำเร็จ (${hcId})`, { type: 'error', sub: json.error || 'not found in sheet' })
+    }
+    return json
   } catch (err) {
     console.error('[updateOpenDateInSheets] error:', err)
+    toast(`เชื่อมต่อ Sheets ไม่ได้ — Open date ${hcId} ไม่ถูก sync`, { type: 'error', sub: err.message })
+    return { success: false, error: err.message }
   }
 }
 
+/**
+ * sendDeleteToSheets — สั่ง GAS ลบ "ทุกแถว" ที่ HCID ตรง แล้วคืนผลจริง
+ * @returns {Promise<{success: boolean, count?: number, error?: string}>}
+ * caller ต้องเช็ค success เพื่อโชว์ toast — ห้ามยิงแล้วลืมแบบเดิม (เคย REQ-2026-485 ค้างใน Sheets แบบเงียบๆ)
+ */
 export async function sendDeleteToSheets(hcId) {
-  if (!DATA_URL || !hcId) return
+  if (!DATA_URL || !hcId) return { success: false, error: 'GAS URL or hcId missing' }
   try {
     const params = new URLSearchParams({ action: 'deleteRow', hcId })
     if (GAS_SECRET) params.set('secret', GAS_SECRET)
-    await fetch(`${DATA_URL}?${params.toString()}`)
+    const res  = await fetch(`${DATA_URL}?${params.toString()}`)
+    const json = await res.json()
+    if (json.success) {
+      toast(`ลบ ${hcId} ออกจาก Sheets แล้ว (${json.count} แถว)`, { type: 'success' })
+    } else {
+      console.warn('[sendDeleteToSheets] failed:', json.error)
+      toast(`ลบ ${hcId} ใน Sheets ไม่สำเร็จ — กรุณาลบแถวใน Sheets เอง`, { type: 'error', sub: json.error })
+    }
+    return json
   } catch (err) {
     console.error('[sendDeleteToSheets] error:', err)
+    toast(`เชื่อมต่อ Sheets ไม่ได้ — ${hcId} อาจยังค้างอยู่ใน Sheets`, { type: 'error', sub: err.message })
+    return { success: false, error: err.message }
   }
 }
 

@@ -73,24 +73,24 @@ function PositionCombobox({ value, onChange, positions, required }) {
           onBlur={() => {
             if (!open) { setIsFocused(false); setSearchText('') }
           }}
-          className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-medium"
+          className="w-full rounded-lg border border-neutral-100 bg-white px-4 py-2.5 pr-9 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
         />
         <button
           type="button"
           tabIndex={-1}
           onClick={() => { setOpen((v) => !v); inputRef.current?.focus() }}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400"
         >
-          <ChevronDown size={14} />
+          <ChevronDown size={14} strokeWidth={1} absoluteStrokeWidth />
         </button>
       </div>
       {open && filtered.length > 0 && (
-        <ul className="absolute z-50 mt-1 w-full max-h-52 overflow-y-auto bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl text-sm">
+        <ul className="absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-lg border border-neutral-100 bg-white text-sm shadow-xl">
           {filtered.map((pos) => (
             <li
               key={pos}
               onMouseDown={() => handleSelect(pos)}
-              className={`px-4 py-2 cursor-pointer font-medium hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors ${pos === value ? 'text-emerald-600 font-bold' : 'text-gray-700 dark:text-gray-200'}`}
+              className={`cursor-pointer px-4 py-2 transition-colors hover:bg-dark-green-50 hover:text-dark-green-700 ${pos === value ? 'font-bold text-dark-green-700' : 'text-neutral-700'}`}
             >
               {pos}
             </li>
@@ -221,42 +221,42 @@ function AddLibraryModal({ isOpen, onClose, onSaved, user, positionsByDept }) {
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-slate-800">
-          <h2 className="text-base font-black text-gray-800 dark:text-gray-100 tracking-tight">เพิ่ม JD เข้า Library</h2>
-          <button type="button" onClick={handleClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
-            <X size={16} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/45 p-4">
+      <div className="w-full max-w-md rounded-[24px] border border-neutral-100 bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-5">
+          <h2 className="text-base font-bold text-neutral-900">เพิ่ม JD เข้า Library</h2>
+          <button type="button" onClick={handleClose} className="rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-neutral-50 hover:text-neutral-600">
+            <X size={16} strokeWidth={1} absoluteStrokeWidth />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-6">
           <div>
-            <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest mb-1.5">Division *</label>
+            <label className="mb-1.5 block text-[13px] font-bold text-neutral-900">Division *</label>
             <select
               value={division}
               onChange={(e) => { setDivision(e.target.value); setDepartment(''); setPosition('') }}
               required
-              className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-bold"
+              className="w-full rounded-lg border border-neutral-100 bg-white px-4 py-2.5 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
             >
               <option value="">เลือก Division</option>
               {DIVISIONS.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest mb-1.5">แผนก *</label>
+            <label className="mb-1.5 block text-[13px] font-bold text-neutral-900">แผนก *</label>
             <select
               value={department}
               onChange={(e) => { setDepartment(e.target.value); setPosition('') }}
               required
               disabled={!division}
-              className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-bold disabled:opacity-50"
+              className="w-full rounded-lg border border-neutral-100 bg-white px-4 py-2.5 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none disabled:opacity-50"
             >
               <option value="">เลือกแผนก</option>
               {deptOptions.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest mb-1.5">ตำแหน่งงาน *</label>
+            <label className="mb-1.5 block text-[13px] font-bold text-neutral-900">ตำแหน่งงาน *</label>
             <PositionCombobox
               value={position}
               onChange={setPosition}
@@ -265,27 +265,27 @@ function AddLibraryModal({ isOpen, onClose, onSaved, user, positionsByDept }) {
             />
           </div>
           <div>
-            <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest mb-1.5">ไฟล์ JD (PDF) *</label>
+            <label className="mb-1.5 block text-[13px] font-bold text-neutral-900">ไฟล์ JD (PDF) *</label>
             {file ? (
-              <div className="flex items-center gap-3 border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/20 rounded-2xl px-4 py-3 animate-in zoom-in-95">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-600 shrink-0">
-                  <FileText size={18} strokeWidth={3} />
+              <div className="flex items-center gap-3 rounded-2xl border border-dark-green-100 bg-dark-green-50 px-4 py-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-dark-green-100 text-dark-green-700">
+                  <FileText size={18} strokeWidth={1} absoluteStrokeWidth />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400 truncate">{file.name}</p>
-                  <p className="text-[10px] font-black text-emerald-600/60 uppercase">{(file.size / 1024).toFixed(0)} KB</p>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-dark-green-800">{file.name}</p>
+                  <p className="text-[11px] font-bold text-dark-green-600">{(file.size / 1024).toFixed(0)} KB</p>
                 </div>
-                <button type="button" onClick={() => setFile(null)} className="p-1.5 text-emerald-400 hover:text-red-500 transition-colors">
-                  <X size={16} strokeWidth={3} />
+                <button type="button" onClick={() => setFile(null)} className="p-1.5 text-dark-green-400 transition-colors hover:text-red-600">
+                  <X size={16} strokeWidth={1} absoluteStrokeWidth />
                 </button>
               </div>
             ) : (
-              <label className="flex flex-col items-center gap-2 border-2 border-dashed border-gray-200 dark:border-slate-800 rounded-2xl px-6 py-6 cursor-pointer hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/5 transition-all group">
-                <div className="w-10 h-10 rounded-full bg-gray-50 dark:bg-slate-800 flex items-center justify-center text-gray-400 group-hover:bg-emerald-500 group-hover:text-white transition-all">
-                  <FileText size={18} strokeWidth={2.5} />
+              <label className="group flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-neutral-100 px-6 py-6 transition-colors hover:border-dark-green-600 hover:bg-dark-green-50">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-50 text-neutral-400 transition-colors group-hover:bg-dark-green-600 group-hover:text-neutral-50">
+                  <FileText size={18} strokeWidth={1} absoluteStrokeWidth />
                 </div>
-                <p className="text-sm font-bold text-gray-500 dark:text-slate-400">คลิกเพื่อเลือกไฟล์ PDF</p>
-                <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest">PDF เท่านั้น, ไม่เกิน 10MB</p>
+                <p className="text-sm font-bold text-neutral-500">คลิกเพื่อเลือกไฟล์ PDF</p>
+                <p className="text-[11px] font-bold text-neutral-400">PDF เท่านั้น, ไม่เกิน 10MB</p>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -298,21 +298,21 @@ function AddLibraryModal({ isOpen, onClose, onSaved, user, positionsByDept }) {
           </div>
 
           {error && (
-            <p className="text-sm font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl px-4 py-2.5">{error}</p>
+            <p className="rounded-lg border border-red-100 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700">{error}</p>
           )}
 
           <div className="flex gap-3 pt-2">
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-slate-800 text-sm font-bold text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+              className="flex-1 rounded-lg border border-neutral-100 py-2.5 text-sm font-bold text-neutral-600 transition-colors hover:bg-neutral-50"
             >
               ยกเลิก
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-black hover:bg-emerald-700 transition-colors disabled:opacity-60 shadow-lg shadow-emerald-500/20"
+              className="flex-1 rounded-lg bg-dark-green-600 py-2.5 text-sm font-bold text-neutral-50 transition-colors hover:bg-dark-green-700 disabled:opacity-60"
             >
               {saving ? 'กำลังบันทึก...' : 'บันทึก'}
             </button>
@@ -370,42 +370,42 @@ function EditLibraryModal({ isOpen, item, onClose, onSaved, positionsByDept }) {
   if (!isOpen || !item) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-slate-800">
-          <h2 className="text-base font-black text-gray-800 dark:text-gray-100 tracking-tight">แก้ไข JD Library</h2>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
-            <X size={16} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/45 p-4">
+      <div className="w-full max-w-md rounded-[24px] border border-neutral-100 bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-5">
+          <h2 className="text-base font-bold text-neutral-900">แก้ไข JD Library</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-neutral-50 hover:text-neutral-600">
+            <X size={16} strokeWidth={1} absoluteStrokeWidth />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-6">
           <div>
-            <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest mb-1.5">Division *</label>
+            <label className="mb-1.5 block text-[13px] font-bold text-neutral-900">Division *</label>
             <select
               value={division}
               onChange={(e) => { setDivision(e.target.value); setDepartment(''); setPosition('') }}
               required
-              className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-bold"
+              className="w-full rounded-lg border border-neutral-100 bg-white px-4 py-2.5 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
             >
               <option value="">เลือก Division</option>
               {DIVISIONS.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest mb-1.5">แผนก *</label>
+            <label className="mb-1.5 block text-[13px] font-bold text-neutral-900">แผนก *</label>
             <select
               value={department}
               onChange={(e) => { setDepartment(e.target.value); setPosition('') }}
               required
               disabled={!division}
-              className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-bold disabled:opacity-50"
+              className="w-full rounded-lg border border-neutral-100 bg-white px-4 py-2.5 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none disabled:opacity-50"
             >
               <option value="">เลือกแผนก</option>
               {deptOptions.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest mb-1.5">ตำแหน่งงาน *</label>
+            <label className="mb-1.5 block text-[13px] font-bold text-neutral-900">ตำแหน่งงาน *</label>
             <PositionCombobox
               value={position}
               onChange={setPosition}
@@ -415,21 +415,21 @@ function EditLibraryModal({ isOpen, item, onClose, onSaved, positionsByDept }) {
           </div>
 
           {error && (
-            <p className="text-sm font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl px-4 py-2.5">{error}</p>
+            <p className="rounded-lg border border-red-100 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700">{error}</p>
           )}
 
           <div className="flex gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-slate-800 text-sm font-bold text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+              className="flex-1 rounded-lg border border-neutral-100 py-2.5 text-sm font-bold text-neutral-600 transition-colors hover:bg-neutral-50"
             >
               ยกเลิก
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-black hover:bg-emerald-700 transition-colors disabled:opacity-60 shadow-lg shadow-emerald-500/20"
+              className="flex-1 rounded-lg bg-dark-green-600 py-2.5 text-sm font-bold text-neutral-50 transition-colors hover:bg-dark-green-700 disabled:opacity-60"
             >
               {saving ? 'กำลังบันทึก...' : 'บันทึก'}
             </button>
@@ -588,24 +588,24 @@ export default function JDFilesPage({ user, role, isDarkMode, toggleDarkMode }) 
       <div className="flex flex-col gap-6">
 
         {/* ── Page Header ── */}
-        <div className="animate-in fade-in slide-in-from-left-4 duration-500 flex items-start justify-between">
+        <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100 italic tracking-tight">JD Files</h1>
-            <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 mt-0.5 uppercase tracking-widest">คลังข้อมูล Job Description ที่อัปโหลดเข้าระบบ</p>
+            <h1 className="text-xl font-bold text-neutral-900">JD Files</h1>
+            <p className="mt-0.5 text-[11px] font-bold text-neutral-400">คลังข้อมูล Job Description ที่อัปโหลดเข้าระบบ</p>
           </div>
           {isAdmin && (
             <button
               onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-600 text-white text-sm font-black hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-500/20"
+              className="flex items-center gap-2 rounded-lg bg-dark-green-600 px-4 py-2.5 text-sm font-bold text-neutral-50 transition-colors hover:bg-dark-green-700"
             >
-              <Plus size={16} strokeWidth={3} />
+              <Plus size={16} strokeWidth={1} absoluteStrokeWidth />
               เพิ่ม JD
             </button>
           )}
         </div>
 
         {/* ── Tabs ── */}
-        <div className="flex gap-1 bg-gray-100 dark:bg-slate-800/60 p-1 rounded-2xl w-fit">
+        <div className="inline-flex w-fit items-center gap-0.5 rounded-full border border-neutral-100 p-0.5">
           {[
             { id: 'library', label: 'JD Library' },
             { id: 'requests', label: 'JD จาก HC Request' },
@@ -613,10 +613,10 @@ export default function JDFilesPage({ user, role, isDarkMode, toggleDarkMode }) 
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-5 py-2 rounded-xl text-sm font-black transition-all ${
+              className={`rounded-full px-5 py-2 text-sm font-normal transition-colors ${
                 activeTab === tab.id
-                  ? 'bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-100 shadow-sm'
-                  : 'text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300'
+                  ? 'bg-green-fresh-50 text-green-fresh-900'
+                  : 'text-neutral-900 hover:bg-neutral-50'
               }`}
             >
               {tab.label}
@@ -628,44 +628,44 @@ export default function JDFilesPage({ user, role, isDarkMode, toggleDarkMode }) 
         {activeTab === 'library' && (
           <>
             {libraryLoading ? (
-              <div className="text-center py-20 text-gray-400 animate-pulse">กำลังดึงข้อมูล...</div>
+              <div className="py-20 text-center text-neutral-400">กำลังดึงข้อมูล...</div>
             ) : libraryItems.length === 0 ? (
-              <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 p-24 flex flex-col items-center gap-6 text-center shadow-xl shadow-emerald-900/5 transition-all group">
-                <div className="w-24 h-24 rounded-[2rem] bg-emerald-50 dark:bg-emerald-500/5 flex items-center justify-center text-emerald-600 dark:text-emerald-500 transition-transform group-hover:scale-110 duration-500">
-                  <FolderOpen size={48} strokeWidth={2.5} />
+              <div className="flex flex-col items-center gap-6 rounded-[2.5rem] border border-neutral-100 bg-white p-24 text-center">
+                <div className="flex h-24 w-24 items-center justify-center rounded-[2rem] bg-dark-green-50 text-dark-green-700">
+                  <FolderOpen size={48} strokeWidth={1} absoluteStrokeWidth />
                 </div>
                 <div>
-                  <p className="text-lg font-bold text-gray-800 dark:text-gray-100 tracking-tight">ยังไม่มี JD ใน Library</p>
-                  <p className="text-xs font-bold text-gray-400 dark:text-slate-500 mt-2 uppercase tracking-widest">กด "เพิ่ม JD" เพื่อเริ่มต้นสร้างคลัง JD</p>
+                  <p className="text-lg font-bold text-neutral-900">ยังไม่มี JD ใน Library</p>
+                  <p className="mt-2 text-xs font-bold text-neutral-400">กด "เพิ่ม JD" เพื่อเริ่มต้นสร้างคลัง JD</p>
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {libraryItems.map((item) => (
                   <div
                     key={item.id}
                     onClick={() => item.filePath && handleOpen(item.filePath)}
-                    className="group relative bg-white dark:bg-slate-900 p-5 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm hover:shadow-xl hover:shadow-emerald-900/5 transition-all cursor-pointer overflow-hidden"
+                    className="group relative cursor-pointer overflow-hidden rounded-3xl border border-neutral-100 bg-white p-5 transition-colors hover:border-dark-green-100"
                   >
                     <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-500 shrink-0 group-hover:scale-110 transition-transform">
-                        <FileText size={24} />
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-dark-green-50 text-dark-green-700">
+                        <FileText size={24} strokeWidth={1} absoluteStrokeWidth />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-black text-emerald-600 dark:text-emerald-500 uppercase tracking-widest mb-1 truncate">
+                      <div className="min-w-0 flex-1">
+                        <p className="mb-1 truncate text-[11px] font-bold text-dark-green-700">
                           {item.position || '—'}
                         </p>
-                        <p className="text-sm font-bold text-gray-800 dark:text-gray-100 truncate mb-1">
+                        <p className="mb-1 truncate text-sm font-bold text-neutral-900">
                           {item.fileName || 'ไฟล์ JD'}
                         </p>
                         {item.department && (
-                          <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 truncate mb-1">
+                          <p className="mb-1 truncate text-[11px] font-bold text-neutral-400">
                             {item.department}
                           </p>
                         )}
                         {item.createdAt && (
-                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                            <Clock size={12} className="shrink-0" />
+                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
+                            <Clock size={12} strokeWidth={1} absoluteStrokeWidth className="shrink-0" />
                             {item.createdAt?.toDate?.().toLocaleDateString('th-TH') || '—'}
                           </div>
                         )}
@@ -674,16 +674,16 @@ export default function JDFilesPage({ user, role, isDarkMode, toggleDarkMode }) 
 
                     {/* Admin action buttons on hover */}
                     {isAdmin && (
-                      <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="absolute right-4 top-4 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
                             setEditItem(item)
                           }}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"
+                          className="rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-dark-green-50 hover:text-dark-green-700"
                           title="แก้ไข"
                         >
-                          <Pencil size={14} />
+                          <Pencil size={14} strokeWidth={1} absoluteStrokeWidth />
                         </button>
                         <button
                           onClick={(e) => {
@@ -691,10 +691,10 @@ export default function JDFilesPage({ user, role, isDarkMode, toggleDarkMode }) 
                             setDeleteLibraryState({ isOpen: true, item })
                           }}
                           disabled={deletingLibraryId === item.id}
-                          className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50"
+                          className="rounded-lg p-1.5 text-red-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
                           title="ลบ"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={14} strokeWidth={1} absoluteStrokeWidth />
                         </button>
                       </div>
                     )}
@@ -709,25 +709,25 @@ export default function JDFilesPage({ user, role, isDarkMode, toggleDarkMode }) 
         {activeTab === 'requests' && (
           <>
             {deleteError && (
-              <div className="flex items-center gap-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 rounded-2xl px-5 py-3 text-sm font-bold animate-in fade-in slide-in-from-top-2">
+              <div className="rounded-2xl border border-red-100 bg-red-50 px-5 py-3 text-sm font-bold text-red-700">
                 {deleteError}
               </div>
             )}
 
             {loading ? (
-              <div className="text-center py-20 text-gray-400 animate-pulse">กำลังดึงข้อมูลไฟล์...</div>
+              <div className="py-20 text-center text-neutral-400">กำลังดึงข้อมูลไฟล์...</div>
             ) : files.length === 0 ? (
-              <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 p-24 flex flex-col items-center gap-6 text-center shadow-xl shadow-emerald-900/5 transition-all group">
-                <div className="w-24 h-24 rounded-[2rem] bg-emerald-50 dark:bg-emerald-500/5 flex items-center justify-center text-emerald-600 dark:text-emerald-500 transition-transform group-hover:scale-110 duration-500">
-                  <FolderOpen size={48} strokeWidth={2.5} />
+              <div className="flex flex-col items-center gap-6 rounded-[2.5rem] border border-neutral-100 bg-white p-24 text-center">
+                <div className="flex h-24 w-24 items-center justify-center rounded-[2rem] bg-dark-green-50 text-dark-green-700">
+                  <FolderOpen size={48} strokeWidth={1} absoluteStrokeWidth />
                 </div>
                 <div>
-                  <p className="text-lg font-bold text-gray-800 dark:text-gray-100 tracking-tight">คลังไฟล์ JD ยังว่างอยู่</p>
-                  <p className="text-xs font-bold text-gray-400 dark:text-slate-500 mt-2 uppercase tracking-widest">ยังไม่มีการอัปโหลดไฟล์ JD เข้าระบบในขณะนี้</p>
+                  <p className="text-lg font-bold text-neutral-900">คลังไฟล์ JD ยังว่างอยู่</p>
+                  <p className="mt-2 text-xs font-bold text-neutral-400">ยังไม่มีการอัปโหลดไฟล์ JD เข้าระบบในขณะนี้</p>
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {files.filter((file) => {
                   // กรองไฟล์ที่เป็น JD Library ออก (path ตรงกับ filePath ใน libraryItems)
                   const libraryPaths = new Set(libraryItems.map((i) => i.filePath).filter(Boolean))
@@ -742,33 +742,33 @@ export default function JDFilesPage({ user, role, isDarkMode, toggleDarkMode }) 
                     <div
                       key={file.path}
                       onClick={() => handleOpen(file.path)}
-                      className="group relative bg-white dark:bg-slate-900 p-5 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm hover:shadow-xl hover:shadow-emerald-900/5 transition-all cursor-pointer overflow-hidden"
+                      className="group relative cursor-pointer overflow-hidden rounded-3xl border border-neutral-100 bg-white p-5 transition-colors hover:border-dark-green-100"
                     >
                       <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-500 shrink-0 group-hover:scale-110 transition-transform">
-                          <FileText size={24} />
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-dark-green-50 text-dark-green-700">
+                          <FileText size={24} strokeWidth={1} absoluteStrokeWidth />
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-black text-emerald-600 dark:text-emerald-500 uppercase tracking-widest mb-1 truncate">
+                        <div className="min-w-0 flex-1">
+                          <p className="mb-1 truncate text-[11px] font-bold text-dark-green-700">
                             {req ? `${req.position} (${req.department})` : file.folder.slice(0, 8).toUpperCase()}
                           </p>
-                          <p className="text-sm font-bold text-gray-800 dark:text-gray-100 truncate mb-2">
+                          <p className="mb-2 truncate text-sm font-bold text-neutral-900">
                             {displayName}
                           </p>
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                              <Clock size={12} className="shrink-0" />
+                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
+                              <Clock size={12} strokeWidth={1} absoluteStrokeWidth className="shrink-0" />
                               {new Date(file.created_at).toLocaleDateString('th-TH')}
                             </div>
-                            <div className="text-[10px] font-bold text-gray-300 uppercase tracking-wider">
+                            <div className="text-[11px] font-bold text-neutral-300">
                               {formatSize(file.metadata?.size)}
                             </div>
                           </div>
                         </div>
                       </div>
 
-                      <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <ExternalLink size={16} className="text-gray-300" />
+                      <div className="absolute right-4 top-4 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                        <ExternalLink size={16} strokeWidth={1} absoluteStrokeWidth className="text-neutral-300" />
                         {role === 'admin' && (
                           <button
                             onClick={(e) => {
@@ -776,10 +776,10 @@ export default function JDFilesPage({ user, role, isDarkMode, toggleDarkMode }) 
                               setConfirmState({ isOpen: true, file })
                             }}
                             disabled={deletingPath === file.path}
-                            className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50"
+                            className="rounded-lg p-1.5 text-red-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
                             title="ลบไฟล์ JD"
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={14} strokeWidth={1} absoluteStrokeWidth />
                           </button>
                         )}
                       </div>

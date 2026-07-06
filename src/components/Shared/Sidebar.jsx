@@ -1,24 +1,22 @@
 /**
  * Sidebar.jsx — Left Navigation Sidebar
  * ─────────────────────────────────────────────────────────────────────────────
- * แถบ navigation ซ้ายมือ แบบ Linear / Notion
+ * แถบ navigation ซ้ายมือ — FKT Design System v1.0 (18-navigation §13)
  *
  * ลักษณะ:
- *   - Expanded (220px): แสดง icon + label
- *   - Collapsed (56px): แสดงเฉพาะ icon พร้อม tooltip title
+ *   - Full (240px): icon + label · Mini (56px): icon + label แนวตั้ง
+ *   - Active item = dark-green-50 bg + 2px left accent + dark-green-900 text
+ *     (weight 400 ทุก state · DS-#118 — ไม่ใช้ weight เป็นตัวบอก state)
  *   - สถานะ collapsed เก็บใน localStorage ('sidebarCollapsed')
  *   - Sticky top-0 h-screen ทำให้ sidebar อยู่กับที่ขณะ scroll
+ *   - Token-only · no dark mode · Lucide strokeWidth 1 (Portal · DS-#083)
  *
  * Navigation groups ตาม role:
- *   manager  → 1 กลุ่ม (ยื่นคำขอ, คำขอของฉัน)
- *   ta       → 2 กลุ่ม (Main | Files)
- *   admin    → 3 กลุ่ม (Main | Recruit tools | Admin tools)
+ *   manager  → 1 กลุ่ม · ta → 2 กลุ่ม · admin → 3 กลุ่ม
  *
  * Props:
- *   user           {object}  Firebase Auth user object
- *   role           {string}  'admin' | 'ta' | 'manager'
- *   isDarkMode     {boolean} สถานะ dark mode
- *   toggleDarkMode {fn}      toggle dark/light mode
+ *   user / role — Firebase Auth user + บทบาท
+ *   isDarkMode / toggleDarkMode — รับไว้เพื่อ compatibility กับ Layout (ไม่ใช้แล้ว · DS ห้าม dark mode)
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -29,53 +27,52 @@ import { auth } from '../../services/firebase'
 import {
   LogOut, LayoutDashboard, FilePlus, List,
   Briefcase, FolderOpen, ClipboardList, ScrollText,
-  Moon, Sun, Users, Tag, DatabaseZap, Upload,
-  ChevronLeft, ChevronRight, HelpCircle,
+  Users, Tag, DatabaseZap, Upload,
+  ChevronLeft, HelpCircle, PieChart,
 } from 'lucide-react'
 import UserGuide from './UserGuide'
 
 // ── Nav item definitions แต่ละ role ──────────────────────────────
-// แต่ละ group คือ array ของ nav items — null ระหว่าง group = เส้นคั่น
+// แต่ละ group มี label (section header) + items
 
 const MANAGER_GROUPS = [
-  [
+  { label: null, items: [
     { path: '/request',     label: 'ยื่นคำขอ',   icon: FilePlus },
     { path: '/my-requests', label: 'คำขอของฉัน', icon: ClipboardList },
-  ],
+  ]},
 ]
 
 const TA_GROUPS = [
-  [
+  { label: 'Overview', items: [
     { path: '/dashboard',    label: 'Dashboard',    icon: LayoutDashboard },
+    { path: '/reports',      label: 'Reports',      icon: PieChart },
     { path: '/all-requests', label: 'All Requests', icon: List },
     { path: '/my-cases',     label: 'My Cases',     icon: Briefcase },
-  ],
-  [
+  ]},
+  { label: 'Files', items: [
     { path: '/jd-files',  label: 'JD Files',  icon: FolderOpen },
     { path: '/audit-log', label: 'Audit Log', icon: ScrollText },
-  ],
+  ]},
 ]
 
 const ADMIN_GROUPS = [
-  // กลุ่ม 1: หน้าหลัก
-  [
+  { label: 'Overview', items: [
     { path: '/dashboard',    label: 'Dashboard',    icon: LayoutDashboard },
+    { path: '/reports',      label: 'Reports',      icon: PieChart },
     { path: '/all-requests', label: 'All Requests', icon: List },
     { path: '/my-cases',     label: 'My Cases',     icon: Briefcase },
-  ],
-  // กลุ่ม 2: เครื่องมือ Recruit
-  [
+  ]},
+  { label: 'Recruit', items: [
     { path: '/request',   label: 'ยื่นคำขอ',  icon: FilePlus },
     { path: '/jd-files',  label: 'JD Files',  icon: FolderOpen },
     { path: '/audit-log', label: 'Audit Log', icon: ScrollText },
-  ],
-  // กลุ่ม 3: Admin tools (เข้าถึงได้เฉพาะ admin)
-  [
+  ]},
+  { label: 'Admin', items: [
     { path: '/custom-positions', label: 'Positions',    icon: Tag },
     { path: '/users',            label: 'Users',        icon: Users },
     { path: '/admin-tools',      label: 'Admin Tools',  icon: DatabaseZap },
     { path: '/import',           label: 'Import Data',  icon: Upload },
-  ],
+  ]},
 ]
 
 // Label แสดงใต้ชื่อ user ใน sidebar
@@ -85,12 +82,15 @@ const ROLE_LABEL = {
   manager: 'Manager',
 }
 
-// ขนาด sidebar (px)
-const EXPANDED_W  = 220
-const COLLAPSED_W = 56
+// ขนาด sidebar (px) — DS 18-navigation §13.1
+const FULL_W = 240
+const MINI_W = 56
+
+// border-right / divider color — neutral-100 @ 60% (DS §13.1)
+const HAIRLINE = 'rgba(230,233,235,0.6)'
 
 // ════════════════════════════════════════════════════════════════
-export default function Sidebar({ user, role, isDarkMode, toggleDarkMode }) {
+export default function Sidebar({ user, role }) {
   // อ่านสถานะ collapsed จาก localStorage เพื่อ persist ระหว่าง refresh
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem('sidebarCollapsed') === 'true'
@@ -118,56 +118,74 @@ export default function Sidebar({ user, role, isDarkMode, toggleDarkMode }) {
 
   return (
     <aside
-      className="h-screen sticky top-0 flex flex-col bg-white dark:bg-slate-900 border-r border-gray-100 dark:border-slate-800 shrink-0 overflow-hidden transition-[width] duration-200 ease-out z-30"
-      style={{ width: collapsed ? COLLAPSED_W : EXPANDED_W }}
+      className="h-screen sticky top-0 z-30 flex shrink-0 flex-col overflow-hidden bg-white transition-[width] duration-200 ease-out"
+      style={{ width: collapsed ? MINI_W : FULL_W, borderRight: `1px solid ${HAIRLINE}` }}
     >
-      {/* ── Brand / Logo ─────────────────────────────────────── */}
-      <div className={`flex items-center gap-2.5 h-14 border-b border-gray-100 dark:border-slate-800 shrink-0 ${collapsed ? 'justify-center px-0' : 'px-4'}`}>
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 shadow-sm"
-          style={{ background: 'linear-gradient(135deg, #008065 0%, #00ce7c 100%)' }}
-        >
-          <span className="text-white text-xs font-black tracking-tight">HC</span>
-        </div>
-        {/* แสดงชื่อแอปเฉพาะตอน expanded */}
-        {!collapsed && (
-          <div className="leading-tight overflow-hidden">
-            <p className="text-sm font-black text-gray-800 dark:text-gray-100 whitespace-nowrap">HC Request</p>
-            <p className="text-[10px] text-gray-400 dark:text-slate-500 font-medium whitespace-nowrap">People Experience</p>
-          </div>
+      {/* ── Logo zone (h-56px · DS §13.2) ─────────────────────── */}
+      <div
+        className={`flex h-14 shrink-0 items-center ${collapsed ? 'justify-center' : 'justify-between px-3'}`}
+        style={{ borderBottom: `1px solid ${HAIRLINE}` }}
+      >
+        {collapsed ? (
+          // Mini: logo mark (clip wordmark) — กดเพื่อขยาย
+          <button onClick={toggle} title="ขยาย sidebar" className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-neutral-50">
+            <span className="block h-7 w-7 overflow-hidden">
+              <img src="/freshket-original.svg" alt="Freshket" className="h-7 max-w-none object-left" style={{ objectPosition: 'left' }} />
+            </span>
+          </button>
+        ) : (
+          <>
+            <img src="/freshket-original.svg" alt="Freshket" className="h-[22px] object-contain" />
+            <button
+              onClick={toggle}
+              title="ย่อ sidebar"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-50 hover:text-neutral-700"
+            >
+              <ChevronLeft size={16} strokeWidth={1} absoluteStrokeWidth />
+            </button>
+          </>
         )}
       </div>
 
       {/* ── Nav groups ────────────────────────────────────────── */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2 flex flex-col gap-0.5">
+      <nav className="flex flex-1 flex-col overflow-y-auto py-2">
         {groups.map((group, gi) => (
-          <div key={gi}>
-            {/* เส้นคั่นระหว่าง group */}
-            {gi > 0 && (
-              <div className={`my-2 border-t border-gray-100 dark:border-slate-800 ${collapsed ? 'mx-2' : 'mx-1'}`} />
+          <div key={gi} className={gi > 0 ? 'mt-5' : ''}>
+            {/* Section header — Full เท่านั้น (Caption · neutral-400 · sentence case) */}
+            {group.label && !collapsed && (
+              <p className="px-4 pb-1.5 text-[11px] font-bold text-neutral-400">{group.label}</p>
             )}
 
-            {group.map((item) => {
+            {group.items.map((item) => {
               const active = pathname === item.path
               return (
                 <button
                   key={item.path}
                   onClick={() => navigate(item.path)}
-                  // เมื่อ collapsed ให้ใช้ native tooltip แทน label
                   title={collapsed ? item.label : undefined}
-                  className={`w-full flex items-center gap-2.5 rounded-lg transition-all text-sm font-medium ${
-                    collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2'
-                  } ${
-                    active
-                      ? 'bg-[#008065] text-white shadow-sm shadow-[#008065]/20'
-                      : 'text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-800 dark:hover:text-gray-200'
-                  }`}
+                  className={
+                    collapsed
+                      ? `relative flex h-[52px] w-full flex-col items-center justify-center gap-[3px] text-[10px] font-normal transition-colors ${
+                          active ? 'bg-dark-green-50 text-dark-green-900' : 'text-neutral-700 hover:bg-neutral-50 hover:text-neutral-900'
+                        }`
+                      : `relative flex h-9 w-full items-center gap-3 px-4 text-sm font-normal transition-colors ${
+                          active ? 'bg-dark-green-50 text-dark-green-900' : 'text-neutral-700 hover:bg-neutral-50 hover:text-neutral-900'
+                        }`
+                  }
                 >
-                  <item.icon size={15} className="shrink-0" />
-                  {/*숨겨진 label เมื่อ collapsed */}
-                  {!collapsed && (
-                    <span className="truncate">{item.label}</span>
+                  {/* Active = 2px left accent flush · เต็มความสูง (DS §13.3) */}
+                  {active && (
+                    <span className="absolute left-0 top-0 h-full w-0.5 bg-dark-green-600" />
                   )}
+                  <item.icon
+                    size={collapsed ? 20 : 18}
+                    strokeWidth={1}
+                    absoluteStrokeWidth
+                    className={`shrink-0 ${active ? 'text-dark-green-600' : 'text-neutral-400'}`}
+                  />
+                  <span className={collapsed ? 'line-clamp-2 px-1 text-center leading-tight' : 'truncate'}>
+                    {item.label}
+                  </span>
                 </button>
               )
             })}
@@ -175,82 +193,62 @@ export default function Sidebar({ user, role, isDarkMode, toggleDarkMode }) {
         ))}
       </nav>
 
-      {/* ── Bottom section: dark mode + collapse toggle + user profile ── */}
-      <div className="shrink-0 border-t border-gray-100 dark:border-slate-800">
+      {/* ── Bottom: help + profile ────────────────────────────── */}
+      <div style={{ borderTop: `1px solid ${HAIRLINE}` }}>
 
-        {/* Dark mode toggle + help button + collapse button */}
-        <div className={`flex items-center py-2 px-2 gap-1 ${collapsed ? 'flex-col' : ''}`}>
-          <button
-            onClick={toggleDarkMode}
-            title={isDarkMode ? 'เปลี่ยนเป็น Light mode' : 'เปลี่ยนเป็น Dark mode'}
-            className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
-          >
-            {isDarkMode
-              ? <Sun size={15} className="text-yellow-400" />
-              : <Moon size={15} />
-            }
-          </button>
-
-          {/* ปุ่มเปิดคู่มือการใช้งาน */}
+        {/* Help (UserGuide) — neutral ghost icon */}
+        <div className={`flex px-2 py-2 ${collapsed ? 'justify-center' : 'justify-start'}`}>
           <button
             onClick={() => setShowGuide(true)}
             title="คู่มือการใช้งาน"
-            className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-[#008065] dark:hover:text-emerald-400 transition-colors"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-neutral-500 transition-colors hover:bg-neutral-50 hover:text-neutral-900"
           >
-            <HelpCircle size={15} />
-          </button>
-
-          {/* spacer เฉพาะตอน expanded */}
-          {!collapsed && <div className="flex-1" />}
-
-          {/* ปุ่มย่อ/ขยาย sidebar */}
-          <button
-            onClick={toggle}
-            title={collapsed ? 'ขยาย sidebar' : 'ย่อ sidebar'}
-            className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
-          >
-            {collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
+            <HelpCircle size={16} strokeWidth={1} absoluteStrokeWidth />
           </button>
         </div>
 
-        {/* User profile: รูปโปรไฟล์ + ชื่อ + role + ปุ่ม sign out */}
-        <div className={`flex items-center gap-2.5 px-2 py-3 ${collapsed ? 'justify-center' : ''}`}>
+        {/* Profile zone (DS §13.8) — Avatar + name + role + sign out */}
+        <div className={`flex items-center gap-2.5 px-3 pb-3 ${collapsed ? 'justify-center' : ''}`}>
           {user.photoURL
             ? <img
                 src={user.photoURL}
                 alt=""
                 referrerPolicy="no-referrer"
-                className="w-8 h-8 rounded-full ring-2 ring-[#008065]/30 shrink-0"
+                className="h-8 w-8 shrink-0 rounded-full"
+                style={{ border: '1px solid rgba(0,128,101,0.2)' }}
               />
-            : <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-black bg-[#008065] shrink-0">
+            : <div
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-dark-green-50 text-xs font-bold text-dark-green-900"
+                style={{ border: '1px solid rgba(0,128,101,0.2)' }}
+              >
                 {user.displayName?.[0]}
               </div>
           }
 
-          {/* ชื่อ + role — แสดงเฉพาะตอน expanded */}
+          {/* ชื่อ + role — Full เท่านั้น */}
           {!collapsed && (
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-bold text-neutral-900">
                 {user.displayName?.split(' ')[0]}
               </p>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500 truncate">
+              <p className="truncate text-[10px] text-neutral-500">
                 {ROLE_LABEL[role]}
               </p>
             </div>
           )}
 
-          {/* ปุ่ม Sign out — แสดงเฉพาะตอน expanded */}
+          {/* Sign out — Full เท่านั้น */}
           {!collapsed && (
             <button
               onClick={handleSignOut}
               title="ออกจากระบบ"
-              className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors shrink-0"
+              className="shrink-0 rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-600"
             >
-              <LogOut size={14} />
+              <LogOut size={14} strokeWidth={1} absoluteStrokeWidth />
             </button>
           )}
 
-          {/* sr-only placeholder เพื่อให้ sign out ยังใช้ได้ตอน collapsed (ผ่าน title) */}
+          {/* Mini: sign out ผ่าน title (sr-only เพื่อ accessibility) */}
           {collapsed && (
             <button onClick={handleSignOut} title="ออกจากระบบ" className="sr-only" />
           )}

@@ -10,8 +10,10 @@ export const ORG_STRUCTURE = {
   },
   'Commercial': {
     'Marketing': {
-      'Performance Marketing': [],
-      'Campaign Marketing': [],
+      'Campaign Management': [],
+      'Communication Management': [],
+      'Performance Management': [],
+      'Creative Production': [],
     },
     'Commercial Excellence': {
       'Commercial Operations': ['Order Management', 'Commercial Process Optimization', 'Sales Coordinator'],

@@ -22,10 +22,15 @@ service cloud.firestore {
     }
 
     // ── Users collection ───────────────────────────────────────────────────────
-    // อ่านได้ทุก freshket user, เขียนได้เฉพาะ admin
+    // อ่านได้ทุก freshket user
+    // create: เฉพาะ admin หรือ self-registration (user สร้าง doc ตัวเองครั้งแรกด้วย
+    //   role 'pending' เท่านั้น — กัน privilege escalation, เปลี่ยน role จริงทำได้แค่ admin)
+    // update/delete: admin เท่านั้น
     match /users/{userId} {
       allow read: if isFreshket();
-      allow write: if isAdmin();
+      allow create: if isAdmin() ||
+        (isFreshket() && request.auth.token.email == userId && request.resource.data.role == 'pending');
+      allow update, delete: if isAdmin();
     }
 
     // ── HC Requests collection ─────────────────────────────────────────────────

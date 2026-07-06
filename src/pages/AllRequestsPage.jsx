@@ -101,17 +101,16 @@ export default function AllRequestsPage({ user, role, department, isDarkMode, to
 
   function SyncBtn({ state, result, onClick, icon: Icon, label, title }) {
     const busy = state === 'running'
-    const color = state === 'done' ? 'emerald' : state === 'error' ? 'red' : 'gray'
     return (
       <button onClick={onClick} disabled={busy} title={title}
-        className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-black border transition-all shrink-0
-          ${state === 'done'  ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
-          : state === 'error' ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400'
-          : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:border-emerald-300 dark:hover:border-emerald-500/40 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/5 shadow-sm'}`}>
-        {busy ? <RefreshCw size={13} className="animate-spin" />
-          : state === 'done'  ? <CheckCircle2 size={13} />
-          : state === 'error' ? <AlertCircle size={13} />
-          : <Icon size={13} />}
+        className={`flex shrink-0 items-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-bold transition-colors
+          ${state === 'done'  ? 'border-green-fresh-100 bg-green-fresh-50 text-green-fresh-900'
+          : state === 'error' ? 'border-red-100 bg-red-50 text-red-700'
+          : 'border-neutral-100 bg-white text-neutral-600 hover:border-dark-green-100 hover:bg-dark-green-50 hover:text-dark-green-700'}`}>
+        {busy ? <RefreshCw size={14} strokeWidth={1} absoluteStrokeWidth className="animate-spin" />
+          : state === 'done'  ? <CheckCircle2 size={14} strokeWidth={1} absoluteStrokeWidth />
+          : state === 'error' ? <AlertCircle size={14} strokeWidth={1} absoluteStrokeWidth />
+          : <Icon size={14} strokeWidth={1} absoluteStrokeWidth />}
         <span>{busy ? 'กำลัง Sync...' : state !== 'idle' ? (result || label) : label}</span>
       </button>
     )
@@ -123,8 +122,8 @@ export default function AllRequestsPage({ user, role, department, isDarkMode, to
         {/* ─── Header ─── */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100 italic tracking-tight">คำขอทั้งหมด</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">รายการคำขออัตรากำลังทั้งหมดในระบบ</p>
+            <h1 className="text-xl font-bold text-neutral-900">คำขอทั้งหมด</h1>
+            <p className="mt-0.5 text-sm text-neutral-500">รายการคำขออัตรากำลังทั้งหมดในระบบ</p>
           </div>
 
         </div>
@@ -135,20 +134,20 @@ export default function AllRequestsPage({ user, role, department, isDarkMode, to
 
       {/* Push to Sheets modal */}
       {pushModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-md mx-4 p-6">
-            <div className="flex items-center justify-between mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/15">
+          <div className="mx-4 w-full max-w-md rounded-[24px] border border-neutral-100 bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
               <div>
-                <p className="font-black text-gray-900 dark:text-gray-100 text-sm">App → Sheets</p>
-                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">เลือก push เฉพาะ ID หรือทั้งหมด</p>
+                <p className="text-sm font-bold text-neutral-900">App → Sheets</p>
+                <p className="mt-0.5 text-xs text-neutral-500">เลือก push เฉพาะ ID หรือทั้งหมด</p>
               </div>
-              <button onClick={() => setPushModal(false)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-400">
-                <X size={16} />
+              <button onClick={() => setPushModal(false)} className="rounded-lg p-1 text-neutral-400 hover:bg-neutral-50">
+                <X size={16} strokeWidth={1} absoluteStrokeWidth />
               </button>
             </div>
 
             <div className="mb-4">
-              <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+              <label className="mb-1.5 block text-[13px] font-bold text-neutral-900">
                 HC IDs (ระบุ ID ที่ต้องการ — คั่นด้วยจุลภาคหรือ Enter)
               </label>
               <textarea
@@ -156,27 +155,27 @@ export default function AllRequestsPage({ user, role, department, isDarkMode, to
                 onChange={e => setPushIds(e.target.value)}
                 placeholder={"REQ-2026-455\nREQ-2026-456"}
                 rows={4}
-                className="w-full text-sm font-mono border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2.5 bg-gray-50 dark:bg-slate-800 text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-slate-600 focus:outline-none focus:border-emerald-400 resize-none"
+                className="w-full resize-none rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2.5 font-mono text-sm text-neutral-700 placeholder-neutral-300 focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
               />
-              <p className="text-[10px] text-gray-400 dark:text-slate-600 mt-1">
+              <p className="mt-1 text-xs text-neutral-400">
                 ว่างไว้ = push ทั้งหมด ({' '}
-                <span className="font-bold text-amber-500">ใช้เวลานาน</span>)
+                <span className="font-bold text-yellow-700">ใช้เวลานาน</span>)
               </p>
             </div>
 
             <div className="flex gap-2">
               <button onClick={() => setPushModal(false)}
-                className="flex-1 px-4 py-2 text-sm font-bold rounded-xl border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+                className="flex-1 rounded-lg border border-neutral-100 px-4 py-2 text-sm font-bold text-neutral-600 transition-colors hover:bg-neutral-50">
                 ยกเลิก
               </button>
               {pushIds.trim() ? (
                 <button onClick={handlePushSelected}
-                  className="flex-1 px-4 py-2 text-sm font-black rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-md shadow-emerald-500/20">
+                  className="flex-1 rounded-lg bg-dark-green-600 px-4 py-2 text-sm font-bold text-neutral-50 transition-colors hover:bg-dark-green-700">
                   Push {pushIds.split(/[\s,]+/).filter(Boolean).length} ID
                 </button>
               ) : (
                 <button onClick={handlePushAll}
-                  className="flex-1 px-4 py-2 text-sm font-black rounded-xl bg-gray-700 text-white hover:bg-gray-800 transition-colors">
+                  className="flex-1 rounded-lg bg-dark-green-600 px-4 py-2 text-sm font-bold text-neutral-50 transition-colors hover:bg-dark-green-700">
                   Push ทั้งหมด
                 </button>
               )}

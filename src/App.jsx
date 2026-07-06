@@ -16,13 +16,14 @@
  * Auth & Role Resolution Flow:
  *   1. onAuthStateChanged fires → ได้ firebaseUser
  *   2. ดึง Firestore users doc และ Google Sheets managers list พร้อมกัน (Promise.all)
- *   3. ถ้า Firestore doc มีอยู่  → ใช้ role จาก doc โดยตรง
+ *   3. ถ้า Firestore doc มีอยู่  → ใช้ role จาก doc โดยตรง (รวมถึง 'pending')
  *   4. ถ้า Firestore doc ไม่มี   → เช็คว่า email อยู่ใน Sheets managers list หรือไม่
- *        - อยู่ใน Sheets → role = 'manager'
- *        - ไม่อยู่ใน Sheets → role = 'ta' (default)
- *   5. ถ้า fetch ล้มเหลวทุกอย่าง → fallback เป็น role = 'ta'
+ *        - อยู่ใน Sheets → role = 'manager' (สร้าง doc ทันที)
+ *        - ไม่อยู่ใน Sheets → role = 'pending' (สร้าง doc รออนุมัติจาก Admin)
+ *   5. ถ้า fetch ล้มเหลวทุกอย่าง → fallback เป็น role = 'pending' (deny-by-default)
  *
  * Roles & Accessible Routes:
+ *   pending → <PendingApprovalPage> เท่านั้น จนกว่า Admin จะกำหนด role จริงใน Users
  *   manager → /my-requests, /request (submit form), /jd-files (TA/Admin only แต่ redirect ออก)
  *   ta      → /dashboard, /all-requests, /my-cases, /audit-log, /jd-files, /my-requests
  *   admin   → ทุก route รวมถึง /users, /custom-positions, /admin-tools, /import
@@ -56,6 +57,8 @@ import { PowerOff, Power } from 'lucide-react'
 import { sendMaintenanceAlert } from './services/webhook'
 
 import Login from './components/Auth/Login'
+import PendingApprovalPage from './components/Auth/PendingApprovalPage'
+import Toaster from './components/Shared/Toast'
 
 // นำเข้า Shared Components
 import { RoleSwitcher, RoleGuard, MaintenancePage } from './components/Shared/AppHelpers'
@@ -66,6 +69,7 @@ import FormPage       from './pages/FormPage'          // Manager submit form
 
 // Lazy — โหลดเฉพาะเมื่อ navigate ไปจริงๆ (ลด initial bundle)
 const DashboardPage       = lazy(() => import('./pages/DashboardPage'))
+const ReportsPage         = lazy(() => import('./pages/ReportsPage'))
 const AllRequestsPage     = lazy(() => import('./pages/AllRequestsPage'))
 const MyCasesPage         = lazy(() => import('./pages/MyCasesPage'))
 const UserManagementPage  = lazy(() => import('./pages/UserManagementPage'))
@@ -101,9 +105,8 @@ export default function App() {
 
   // isDarkMode — สถานะ dark mode ปัจจุบัน
   // อ่านค่าเริ่มต้นจาก localStorage แบบ lazy init เพื่อหลีกเลี่ยง flash
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    return localStorage.getItem('theme') === 'dark'
-  })
+  // DS 2026 ห้าม dark mode (Pillar 2+4) — บังคับ light เสมอ ไม่อ่านจาก localStorage
+  const [isDarkMode, setIsDarkMode] = useState(false)
 
   // maintenanceMode — true = ระบบปิดปรับปรุง, non-admin จะเห็น MaintenancePage
   const [maintenanceMode, setMaintenanceMode] = useState(false)
@@ -120,11 +123,8 @@ export default function App() {
   // Tailwind ใช้ class strategy: ต้องมี class 'dark' ที่ root element
   // เพื่อให้ dark: variants ทำงานทั่วทั้งแอป
   useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
+    // DS ห้าม dark mode — เอา class 'dark' ออกเสมอ (กันค่าเก่าใน localStorage)
+    document.documentElement.classList.remove('dark')
   }, [isDarkMode])
 
   // toggleDarkMode — สลับ dark/light mode และ persist ลง localStorage
@@ -177,7 +177,7 @@ export default function App() {
         updatedBy: user?.email,         // บันทึกว่า admin คนไหนเป็นคนกด
       })
       // แจ้งเตือน Slack ว่าระบบเปิดหรือปิด
-      // await sendMaintenanceAlert(next)
+      await sendMaintenanceAlert(next)
       // อัปเดต local state ให้ตรงกับ Firestore
       setMaintenanceMode(next)
       setMaintenanceMessage(next ? 'กำลังดำเนินการปรับปรุงระบบ กรุณารอสักครู่' : '')
@@ -223,18 +223,29 @@ export default function App() {
           setDepartment(sheetDept || '')
 
           if (userDoc.exists()) {
-            // กรณีที่ 1: Firestore มี users doc → ใช้ role ที่ admin กำหนดไว้
+            // กรณีที่ 1: Firestore มี users doc → ใช้ role ที่ admin กำหนดไว้ (รวม 'pending')
             setRole(userDoc.data().role)
+          } else if (sheetDept) {
+            // กรณีที่ 2: ไม่มี Firestore doc แต่มีชื่ออยู่ใน Sheets managers list → 'manager'
+            // ไม่สร้าง doc ถาวร — ปล่อยให้ประเมินจาก Sheets ใหม่ทุกครั้งที่ login เหมือนเดิม
+            // (ถ้าถูกถอดออกจาก Sheets ภายหลัง role จะหลุดอัตโนมัติโดยไม่ต้องมี Admin มาแก้)
+            setRole('manager')
           } else {
-            // กรณีที่ 2: ไม่มี Firestore doc → ใช้ Sheets เป็น fallback
-            // มีชื่ออยู่ใน Sheets managers → 'manager', ไม่มี → 'ta'
-            setRole(sheetDept ? 'manager' : 'ta')
+            // กรณีที่ 3: ไม่มี Firestore doc และไม่อยู่ใน Sheets → ผู้ใช้ใหม่ที่ระบบไม่รู้จัก
+            // สร้าง users doc ด้วย role 'pending' เพื่อให้ Admin เห็นใน Users list และกำหนด role จริงได้
+            await setDoc(userRef, {
+              email: userEmail,
+              name: firebaseUser.displayName || '',
+              role: 'pending',
+              createdAt: serverTimestamp(),
+            })
+            setRole('pending')
           }
         } catch (error) {
           console.error('[App] Error fetching role:', error)
-          // Fallback สุดท้าย: ถ้า fetch ล้มเหลวทุกอย่าง ให้เป็น 'ta'
-          // เพื่อป้องกันไม่ให้แอปค้างโดยไม่มี role
-          setRole('ta')
+          // Fallback สุดท้าย: ถ้า fetch ล้มเหลวทุกอย่าง ให้เป็น 'pending' (deny-by-default)
+          // เพื่อป้องกันไม่ให้ user ที่ยังไม่ผ่านการตรวจสอบเข้าแอปได้โดยไม่ตั้งใจ
+          setRole('pending')
         }
       } else {
         // User logout → reset state ทั้งหมดที่เกี่ยวกับ user
@@ -254,8 +265,8 @@ export default function App() {
   // ป้องกัน flash ของ Login page ก่อนที่ auth state จะพร้อม
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f5f7f6] dark:bg-slate-950">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#008065]" />
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-dark-green-600" />
       </div>
     )
   }
@@ -263,6 +274,13 @@ export default function App() {
   // ─── Unauthenticated ────────────────────────────────────────────────────────
   // ถ้าไม่มี user (ยังไม่ได้ login หรือ logout แล้ว) ให้แสดงหน้า Login
   if (!user) return <Login />
+
+  // ─── Pending Approval Gate ──────────────────────────────────────────────────
+  // user login สำเร็จแต่ยังไม่มี role ที่ Admin กำหนด (เพิ่งเข้าระบบครั้งแรก
+  // หรือไม่มีชื่อใน Sheets managers) → กันไม่ให้เข้าแอปจนกว่า Admin จะอนุมัติ
+  if (role === 'pending') {
+    return <PendingApprovalPage user={user} />
+  }
 
   // ─── Maintenance Gate (non-admin) ──────────────────────────────────────────
   // แสดงหน้า maintenance ให้ non-admin เมื่อระบบปิดปรับปรุง
@@ -282,8 +300,8 @@ export default function App() {
 
   // Suspense fallback — spinner เดียวกับตอนโหลด auth
   const pageLoader = (
-    <div className="min-h-screen flex items-center justify-center bg-[#f5f7f6] dark:bg-slate-950">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#008065]" />
+    <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-dark-green-600" />
     </div>
   )
 
@@ -331,6 +349,18 @@ export default function App() {
           element={
             <RoleGuard role={role} allowed={['ta', 'admin']} redirectTo="/my-requests">
               <DashboardPage {...pageProps} />
+            </RoleGuard>
+          }
+        />
+
+        {/* /reports — Reports & Pivot (แทน Google Sheets pivot/report ในอนาคต)
+            อนุญาต: ta, admin
+            redirect: manager → /my-requests */}
+        <Route
+          path="/reports"
+          element={
+            <RoleGuard role={role} allowed={['ta', 'admin']} redirectTo="/my-requests">
+              <ReportsPage {...pageProps} />
             </RoleGuard>
           }
         />
@@ -438,6 +468,9 @@ export default function App() {
           onDeptSwitch={setDepartment}
         />
       )}
+
+      {/* ─── Toaster — แสดงผล sync ไป Google Sheets (สำเร็จ/ล้มเหลว) ทุก action ── */}
+      <Toaster />
 
     </>
   )

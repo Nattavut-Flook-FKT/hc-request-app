@@ -30,12 +30,12 @@ import { Trash2 } from 'lucide-react'
 import Layout from '../components/Shared/Layout'
 import ConfirmModal from '../components/Shared/ConfirmModal'
 
-// map action type → label ภาษาไทย + color classes สำหรับ badge
+// map action type → label ภาษาไทย + DS Light-variant badge tokens
 const STATUS_CONFIG = {
-  Submit: { label: 'ยื่นคำขอ', bg: 'bg-emerald-50 dark:bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-400', border: 'border-emerald-200 dark:border-emerald-500/20' },
-  Assign: { label: 'รับเคส', bg: 'bg-purple-50 dark:bg-purple-500/10', text: 'text-purple-700 dark:text-purple-400', border: 'border-purple-200 dark:border-purple-500/20' },
-  StatusChange: { label: 'เปลี่ยนสถานะ', bg: 'bg-amber-50 dark:bg-amber-500/10', text: 'text-amber-700 dark:text-amber-400', border: 'border-amber-200 dark:border-amber-500/20' },
-  Cancel: { label: 'ยกเลิก', bg: 'bg-rose-50 dark:bg-rose-500/10', text: 'text-rose-700 dark:text-rose-400', border: 'border-rose-200 dark:border-rose-500/20' },
+  Submit: { label: 'ยื่นคำขอ', bg: 'bg-green-fresh-50', text: 'text-green-fresh-900', border: 'border-green-fresh-100' },
+  Assign: { label: 'รับเคส', bg: 'bg-purple-50', text: 'text-purple-900', border: 'border-purple-100' },
+  StatusChange: { label: 'เปลี่ยนสถานะ', bg: 'bg-banana-50', text: 'text-banana-900', border: 'border-banana-100' },
+  Cancel: { label: 'ยกเลิก', bg: 'bg-pink-50', text: 'text-pink-900', border: 'border-pink-100' },
 }
 
 export default function AuditLogPage({ user, role, isDarkMode, toggleDarkMode }) {
@@ -79,80 +79,80 @@ export default function AuditLogPage({ user, role, isDarkMode, toggleDarkMode })
     <Layout user={user} role={role} isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode}>
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100 italic tracking-tight">Audit Log</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">ประวัติการเปลี่ยนแปลงทั้งหมดในระบบ</p>
+          <h1 className="text-xl font-bold text-neutral-900">Audit Log</h1>
+          <p className="mt-0.5 text-sm text-neutral-500">ประวัติการเปลี่ยนแปลงทั้งหมดในระบบ</p>
         </div>
 
         {logError && (
-          <div className="flex items-center gap-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 rounded-2xl px-5 py-3 text-sm font-bold animate-in fade-in slide-in-from-top-2">
+          <div className="rounded-2xl border border-red-100 bg-red-50 px-5 py-3 text-sm font-bold text-red-700">
             {logError}
           </div>
         )}
 
         {loading ? (
-          <div className="text-center py-20 text-gray-400">กำลังโหลด...</div>
+          <div className="py-20 text-center text-neutral-400">กำลังโหลด...</div>
         ) : logs.length === 0 ? (
-          <div className="text-center py-20 text-gray-400">ยังไม่มีประวัติ</div>
+          <div className="py-20 text-center text-neutral-400">ยังไม่มีประวัติ</div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:bg-slate-900 dark:border-slate-800 shadow-sm">
+          <div className="overflow-x-auto rounded-2xl border border-neutral-100 bg-white">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 dark:bg-slate-800/50">
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-left">เวลา</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-left">Request ID</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-left">ตำแหน่ง / แผนก</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-left">Action</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-left">จาก → ไป</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-left">โดย</th>
+                <tr className="border-b border-neutral-100 bg-neutral-50">
+                  <th className="px-4 py-3 text-left text-[11px] font-bold text-neutral-500">เวลา</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold text-neutral-500">Request ID</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold text-neutral-500">ตำแหน่ง / แผนก</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold text-neutral-500">Action</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold text-neutral-500">จาก → ไป</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold text-neutral-500">โดย</th>
                   {/* คอลัมน์จัดการแสดงเฉพาะ admin */}
                   {role === 'admin' && (
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-right">จัดการ</th>
+                    <th className="px-4 py-3 text-right text-[11px] font-bold text-neutral-500">จัดการ</th>
                   )}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+              <tbody className="divide-y divide-neutral-100">
                 {logs.map((log) => {
                   // fallback config สำหรับ action type ที่ไม่รู้จัก
-                  const config = STATUS_CONFIG[log.action] || { label: log.action, bg: 'bg-gray-100 dark:bg-slate-800', text: 'text-gray-600 dark:text-slate-400', border: 'border-gray-200 dark:border-slate-700' }
+                  const config = STATUS_CONFIG[log.action] || { label: log.action, bg: 'bg-neutral-100', text: 'text-neutral-600', border: 'border-neutral-100' }
                   return (
-                    <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors group">
-                      <td className="px-5 py-4 text-gray-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-tighter whitespace-nowrap">
+                    <tr key={log.id} className="group transition-colors hover:bg-neutral-50">
+                      <td className="whitespace-nowrap px-5 py-4 font-mono text-[11px] text-neutral-400">
                         {log.timestamp?.toDate?.().toLocaleString('th-TH') ?? '—'}
                       </td>
                       <td className="px-5 py-4">
                         {/* แสดง 8 ตัวอักษรแรกของ doc ID เป็น short ID */}
-                        <span className="font-mono text-[10px] font-bold text-gray-400 dark:text-slate-600 bg-gray-50 dark:bg-slate-950 px-2 py-1 rounded-md border border-gray-100 dark:border-slate-800">
+                        <span className="rounded-md border border-neutral-100 bg-neutral-50 px-2 py-1 font-mono text-[11px] font-bold text-neutral-400">
                           {log.requestId?.slice(0, 8).toUpperCase() ?? '—'}
                         </span>
                       </td>
                       <td className="px-5 py-4">
-                        <p className="text-sm font-black text-gray-800 dark:text-gray-200 tracking-tight group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{log.position || '—'}</p>
-                        {log.department && <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">{log.department}</p>}
+                        <p className="text-sm font-bold text-neutral-900 transition-colors group-hover:text-dark-green-700">{log.position || '—'}</p>
+                        {log.department && <p className="text-[11px] font-bold text-neutral-400">{log.department}</p>}
                       </td>
                       <td className="px-5 py-4">
-                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${config.bg} ${config.text} ${config.border}`}>
+                        <span className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold ${config.bg} ${config.text} ${config.border}`}>
                           {config.label}
                         </span>
                       </td>
-                      <td className="px-5 py-4 text-[11px] font-bold text-gray-500 dark:text-slate-400">
+                      <td className="px-5 py-4 text-[11px] font-bold text-neutral-500">
                         {/* แสดง fromStatus → toStatus สำหรับ StatusChange, หรือแค่ toStatus สำหรับ action อื่น */}
                         {log.fromStatus && log.toStatus
                           ? <div className="flex items-center gap-2">
-                            {log.fromStatus} <span className="text-gray-300 dark:text-slate-700">→</span> <span className="text-emerald-600 dark:text-emerald-500">{log.toStatus}</span>
+                            {log.fromStatus} <span className="text-neutral-300">→</span> <span className="text-dark-green-700">{log.toStatus}</span>
                           </div>
-                          : log.toStatus ? <span className="text-emerald-600 dark:text-emerald-500">{log.toStatus}</span> : '—'}
+                          : log.toStatus ? <span className="text-dark-green-700">{log.toStatus}</span> : '—'}
                       </td>
                       {/* byName ใช้ display name, by ใช้ email — fallback ตามลำดับ */}
-                      <td className="px-5 py-4 text-xs font-bold text-gray-600 dark:text-slate-400">{log.byName ?? log.by ?? '—'}</td>
+                      <td className="px-5 py-4 text-xs font-bold text-neutral-600">{log.byName ?? log.by ?? '—'}</td>
                       {role === 'admin' && (
                         <td className="px-5 py-4 text-right">
                           <button
                             onClick={() => setConfirmState({ isOpen: true, logId: log.id })}
                             disabled={deletingLogId === log.id}
-                            className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50"
+                            className="rounded-lg p-1.5 text-red-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
                             title="ลบ log นี้"
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={14} strokeWidth={1} absoluteStrokeWidth />
                           </button>
                         </td>
                       )}

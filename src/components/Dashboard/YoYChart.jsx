@@ -4,7 +4,7 @@
  * แสดงจำนวน HC Request ที่เปิดใหม่แต่ละเดือน เปรียบเทียบปีนี้ vs ปีที่แล้ว
  *
  * ลักษณะกราฟ:
- *   - แท่งคู่ต่อเดือน: สีเขียว (#008065) = ปีนี้, สีเทา = ปีที่แล้ว
+ *   - แท่งคู่ต่อเดือน: สีเขียว (dark-green-600) = ปีนี้, สีเทา = ปีที่แล้ว
  *   - Y-axis ซ้ายมือแสดง 0 / ครึ่ง / max
  *   - Grid line แนวนอน 2 เส้น (50% + top)
  *   - ตัวเลขบนแท่ง = จำนวนปีนี้, ตัวเลขเล็กด้านบน = ผลต่างเทียบเดือนเดียวกันปีที่แล้ว
@@ -70,62 +70,62 @@ export default function YoYChart({ requests, onMonthClick, selectedMonth }) {
   const monthlyDelta = ty.map((v, i) => v - ly[i])
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden">
+    <div className="overflow-hidden rounded-2xl border border-neutral-100 bg-white">
 
       {/* ── Header: ชื่อ + คำอธิบาย + KPI trio ──────────────── */}
-      <div className="px-6 pt-5 pb-4 border-b border-gray-50 dark:border-slate-800">
+      <div className="border-b border-neutral-100 px-6 pb-4 pt-5">
         <div className="flex items-start justify-between gap-6">
           <div>
-            <h3 className="text-sm font-black text-gray-800 dark:text-gray-100 tracking-tight">
+            <h3 className="text-sm font-bold text-neutral-900">
               จำนวน HC Request รายเดือน
             </h3>
             {/* คำอธิบายสั้นๆ ว่ากราฟนี้ดูอะไร */}
-            <p className="text-xs text-gray-500 dark:text-slate-400 mt-1 max-w-md leading-relaxed">
+            <p className="mt-1 max-w-md text-xs leading-relaxed text-neutral-500">
               แสดงจำนวนคำขออัตรากำลังที่เปิดใหม่แต่ละเดือน เปรียบเทียบ
-              <span className="font-bold text-[#008065]"> ปีนี้ ({thisYear})</span> กับ
-              <span className="font-bold text-slate-400"> ปีที่แล้ว ({lastYear})</span>
-              <span className="ml-1 text-gray-400">· ตัวเลขบนแท่ง = ผลต่างเทียบเดือนเดียวกันปีที่แล้ว</span>
+              <span className="font-bold text-dark-green-700"> ปีนี้ ({thisYear})</span> กับ
+              <span className="font-bold text-neutral-400"> ปีที่แล้ว ({lastYear})</span>
+              <span className="ml-1 text-neutral-400">· ตัวเลขบนแท่ง = ผลต่างเทียบเดือนเดียวกันปีที่แล้ว</span>
             </p>
           </div>
 
           {/* KPI trio: ยอดรวมปีนี้ / ปีที่แล้ว / ผลต่าง YoY */}
-          <div className="flex items-stretch gap-0 rounded-xl border border-gray-100 dark:border-slate-800 overflow-hidden shrink-0">
+          <div className="flex shrink-0 items-stretch overflow-hidden rounded-lg border border-neutral-100">
             {[
               {
                 label: `ปีนี้ (${thisYear})`,
                 value: totalTY,
-                color: 'text-gray-800 dark:text-gray-100',
-                dot: '#008065',
+                color: 'text-neutral-900',
+                dot: 'bg-dark-green-600',
               },
               {
                 label: `ปีที่แล้ว (${lastYear})`,
                 value: totalLY,
-                color: 'text-gray-400 dark:text-slate-500',
-                dot: '#cbd5e1',
+                color: 'text-neutral-400',
+                dot: 'bg-neutral-200',
               },
               {
                 label: 'ผลต่าง YoY',
                 value: (delta > 0 ? '+' : '') + delta,
                 // สีแดง = เพิ่มขึ้น (หมายถึงโหลดงานมากขึ้น), เขียว = ลดลง, เทา = เท่ากัน
-                color: delta > 0 ? 'text-red-500' : delta < 0 ? 'text-[#008065]' : 'text-gray-400',
+                color: delta > 0 ? 'text-red-600' : delta < 0 ? 'text-dark-green-700' : 'text-neutral-400',
                 dot: null,
                 hint: delta > 0 ? 'เพิ่มขึ้นจากปีที่แล้ว' : delta < 0 ? 'ลดลงจากปีที่แล้ว' : 'เท่ากัน',
               },
             ].map((k, i) => (
               <div
                 key={k.label}
-                className={`px-4 py-2.5 text-right ${i > 0 ? 'border-l border-gray-100 dark:border-slate-800' : ''}`}
+                className={`px-4 py-2.5 text-right ${i > 0 ? 'border-l border-neutral-100' : ''}`}
                 title={k.hint}
               >
-                <div className="flex items-center gap-1.5 justify-end mb-0.5">
+                <div className="mb-0.5 flex items-center justify-end gap-1.5">
                   {k.dot && (
-                    <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: k.dot }} />
+                    <span className={`h-2 w-2 shrink-0 rounded-sm ${k.dot}`} />
                   )}
-                  <p className={`text-xl font-black tabular-nums leading-none ${k.color}`}>
+                  <p className={`text-xl font-bold leading-none tabular-nums ${k.color}`}>
                     {k.value}
                   </p>
                 </div>
-                <p className="text-[9px] font-bold text-gray-400 dark:text-slate-600 uppercase tracking-wider">
+                <p className="text-[10px] font-bold text-neutral-400">
                   {k.label}
                 </p>
               </div>
@@ -135,12 +135,12 @@ export default function YoYChart({ requests, onMonthClick, selectedMonth }) {
       </div>
 
       {/* ── Chart area ────────────────────────────────────────── */}
-      <div className="px-6 pt-5 pb-3">
+      <div className="px-6 pb-3 pt-5">
         <div className="flex gap-2">
 
           {/* Y-axis: แสดง 0 / ครึ่ง / max เพื่อให้อ่านค่าได้ง่ายขึ้น */}
           <div
-            className="flex flex-col justify-between items-end shrink-0 pb-6 text-[9px] tabular-nums font-bold text-gray-300 dark:text-slate-700"
+            className="flex shrink-0 flex-col items-end justify-between pb-6 text-[10px] font-bold tabular-nums text-neutral-300"
             style={{ height: `${CHART_H + 24}px` }}
           >
             <span>{maxVal}</span>
@@ -149,12 +149,12 @@ export default function YoYChart({ requests, onMonthClick, selectedMonth }) {
           </div>
 
           {/* Bars + month labels */}
-          <div className="flex-1 flex flex-col gap-0">
+          <div className="flex flex-1 flex-col gap-0">
             <div className="relative flex-1">
               {/* Grid lines แนวนอน — top / 50% / bottom */}
-              <div className="absolute inset-x-0 top-0 border-t border-gray-100 dark:border-slate-800/60" />
-              <div className="absolute inset-x-0 border-t border-gray-100 dark:border-slate-800/60" style={{ top: '50%' }} />
-              <div className="absolute inset-x-0 bottom-0 border-t border-gray-200 dark:border-slate-700" />
+              <div className="absolute inset-x-0 top-0 border-t border-neutral-100" />
+              <div className="absolute inset-x-0 border-t border-neutral-100" style={{ top: '50%' }} />
+              <div className="absolute inset-x-0 bottom-0 border-t border-neutral-100" />
 
               {/* Bars row — ทุก 12 เดือน */}
               <div className="flex items-end gap-1" style={{ height: `${CHART_H}px` }}>
@@ -175,15 +175,15 @@ export default function YoYChart({ requests, onMonthClick, selectedMonth }) {
                   return (
                     <div
                       key={mo}
-                      className="flex-1 flex flex-col items-center justify-end gap-0.5 cursor-pointer group relative"
+                      className="group relative flex flex-1 cursor-pointer flex-col items-center justify-end gap-0.5"
                       onClick={() => onMonthClick?.(isSelected ? null : moKey)}
                       title={`${MONTH_TH[mo]} — ปีนี้: ${tyVal} · ปีที่แล้ว: ${lyVal}${diff !== 0 ? ` · ผลต่าง: ${diff > 0 ? '+' : ''}${diff}` : ''}`}
                     >
                       {/* Delta badge เหนือกราฟ — แสดงเฉพาะที่มีข้อมูลและไม่ใช่เดือนอนาคต */}
                       <div className="absolute -top-5 left-0 right-0 flex items-center justify-center">
                         {diff !== 0 && tyVal > 0 && !isFuture && (
-                          <span className={`text-[8px] font-black tabular-nums leading-none ${
-                            diff > 0 ? 'text-red-400' : 'text-[#008065] dark:text-emerald-400'
+                          <span className={`text-[9px] font-bold leading-none tabular-nums ${
+                            diff > 0 ? 'text-red-500' : 'text-dark-green-700'
                           }`}>
                             {diff > 0 ? '+' : ''}{diff}
                           </span>
@@ -192,8 +192,8 @@ export default function YoYChart({ requests, onMonthClick, selectedMonth }) {
 
                       {/* จำนวนปีนี้ — แสดงบนแท่งสีเขียว */}
                       {tyVal > 0 && (
-                        <span className={`text-[9px] font-black tabular-nums leading-none mb-0.5 ${
-                          isSelected ? 'text-[#008065] dark:text-emerald-400' : 'text-gray-500 dark:text-slate-400'
+                        <span className={`mb-0.5 text-[10px] font-bold leading-none tabular-nums ${
+                          isSelected ? 'text-dark-green-700' : 'text-neutral-500'
                         }`}>
                           {tyVal}
                         </span>
@@ -201,22 +201,22 @@ export default function YoYChart({ requests, onMonthClick, selectedMonth }) {
 
                       {/* แท่งคู่: ปีที่แล้ว (ซ้าย/เทา) + ปีนี้ (ขวา/เขียว) */}
                       <div
-                        className={`w-full flex items-end gap-0.5 transition-all ${
+                        className={`flex w-full items-end gap-0.5 transition-all ${
                           isSelected
-                            ? 'rounded-sm ring-2 ring-[#008065] ring-offset-1 ring-offset-white dark:ring-offset-slate-900'
+                            ? 'rounded-sm ring-2 ring-dark-green-600 ring-offset-1 ring-offset-white'
                             : 'group-hover:opacity-75'
                         }`}
                         style={{ height: `${CHART_H}px` }}
                       >
                         {/* แท่งปีที่แล้ว */}
                         <div
-                          className="flex-1 rounded-t-sm transition-all duration-300"
-                          style={{ height: `${lyPx}px`, backgroundColor: '#e2e8f0' }}
+                          className="flex-1 rounded-t-sm bg-neutral-200 transition-all duration-300"
+                          style={{ height: `${lyPx}px` }}
                         />
                         {/* แท่งปีนี้ — ซีดถ้าเป็นเดือนอนาคต */}
                         <div
-                          className={`flex-1 rounded-t-sm transition-all duration-300 ${isFuture ? 'opacity-20' : ''}`}
-                          style={{ height: `${tyPx}px`, backgroundColor: '#008065' }}
+                          className={`flex-1 rounded-t-sm bg-dark-green-600 transition-all duration-300 ${isFuture ? 'opacity-20' : ''}`}
+                          style={{ height: `${tyPx}px` }}
                         />
                       </div>
                     </div>
@@ -226,14 +226,14 @@ export default function YoYChart({ requests, onMonthClick, selectedMonth }) {
             </div>
 
             {/* Month labels ใต้กราฟ */}
-            <div className="flex gap-1 mt-1.5">
+            <div className="mt-1.5 flex gap-1">
               {Array.from({ length: 12 }, (_, mo) => {
                 const moKey      = `${thisYear}-${String(mo + 1).padStart(2, '0')}`
                 const isSelected = selectedMonth === moKey
                 return (
                   <div key={mo} className="flex-1 text-center">
-                    <span className={`text-[9px] font-bold transition-colors ${
-                      isSelected ? 'text-[#008065] dark:text-emerald-400' : 'text-gray-400 dark:text-slate-600'
+                    <span className={`text-[10px] font-bold transition-colors ${
+                      isSelected ? 'text-dark-green-700' : 'text-neutral-400'
                     }`}>
                       {MONTH_TH[mo]}
                     </span>
@@ -246,28 +246,28 @@ export default function YoYChart({ requests, onMonthClick, selectedMonth }) {
       </div>
 
       {/* ── Footer: Legend + hint + clear filter ─────────────── */}
-      <div className="px-6 py-3 border-t border-gray-50 dark:border-slate-800 flex items-center gap-5 flex-wrap">
+      <div className="flex flex-wrap items-center gap-5 border-t border-neutral-100 px-6 py-3">
         {/* สัญลักษณ์สีของแต่ละปี */}
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-2.5 rounded-sm bg-[#008065]" />
-          <span className="text-[10px] font-semibold text-gray-500 dark:text-slate-500">ปีนี้ ({thisYear})</span>
+          <div className="h-2.5 w-3 rounded-sm bg-dark-green-600" />
+          <span className="text-[11px] font-bold text-neutral-500">ปีนี้ ({thisYear})</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-2.5 rounded-sm bg-slate-200 dark:bg-slate-700" />
-          <span className="text-[10px] font-semibold text-gray-500 dark:text-slate-500">ปีที่แล้ว ({lastYear})</span>
+          <div className="h-2.5 w-3 rounded-sm bg-neutral-200" />
+          <span className="text-[11px] font-bold text-neutral-500">ปีที่แล้ว ({lastYear})</span>
         </div>
 
         {/* อธิบายความหมาย delta badge */}
-        <div className="flex items-center gap-1 text-[10px] text-gray-400 dark:text-slate-600">
-          <span className="font-black text-[#008065]">+3</span>
+        <div className="flex items-center gap-1 text-[11px] text-neutral-400">
+          <span className="font-bold text-dark-green-700">+3</span>
           <span>/</span>
-          <span className="font-black text-red-400">−2</span>
+          <span className="font-bold text-red-500">−2</span>
           <span className="ml-1">= ผลต่างเทียบเดือนเดียวกันปีที่แล้ว</span>
         </div>
 
         {/* Hint: กดได้ */}
-        <div className="ml-auto flex items-center gap-1 text-[10px] text-gray-400 dark:text-slate-600">
-          <MousePointerClick size={11} />
+        <div className="ml-auto flex items-center gap-1 text-[11px] text-neutral-400">
+          <MousePointerClick size={11} strokeWidth={1} absoluteStrokeWidth />
           <span>กดแท่งเดือนเพื่อกรองข้อมูลในตาราง</span>
         </div>
 
@@ -275,7 +275,7 @@ export default function YoYChart({ requests, onMonthClick, selectedMonth }) {
         {selectedMonth && (
           <button
             onClick={() => onMonthClick?.(null)}
-            className="text-[10px] text-[#008065] dark:text-emerald-400 font-bold hover:underline"
+            className="text-[11px] font-bold text-dark-green-700 hover:underline"
           >
             ✕ ล้าง filter
           </button>

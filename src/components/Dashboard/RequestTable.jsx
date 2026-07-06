@@ -88,19 +88,19 @@ import { Loader2, UserCheck, XCircle, ChevronUp, ChevronDown, ChevronsUpDown, Sl
 import { getJDSignedUrl, deleteJDFile, uploadCVFile, getCVSignedUrl, deleteCVFile } from '../../services/supabase'
 import ConfirmModal from '../Shared/ConfirmModal'
 
-// ─── สี Badge ของแต่ละสถานะ (light + dark mode) ───
+// ─── สี Badge ของแต่ละสถานะ — DS Light-variant recipe (functional color-coding, DS-#010) ───
 const STATUS_CONFIG = {
-  Open:             { label: 'Open',              bg: 'bg-yellow-50 dark:bg-yellow-500/10',   text: 'text-yellow-700 dark:text-yellow-500',  border: 'border-yellow-200 dark:border-yellow-500/20' },
-  Recruiting:       { label: 'Recruiting',        bg: 'bg-emerald-50 dark:bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-500', border: 'border-emerald-200 dark:border-emerald-500/20' },
-  Interviewing:     { label: 'Interviewing',      bg: 'bg-orange-50 dark:bg-orange-500/10',   text: 'text-orange-700 dark:text-orange-500',  border: 'border-orange-200 dark:border-orange-500/20' },
-  Offering:         { label: 'Offering',          bg: 'bg-indigo-50 dark:bg-indigo-500/10',   text: 'text-indigo-700 dark:text-indigo-500',  border: 'border-indigo-200 dark:border-indigo-500/20' },
-  Onboarding:       { label: 'W.Onboarding',      bg: 'bg-teal-50 dark:bg-teal-500/10',       text: 'text-teal-700 dark:text-teal-500',      border: 'border-teal-200 dark:border-teal-500/20' },
-  Rejected:         { label: 'Rejected',          bg: 'bg-red-50 dark:bg-red-500/10',         text: 'text-red-700 dark:text-red-500',        border: 'border-red-200 dark:border-red-500/20' },
-  Closed:           { label: 'Closed',            bg: 'bg-slate-100 dark:bg-slate-800',       text: 'text-slate-700 dark:text-slate-400',    border: 'border-slate-200 dark:border-slate-700' },
-  Cancelled:        { label: 'Cancelled',         bg: 'bg-gray-50 dark:bg-slate-900',         text: 'text-gray-500 dark:text-slate-500',     border: 'border-gray-200 dark:border-slate-800' },
-  OnHold:           { label: 'On Hold',           bg: 'bg-gray-100 dark:bg-slate-800/60',     text: 'text-gray-500 dark:text-slate-400',     border: 'border-gray-300 dark:border-slate-600' },
-  Confidential:     { label: 'Confidential',      bg: 'bg-gray-800 dark:bg-gray-900',         text: 'text-white',                            border: 'border-gray-900 dark:border-black' },
-  InternalTransfer: { label: 'Internal Transfer', bg: 'bg-blue-800 dark:bg-blue-900',         text: 'text-white',                            border: 'border-blue-900 dark:border-blue-950' },
+  Open:             { label: 'Open',              bg: 'bg-yellow-50',      text: 'text-yellow-900',      border: 'border-yellow-100' },
+  Recruiting:       { label: 'Recruiting',        bg: 'bg-blue-50',        text: 'text-blue-900',        border: 'border-blue-100' },
+  Interviewing:     { label: 'Interviewing',      bg: 'bg-orange-50',      text: 'text-orange-900',      border: 'border-orange-100' },
+  Offering:         { label: 'Offering',          bg: 'bg-purple-50',     text: 'text-purple-900',      border: 'border-purple-100' },
+  Onboarding:       { label: 'W.Onboarding',      bg: 'bg-teal-50',        text: 'text-teal-900',        border: 'border-teal-100' },
+  Rejected:         { label: 'Rejected',          bg: 'bg-red-50',         text: 'text-red-700',         border: 'border-red-100' },
+  Closed:           { label: 'Closed',            bg: 'bg-green-fresh-50', text: 'text-green-fresh-900', border: 'border-green-fresh-100' },
+  Cancelled:        { label: 'Cancelled',         bg: 'bg-neutral-50',     text: 'text-neutral-500',     border: 'border-neutral-100' },
+  OnHold:           { label: 'On Hold',           bg: 'bg-banana-50',      text: 'text-banana-900',      border: 'border-banana-100' },
+  Confidential:     { label: 'Confidential',      bg: 'bg-neutral-900',    text: 'text-neutral-50',      border: 'border-neutral-900' },
+  InternalTransfer: { label: 'Internal Transfer', bg: 'bg-blue-600',       text: 'text-neutral-50',      border: 'border-blue-600' },
 }
 
 // ─── Tab list และสถานะที่ TA สามารถเปลี่ยนได้ (ยกเว้น Open) ───
@@ -134,9 +134,9 @@ function getAvailableStatuses(currentStatus, isAdmin = false) {
 }
 
 function StatusBadge({ status }) {
-  const cfg = STATUS_CONFIG[status] ?? { label: status, bg: 'bg-gray-50', text: 'text-gray-500', border: 'border-gray-200' }
+  const cfg = STATUS_CONFIG[status] ?? { label: status, bg: 'bg-neutral-50', text: 'text-neutral-500', border: 'border-neutral-100' }
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${cfg.bg} ${cfg.text} ${cfg.border} uppercase tracking-wider`}>
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${cfg.bg} ${cfg.text} ${cfg.border}`}>
       {cfg.label}
     </span>
   )
@@ -213,27 +213,27 @@ function getDaysOpen(req) {
   return Math.floor(accumulated / (1000 * 60 * 60 * 24))
 }
 
-// แสดงป้าย SLA: ⏸ pause | 🔴 >30วัน | 🟡 15-30วัน | 🟢 <15วัน
+// แสดงป้าย SLA: dot สีตามสถานะ — pause / >30วัน / 15-30วัน / <15วัน
 function SLABadge({ req }) {
   const days = getDaysOpen(req)
   if (days === null) return null
   const done   = ['Closed', 'Cancelled'].includes(req.status)
   const paused = ['Offering', 'Onboarding'].includes(req.status)
-  if (done) return <span className="text-[10px] text-slate-400 dark:text-slate-600 font-mono">{days}d</span>
+  if (done) return <span className="text-[11px] font-bold text-neutral-400 tabular-nums">{days}d</span>
   if (paused) return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg text-[10px] font-bold border text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700">
-      ⏸ {days}d
+    <span className="inline-flex items-center gap-1 rounded-lg border border-neutral-100 bg-neutral-50 px-1.5 py-0.5 text-[11px] font-bold text-neutral-500">
+      <span className="h-1.5 w-1.5 rounded-full bg-neutral-300" /> {days}d
     </span>
   )
   const style = days > 30
-    ? 'text-red-600 bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20'
+    ? 'text-red-700 bg-red-50 border-red-100'
     : days > 15
-      ? 'text-yellow-600 bg-yellow-50 dark:bg-yellow-500/10 border-yellow-200 dark:border-yellow-500/20'
-      : 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20'
-  const dot = days > 30 ? '🔴' : days > 15 ? '🟡' : '🟢'
+      ? 'text-yellow-900 bg-yellow-50 border-yellow-100'
+      : 'text-green-fresh-900 bg-green-fresh-50 border-green-fresh-100'
+  const dotColor = days > 30 ? 'bg-red-500' : days > 15 ? 'bg-yellow-500' : 'bg-green-fresh-500'
   return (
-    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg text-[10px] font-bold border ${style}`}>
-      {dot} {days}d
+    <span className={`inline-flex items-center gap-1 rounded-lg border px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${style}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} /> {days}d
     </span>
   )
 }
@@ -255,10 +255,10 @@ function buildHistoryEntry(status, user) {
 }
 
 function SortIcon({ field, sortField, sortDir }) {
-  if (sortField !== field) return <ChevronsUpDown size={12} className="text-gray-300" />
+  if (sortField !== field) return <ChevronsUpDown size={12} strokeWidth={1} absoluteStrokeWidth className="text-neutral-300" />
   return sortDir === 'asc'
-    ? <ChevronUp size={12} className="text-[#008065]" />
-    : <ChevronDown size={12} className="text-[#008065]" />
+    ? <ChevronUp size={12} strokeWidth={1} absoluteStrokeWidth className="text-dark-green-700" />
+    : <ChevronDown size={12} strokeWidth={1} absoluteStrokeWidth className="text-dark-green-700" />
 }
 
 export default function RequestTable({
@@ -457,14 +457,19 @@ export default function RequestTable({
 
       await updateDoc(doc(db, 'hc_requests', id), updateData)
       const assignedAt = updateData.assignedAt ? new Date().toISOString() : req.assignedAt?.toDate?.().toISOString()
-      const offeringDate = PRE_OFFERING.includes(newStatus) && req.offeringDate ? 'CLEAR'
-        : (updateData.offeringDate || req.offeringDate || null)
+      // ส่ง offeringDate ไป GAS เฉพาะเมื่อ set ใหม่ (Offering) หรือ clear (กลับก่อน Offering)
+      // Onboarding/Closed/Rejected ไม่ส่ง → ป้องกัน GAS overwrite offering date ด้วยค่าเก่า
+      const offeringDate = PRE_OFFERING.includes(newStatus) && req.offeringDate
+        ? 'CLEAR'
+        : newStatus === 'Offering'
+          ? (updateData.offeringDate || null)
+          : null
       const clearInfo = CLEAR_CANDIDATE.includes(newStatus) && !!(req.candidateName || req.startDate)
       // ส่ง startDate='CLEAR' ไป GAS เมื่อกลับไป Offering เพื่อล้าง Onboard Date ใน Sheets
       const startDateParam = CLEAR_START_DATE.includes(newStatus) && req.startDate
         ? 'CLEAR'
         : (extraData.startDate || null)
-      sendStatusUpdate(id, newStatus, updateData.assignedToName || req.assignedToName, assignedAt, startDateParam, extraData.candidateName || null, req?.hcId, offeringDate, clearInfo, extraData.cvUrl || null)
+      sendStatusUpdate(id, newStatus, updateData.assignedToName || req.assignedToName, assignedAt, startDateParam, extraData.candidateName || null, req?.hcId, offeringDate, clearInfo, extraData.cvUrl || req.cvUrl || null)
       logAudit({
         requestId: id,
         action: newStatus === 'Rejected' ? 'Rejected' : 'StatusChange',
@@ -667,7 +672,9 @@ export default function RequestTable({
       await deleteDoc(doc(db, 'hc_requests', id))
 
       // 4. แจ้ง GAS ให้ลบ row ใน Google Sheets (ถ้ามี hcId)
-      if (req?.hcId) sendDeleteToSheets(req.hcId)
+      // await เพื่อรอผลจริง — sendDeleteToSheets โชว์ toast สำเร็จ/ล้มเหลวเอง
+      // (เดิม fire-and-forget ไม่เช็คผล ทำให้เคยมีแถวค้างใน Sheets แบบเงียบๆ)
+      if (req?.hcId) await sendDeleteToSheets(req.hcId)
 
       logAudit({
         requestId: id,
@@ -889,8 +896,8 @@ export default function RequestTable({
   const paged = displayed.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   if (loading) return (
-    <div className="flex items-center justify-center py-20 text-gray-400 gap-2">
-      <Loader2 size={20} className="animate-spin text-[#008065]" />
+    <div className="flex items-center justify-center gap-2 py-20 text-neutral-400">
+      <Loader2 size={20} strokeWidth={1} absoluteStrokeWidth className="animate-spin text-dark-green-600" />
       <span>กำลังโหลดข้อมูล...</span>
     </div>
   )
@@ -899,20 +906,20 @@ export default function RequestTable({
     <div className="flex flex-col gap-3">
 
       {/* Search + Filter toggle */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-48">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-48 flex-1">
+          <Search size={14} strokeWidth={1} absoluteStrokeWidth className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
           <input
             id="rt-search" name="rt-search"
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="ค้นหาตำแหน่ง, แผนก, TA, ผู้สมัคร, HCID, สถานะ..."
-            className="w-full pl-8 pr-10 py-1.5 text-sm border border-gray-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[#00ce7c]/30 transition-all font-medium"
+            className="w-full rounded-lg border border-neutral-100 bg-white py-2 pl-8 pr-10 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
           />
           {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-              <X size={13} strokeWidth={3} />
+            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600">
+              <X size={13} strokeWidth={1} absoluteStrokeWidth />
             </button>
           )}
         </div>
@@ -920,30 +927,30 @@ export default function RequestTable({
         {showFilters && (
           <button
             onClick={() => setShowFilterBar(v => !v)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm border transition-all font-medium ${showFilterBar || hasAdvancedFilters
-                ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
-                : 'bg-white dark:bg-slate-900 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800'
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-bold transition-colors ${showFilterBar || hasAdvancedFilters
+                ? 'border-dark-green-100 bg-dark-green-50 text-dark-green-900'
+                : 'border-neutral-100 bg-white text-neutral-600 hover:bg-neutral-50'
               }`}
           >
-            <SlidersHorizontal size={13} />
+            <SlidersHorizontal size={13} strokeWidth={1} absoluteStrokeWidth />
             Filters
             {hasAdvancedFilters && (
-              <span className="ml-1 bg-emerald-600 text-white text-[10px] px-1.5 py-0.5 rounded-full leading-none">
+              <span className="ml-1 rounded-full bg-dark-green-600 px-1.5 py-0.5 text-[11px] font-bold leading-none text-neutral-50">
                 {[filterYear, filterDept, filterAssigned, filterDateFrom, filterDateTo].filter(Boolean).length}
               </span>
             )}
           </button>
         )}
         {hasAdvancedFilters && (
-          <button onClick={clearAdvanced} className="flex items-center gap-1 text-xs text-gray-400 dark:text-slate-500 hover:text-emerald-600 transition-colors font-medium">
-            <X size={11} strokeWidth={3} /> ล้างค่าทิ้ง
+          <button onClick={clearAdvanced} className="flex items-center gap-1 text-xs font-bold text-neutral-400 transition-colors hover:text-dark-green-700">
+            <X size={11} strokeWidth={1} absoluteStrokeWidth /> ล้างค่าทิ้ง
           </button>
         )}
-        <span className="ml-auto text-xs text-slate-400 dark:text-slate-600 font-medium">{displayed.length} รายการ</span>
+        <span className="ml-auto text-xs font-bold text-neutral-400">{displayed.length} รายการ</span>
       </div>
 
       {/* Status Tabs */}
-      <div className="flex flex-wrap items-center gap-1 border-b border-gray-100 dark:border-slate-800 pb-0">
+      <div className="flex flex-wrap items-center gap-1 border-b border-neutral-100 pb-0">
         {STATUS_TABS.map((tab) => {
           const active = activeTab === tab
           const count = tabCounts[tab] ?? 0
@@ -952,16 +959,16 @@ export default function RequestTable({
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-semibold whitespace-nowrap transition-all border-b-2 -mb-px ${active
-                  ? 'border-[#008065] text-[#008065]'
-                  : 'border-transparent text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300'
+              className={`-mb-px flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-bold transition-colors ${active
+                  ? 'border-dark-green-600 text-dark-green-900'
+                  : 'border-transparent text-neutral-400 hover:text-neutral-600'
                 }`}
             >
               {tabLabel}
               {count > 0 && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full leading-none transition-colors ${active
-                    ? 'bg-[#008065] text-white'
-                    : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400'
+                <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold leading-none transition-colors ${active
+                    ? 'bg-dark-green-600 text-neutral-50'
+                    : 'bg-neutral-100 text-neutral-500'
                   }`}>
                   {count}
                 </span>
@@ -978,24 +985,24 @@ export default function RequestTable({
             <div className="relative" onMouseDown={e => e.stopPropagation()}>
               <button
                 onClick={() => setOpenChip(openChip === id ? null : id)}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all whitespace-nowrap select-none
+                className={`flex select-none items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-bold transition-colors
                   ${value
-                    ? 'bg-emerald-50 dark:bg-emerald-500/15 border-emerald-300 dark:border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
-                    : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-400 hover:border-emerald-300 dark:hover:border-emerald-500/40 hover:text-emerald-600'}`}
+                    ? 'border-dark-green-100 bg-dark-green-50 text-dark-green-900'
+                    : 'border-neutral-100 bg-white text-neutral-500 hover:border-dark-green-100 hover:text-dark-green-700'}`}
               >
                 <span>{value || label}</span>
                 {value
-                  ? <X size={10} className="cursor-pointer" onClick={e => { e.stopPropagation(); onChange(''); setOpenChip(null) }} />
-                  : <ChevronDown size={10} />}
+                  ? <X size={10} strokeWidth={1} absoluteStrokeWidth className="cursor-pointer" onClick={e => { e.stopPropagation(); onChange(''); setOpenChip(null) }} />
+                  : <ChevronDown size={10} strokeWidth={1} absoluteStrokeWidth />}
               </button>
               {openChip === id && (
-                <div className="absolute top-full mt-1.5 z-40 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg min-w-40 py-1 max-h-56 overflow-y-auto">
+                <div className="absolute top-full z-40 mt-1.5 max-h-56 min-w-40 overflow-y-auto rounded-xl border border-neutral-100 bg-white py-1 shadow-lg">
                   {options.map(opt => (
                     <button key={opt} onMouseDown={() => { onChange(opt); setOpenChip(null) }}
-                      className={`w-full text-left px-3 py-1.5 text-xs transition-colors
+                      className={`w-full px-3 py-1.5 text-left text-xs font-bold transition-colors
                         ${value === opt
-                          ? 'text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-500/10'
-                          : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                          ? 'bg-dark-green-50 text-dark-green-900'
+                          : 'text-neutral-700 hover:bg-neutral-50'}`}>
                       {opt}
                     </button>
                   ))}
@@ -1005,24 +1012,24 @@ export default function RequestTable({
           )
         }
         return (
-          <div className="flex flex-wrap gap-2 items-center">
+          <div className="flex flex-wrap items-center gap-2">
             <ChipSelect id="year"     label="ปี"             value={filterYear}     onChange={setFilterYear}     options={years} />
-            <div className="w-px h-4 bg-gray-200 dark:bg-slate-700" />
+            <div className="h-4 w-px bg-neutral-100" />
             <ChipSelect id="empType"  label="Emp. Type"      value={filterEmpType}  onChange={setFilterEmpType}  options={['Monthly','Daily','Contract','Intern']} />
             <ChipSelect id="jobType"  label="Job Type"       value={filterJobType}  onChange={setFilterJobType}  options={['New HC','Replace']} />
             <ChipSelect id="rank"     label="Rank"           value={filterRank}     onChange={setFilterRank}     options={ranks} />
             <ChipSelect id="dept"     label="Department"     value={filterDept}     onChange={setFilterDept}     options={departments} />
             <ChipSelect id="bu"       label="Business Unit"  value={filterBU}       onChange={setFilterBU}       options={businessUnits} />
             <ChipSelect id="ta"       label="PIC / TA"       value={filterAssigned} onChange={setFilterAssigned} options={assignees} />
-            <div className="w-px h-4 bg-gray-200 dark:bg-slate-700 mx-1" />
+            <div className="mx-1 h-4 w-px bg-neutral-100" />
             <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} title="วันที่ตั้งแต่"
-              className="text-[11px] border border-gray-200 dark:border-slate-700 rounded-full px-3 py-1.5 bg-white dark:bg-slate-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-300/40" />
-            <span className="text-gray-400 text-xs">–</span>
+              className="rounded-full border border-neutral-100 bg-white px-3 py-1.5 text-[11px] text-neutral-700 focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none" />
+            <span className="text-xs text-neutral-400">–</span>
             <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} title="ถึงวันที่"
-              className="text-[11px] border border-gray-200 dark:border-slate-700 rounded-full px-3 py-1.5 bg-white dark:bg-slate-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-300/40" />
+              className="rounded-full border border-neutral-100 bg-white px-3 py-1.5 text-[11px] text-neutral-700 focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none" />
             {hasAdvancedFilters && (
-              <button onClick={clearAdvanced} className="text-[11px] text-gray-400 hover:text-red-500 dark:hover:text-red-400 flex items-center gap-1 transition-colors">
-                <X size={11} /> ล้างทั้งหมด
+              <button onClick={clearAdvanced} className="flex items-center gap-1 text-[11px] font-bold text-neutral-400 transition-colors hover:text-red-600">
+                <X size={11} strokeWidth={1} absoluteStrokeWidth /> ล้างทั้งหมด
               </button>
             )}
           </div>
@@ -1031,19 +1038,19 @@ export default function RequestTable({
 
       {/* Table */}
       {displayed.length === 0 ? (
-        <div className="text-center py-16 rounded-xl border border-dashed border-gray-200 bg-white">
-          <p className="text-gray-400 font-medium">ไม่พบรายการ</p>
+        <div className="rounded-xl border border-dashed border-neutral-100 bg-white py-16 text-center">
+          <p className="font-bold text-neutral-400">ไม่พบรายการ</p>
           {(hasAdvancedFilters || search || activeTab !== 'ทั้งหมด') && (
-            <button onClick={() => { clearAdvanced(); setSearch(''); setActiveTab('ทั้งหมด') }} className="text-sm mt-2 hover:underline text-[#008065]">
+            <button onClick={() => { clearAdvanced(); setSearch(''); setActiveTab('ทั้งหมด') }} className="mt-2 text-sm font-bold text-dark-green-700 hover:underline">
               ล้าง filter ทั้งหมด
             </button>
           )}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm transition-colors">
+        <div className="overflow-x-auto rounded-2xl border border-neutral-100 bg-white">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50/80 dark:bg-slate-800/50 backdrop-blur-sm">
+              <tr className="border-b border-neutral-100 bg-neutral-50">
                 {[
                   { label: 'ID', field: 'hcId' },
                   { label: 'ประเภท', field: 'requestType' },
@@ -1058,7 +1065,7 @@ export default function RequestTable({
                 ].map(({ label, field }) => (
                   <th
                     key={label}
-                    className={`px-4 py-3 text-left text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest ${field ? 'cursor-pointer select-none hover:text-[#008065] dark:hover:text-emerald-400' : ''} transition-colors`}
+                    className={`px-4 py-3 text-left text-[11px] font-bold text-neutral-500 ${field ? 'cursor-pointer select-none hover:text-dark-green-700' : ''} transition-colors`}
                     onClick={field ? () => toggleSort(field) : undefined}
                   >
                     <span className="flex items-center gap-1.5">
@@ -1069,7 +1076,7 @@ export default function RequestTable({
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50 dark:divide-slate-800/50">
+            <tbody className="divide-y divide-neutral-100">
               {paged.map((req) => {
                 // ─── Permission flags สำหรับแต่ละแถว ───
                 const isOwner = req.requesterEmail === user.email
@@ -1092,37 +1099,37 @@ export default function RequestTable({
                 return (
                   <Fragment key={req.id}>
                     <tr
-                      className={`transition-all cursor-pointer group ${isExpanded ? 'bg-emerald-50/50 dark:bg-emerald-900/10' : 'hover:bg-gray-50/80 dark:hover:bg-slate-800/80'}`}
+                      className={`group cursor-pointer transition-colors ${isExpanded ? 'bg-dark-green-50' : 'hover:bg-neutral-50'}`}
                       onClick={() => setExpandedId(isExpanded ? null : req.id)}
                     >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <ChevronRight size={13} strokeWidth={3} className={`text-gray-300 dark:text-slate-700 transition-transform shrink-0 ${isExpanded ? 'rotate-90 text-emerald-500' : 'rotate-0 group-hover:text-gray-400'}`} />
-                          <span className="font-mono text-[10px] font-bold text-gray-400 dark:text-slate-600 tracking-tighter uppercase">{req.hcId || req.id.slice(0, 7)}</span>
+                          <ChevronRight size={13} strokeWidth={1} absoluteStrokeWidth className={`shrink-0 text-neutral-300 transition-transform ${isExpanded ? 'rotate-90 text-dark-green-600' : 'rotate-0 group-hover:text-neutral-400'}`} />
+                          <span className="font-mono text-[11px] font-bold text-neutral-400">{req.hcId || req.id.slice(0, 7)}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-block px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-tight ${req.requestType === 'New HC'
-                            ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400'
-                            : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
+                        <span className={`inline-block rounded-lg px-2 py-0.5 text-[11px] font-bold ${req.requestType === 'New HC'
+                            ? 'bg-purple-50 text-purple-900'
+                            : 'bg-orange-50 text-orange-900'
                           }`}>
                           {req.requestType === 'New HC' ? 'New HC' : 'Replace'}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <p className="font-bold text-gray-800 dark:text-gray-200 leading-tight">{req.position}</p>
-                        {req.jg && <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 mt-0.5 uppercase tracking-wide">{getJGLabel(req.jg)}</p>}
+                        <p className="font-bold leading-tight text-neutral-900">{req.position}</p>
+                        {req.jg && <p className="mt-0.5 text-[11px] font-bold text-neutral-400">{getJGLabel(req.jg)}</p>}
                       </td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-slate-400 font-medium">{req.department}</td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-slate-500 text-[11px] font-medium">{req.requesterName}</td>
+                      <td className="px-4 py-3 text-neutral-600">{req.department}</td>
+                      <td className="px-4 py-3 text-[11px] text-neutral-500">{req.requesterName}</td>
                       <td className="px-4 py-3">
                         {req.assignedToName
-                          ? <span className="text-xs font-bold text-emerald-600 dark:text-emerald-500">{req.assignedToName}</span>
-                          : <span className="text-slate-300 dark:text-slate-800">—</span>
+                          ? <span className="text-xs font-bold text-dark-green-700">{req.assignedToName}</span>
+                          : <span className="text-neutral-200">—</span>
                         }
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={req.status} /></td>
-                      <td className="px-4 py-3 text-gray-400 dark:text-slate-600 text-[11px] font-medium font-mono whitespace-nowrap">
+                      <td className="whitespace-nowrap px-4 py-3 font-mono text-[11px] text-neutral-400">
                         {req.createdAt?.toDate?.().toLocaleDateString('th-TH') ?? '—'}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
@@ -1132,16 +1139,16 @@ export default function RequestTable({
                         <div className="flex items-center gap-2 flex-wrap">
                           {canViewFile && (
                             <button onClick={handleOpenFile} title={req.jdFileName || 'ไฟล์ JD'}
-                              className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold border rounded-lg transition-all bg-emerald-50 dark:bg-emerald-950/30 text-[#008065] dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 uppercase tracking-tight"
+                              className="flex items-center gap-1.5 rounded-lg border border-dark-green-100 bg-dark-green-50 px-2.5 py-1 text-[11px] font-bold text-dark-green-800 transition-colors hover:bg-dark-green-100"
                             >
-                              <FileText size={11} strokeWidth={3} /> JD
+                              <FileText size={11} strokeWidth={1} absoluteStrokeWidth /> JD
                             </button>
                           )}
                           {canClaim && (
                             <button onClick={(e) => { e.stopPropagation(); handleClaim(req.id) }} disabled={isBusy}
-                              className="flex items-center gap-1.5 px-3 py-1 bg-[#008065] text-white text-[10px] font-bold rounded-lg disabled:opacity-50 transition-all hover:bg-emerald-700 shadow-md shadow-emerald-500/20 uppercase tracking-tight"
+                              className="flex items-center gap-1.5 rounded-lg bg-dark-green-600 px-3 py-1 text-[11px] font-bold text-neutral-50 transition-colors hover:bg-dark-green-700 disabled:opacity-50"
                             >
-                              {isBusy ? <Loader2 size={11} className="animate-spin" /> : <UserCheck size={11} strokeWidth={3} />}
+                              {isBusy ? <Loader2 size={11} className="animate-spin" /> : <UserCheck size={11} strokeWidth={1} absoluteStrokeWidth />}
                               รับเรื่อง
                             </button>
                           )}
@@ -1157,7 +1164,7 @@ export default function RequestTable({
                                 if (val === 'Onboarding') { setOfferingModal({ isOpen: true, id: req.id, mode: 'onboarding' }); setOfferingCandidateName(req.candidateName || ''); return }
                                 handleStatusChange(req.id, val)
                               }}
-                              className="text-[10px] font-bold border border-emerald-500/30 rounded-lg px-2 py-1 bg-white dark:bg-slate-900 text-[#008065] dark:text-emerald-400 focus:outline-none cursor-pointer uppercase tracking-tight"
+                              className="cursor-pointer rounded-lg border border-dark-green-100 bg-white px-2 py-1 text-[11px] font-bold text-dark-green-800 focus:outline-none"
                             >
                               {getAvailableStatuses(req.status, isAdmin).map((s) => (
                                 <option key={s} value={s}>{STATUS_CONFIG[s]?.label ?? s}</option>
@@ -1168,18 +1175,18 @@ export default function RequestTable({
                           {isTA && ['Offering', 'Onboarding'].includes(req.status) && (
                             <button
                               onClick={(e) => { e.stopPropagation(); setRejectModal({ isOpen: true, id: req.id }) }}
-                              className="flex items-center gap-1.5 px-2.5 py-1 text-red-600 dark:text-red-400 text-[10px] font-bold border border-red-300 dark:border-red-900/30 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 transition-all uppercase tracking-tight"
+                              className="flex items-center gap-1.5 rounded-lg border border-red-100 px-2.5 py-1 text-[11px] font-bold text-red-700 transition-colors hover:bg-red-50"
                             >
-                              <XCircle size={11} strokeWidth={3} /> Reject
+                              <XCircle size={11} strokeWidth={1} absoluteStrokeWidth /> Reject
                             </button>
                           )}
                           {/* Rejected → Reopen: เปิด recruit ใหม่ */}
                           {isTA && req.status === 'Rejected' && (
                             <button
                               onClick={(e) => { e.stopPropagation(); handleReopen(req.id) }}
-                              className="flex items-center gap-1.5 px-2.5 py-1 text-yellow-700 dark:text-yellow-400 text-[10px] font-bold border border-yellow-300 dark:border-yellow-900/30 rounded-lg hover:bg-yellow-50 dark:hover:bg-yellow-950/20 transition-all uppercase tracking-tight"
+                              className="flex items-center gap-1.5 rounded-lg border border-yellow-100 px-2.5 py-1 text-[11px] font-bold text-yellow-900 transition-colors hover:bg-yellow-50"
                             >
-                              <UserCheck size={11} strokeWidth={3} /> Recruit ใหม่
+                              <UserCheck size={11} strokeWidth={1} absoluteStrokeWidth /> Recruit ใหม่
                             </button>
                           )}
                           {canReassign && (
@@ -1195,7 +1202,7 @@ export default function RequestTable({
                                 }}
                                 onBlur={() => setTimeout(() => setReassigningId(null), 200)}
                                 autoFocus
-                                className="text-[10px] font-bold border border-emerald-500/30 rounded-lg px-2 py-1 bg-white dark:bg-slate-900 text-[#008065] dark:text-emerald-400 focus:outline-none cursor-pointer"
+                                className="cursor-pointer rounded-lg border border-dark-green-100 bg-white px-2 py-1 text-[11px] font-bold text-dark-green-800 focus:outline-none"
                               >
                                 <option value="">ย้ายไปที่...</option>
                                 {allTAs.map(t => (
@@ -1205,18 +1212,18 @@ export default function RequestTable({
                             ) : (
                               <button
                                 onClick={(e) => { e.stopPropagation(); setReassigningId(req.id) }}
-                                className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold border rounded-lg transition-all bg-white dark:bg-slate-900 text-[#008065] dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 uppercase tracking-tight"
+                                className="flex items-center gap-1.5 rounded-lg border border-dark-green-100 bg-white px-2.5 py-1 text-[11px] font-bold text-dark-green-800 transition-colors hover:bg-dark-green-50"
                               >
-                                <Pencil size={11} strokeWidth={3} />
+                                <Pencil size={11} strokeWidth={1} absoluteStrokeWidth />
                                 ย้ายคนดูแลเคส
                               </button>
                             )
                           )}
                           {canCancel && (
                             <button onClick={(e) => { e.stopPropagation(); openConfirm('cancel', { id: req.id }) }} disabled={isBusy}
-                              className="flex items-center gap-1.5 px-2.5 py-1 text-red-500 dark:text-red-400 text-[10px] font-bold border border-red-200 dark:border-red-900/30 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 disabled:opacity-50 transition-all uppercase tracking-tight"
+                              className="flex items-center gap-1.5 rounded-lg border border-red-100 px-2.5 py-1 text-[11px] font-bold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
                             >
-                              {isBusy ? <Loader2 size={11} className="animate-spin" /> : <XCircle size={11} strokeWidth={3} />}
+                              {isBusy ? <Loader2 size={11} className="animate-spin" /> : <XCircle size={11} strokeWidth={1} absoluteStrokeWidth />}
                               ยกเลิก
                             </button>
                           )}
@@ -1244,20 +1251,20 @@ export default function RequestTable({
                                 })
                               }}
                               disabled={isBusy}
-                              className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-lg disabled:opacity-50 transition-all uppercase tracking-tight shadow-sm
+                              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors disabled:opacity-50
                                 ${req.slaStartDate
-                                  ? 'text-amber-700 bg-amber-100 dark:bg-amber-900/40 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800/50'
-                                  : 'text-purple-700 bg-purple-100 dark:bg-purple-900/40 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-800/50'
+                                  ? 'bg-banana-100 text-banana-900 hover:bg-banana-200'
+                                  : 'bg-purple-100 text-purple-900 hover:bg-purple-200'
                                 }`}
                             >
-                              ⏱ SLA{req.slaStartDate ? ' ✓' : ''}
+                              SLA{req.slaStartDate ? ' ✓' : ''}
                             </button>
                           )}
                           {isAdmin && (
                             <button onClick={(e) => { e.stopPropagation(); openConfirm('delete', { id: req.id }) }} disabled={isBusy}
-                              className="flex items-center gap-1.5 px-2.5 py-1 text-white bg-red-600 dark:bg-red-700 text-[10px] font-bold rounded-lg hover:bg-red-700 dark:hover:bg-red-800 disabled:opacity-50 transition-all uppercase tracking-tight shadow-sm"
+                              className="flex items-center gap-1.5 rounded-lg bg-red-600 px-2.5 py-1 text-[11px] font-bold text-neutral-50 transition-colors hover:bg-red-700 disabled:opacity-50"
                             >
-                              {isBusy ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} strokeWidth={3} />}
+                              {isBusy ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} strokeWidth={1} absoluteStrokeWidth />}
                               ลบ
                             </button>
                           )}
@@ -1268,23 +1275,23 @@ export default function RequestTable({
 
                     {/* Expanded Detail Row */}
                     {isExpanded && (
-                      <tr key={`${req.id}-detail`} className="bg-emerald-50/50 dark:bg-emerald-900/10">
+                      <tr key={`${req.id}-detail`} className="bg-dark-green-50">
                         <td colSpan={9} className="px-6 pb-6 pt-0">
-                          <div className="border border-emerald-500/20 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 bg-white dark:bg-slate-900 shadow-xl shadow-emerald-900/5 transition-colors">
+                          <div className="grid grid-cols-1 gap-8 rounded-2xl border border-neutral-100 bg-white p-6 md:grid-cols-2 lg:grid-cols-4">
 
                             {/* จำนวน HC + วันที่ */}
                             <div className="flex flex-col gap-5">
                               <div>
-                                <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest flex items-center gap-1.5 mb-2">
-                                  <Users size={12} strokeWidth={3} /> จำนวน HC
+                                <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
+                                  <Users size={12} strokeWidth={1} absoluteStrokeWidth /> จำนวน HC
                                 </p>
-                                <p className="text-xl font-black text-[#008065] dark:text-emerald-500 tabular-nums">{req.headcount ?? 1} <span className="text-sm font-bold text-gray-400">คน</span></p>
+                                <p className="text-xl font-bold text-dark-green-700 tabular-nums">{req.headcount ?? 1} <span className="text-sm font-bold text-neutral-400">คน</span></p>
                               </div>
                               {/* Candidate name — editable inline สำหรับ TA/Admin */}
                               {(isTA || isAdmin) && (
                                 <div>
-                                  <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest flex items-center gap-1.5 mb-2">
-                                    <UserCheck size={12} strokeWidth={3} /> Candidate
+                                  <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
+                                    <UserCheck size={12} strokeWidth={1} absoluteStrokeWidth /> Candidate
                                   </p>
                                   {candidateEditId === req.id ? (
                                     <div className="flex items-center gap-1.5">
@@ -1295,114 +1302,114 @@ export default function RequestTable({
                                         onKeyDown={async e => {
                                           if (e.key === 'Enter') {
                                             await updateDoc(doc(db, 'hc_requests', req.id), { candidateName: candidateEditVal.trim() })
-                                            sendStatusUpdate(req.id, req.status, req.assignedToName, null, req.startDate, candidateEditVal.trim(), req.hcId)
+                                            sendStatusUpdate(req.id, req.status, req.assignedToName, null, req.startDate, candidateEditVal.trim(), req.hcId, null, false, req.cvUrl || null)
                                             setCandidateEditId(null)
                                           } else if (e.key === 'Escape') {
                                             setCandidateEditId(null)
                                           }
                                         }}
                                         placeholder="ชื่อ Candidate..."
-                                        className="flex-1 text-sm border border-indigo-200 dark:border-indigo-700 rounded-lg px-2 py-1 bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-400 min-w-0"
+                                        className="min-w-0 flex-1 rounded-lg border border-purple-100 bg-white px-2 py-1 text-sm text-purple-900 focus:outline-none focus:ring-1 focus:ring-purple-300"
                                       />
                                       <button
                                         onClick={async () => {
                                           await updateDoc(doc(db, 'hc_requests', req.id), { candidateName: candidateEditVal.trim() })
-                                          sendStatusUpdate(req.id, req.status, req.assignedToName, null, req.startDate, candidateEditVal.trim(), req.hcId)
+                                          sendStatusUpdate(req.id, req.status, req.assignedToName, null, req.startDate, candidateEditVal.trim(), req.hcId, null, false, req.cvUrl || null)
                                           setCandidateEditId(null)
                                         }}
-                                        className="text-[10px] font-black px-2 py-1 rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 transition-colors shrink-0"
+                                        className="shrink-0 rounded-lg bg-purple-600 px-2 py-1 text-[11px] font-bold text-neutral-50 transition-colors hover:bg-purple-700"
                                       >
                                         ✓
                                       </button>
-                                      <button onClick={() => setCandidateEditId(null)} className="text-[10px] text-gray-400 hover:text-gray-600 shrink-0">✕</button>
+                                      <button onClick={() => setCandidateEditId(null)} className="shrink-0 text-[11px] text-neutral-400 hover:text-neutral-600">✕</button>
                                     </div>
                                   ) : (
                                     <button
                                       onClick={() => { setCandidateEditId(req.id); setCandidateEditVal(req.candidateName || '') }}
-                                      className="flex items-center gap-1.5 group text-left"
+                                      className="group flex items-center gap-1.5 text-left"
                                     >
                                       {req.candidateName
-                                        ? <span className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400">{req.candidateName}</span>
-                                        : <span className="text-xs text-gray-300 dark:text-slate-700 italic">— กดเพื่อกรอกชื่อ</span>
+                                        ? <span className="text-sm font-bold text-purple-700">{req.candidateName}</span>
+                                        : <span className="text-xs italic text-neutral-300">— กดเพื่อกรอกชื่อ</span>
                                       }
-                                      <Pencil size={10} strokeWidth={2.5} className="text-gray-300 dark:text-slate-700 group-hover:text-indigo-400 transition-colors shrink-0" />
+                                      <Pencil size={10} strokeWidth={1} absoluteStrokeWidth className="shrink-0 text-neutral-300 transition-colors group-hover:text-purple-500" />
                                     </button>
                                   )}
                                 </div>
                               )}
                               {!isTA && !isAdmin && req.candidateName && (
                                 <div>
-                                  <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest flex items-center gap-1.5 mb-2">
-                                    <UserCheck size={12} strokeWidth={3} /> Candidate
+                                  <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
+                                    <UserCheck size={12} strokeWidth={1} absoluteStrokeWidth /> Candidate
                                   </p>
-                                  <p className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400">{req.candidateName}</p>
+                                  <p className="text-sm font-bold text-purple-700">{req.candidateName}</p>
                                 </div>
                               )}
                               {req.startDate && (
                                 <div>
-                                  <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest flex items-center gap-1.5 mb-2">
-                                    <Calendar size={12} strokeWidth={3} /> วันเริ่มงาน
+                                  <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
+                                    <Calendar size={12} strokeWidth={1} absoluteStrokeWidth /> วันเริ่มงาน
                                   </p>
-                                  <p className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">{(() => { const d = new Date(req.startDate); return isNaN(d) ? req.startDate : d.getDate() + '-' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + '-' + d.getFullYear() })()}</p>
+                                  <p className="text-sm font-bold text-teal-700">{(() => { const d = new Date(req.startDate); return isNaN(d) ? req.startDate : d.getDate() + '-' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + '-' + d.getFullYear() })()}</p>
                                 </div>
                               )}
                               {req.rejectReason && (
                                 <div>
-                                  <p className="text-[10px] font-black text-red-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">
-                                    <XCircle size={12} strokeWidth={3} /> เหตุผลการ Reject
+                                  <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-red-400">
+                                    <XCircle size={12} strokeWidth={1} absoluteStrokeWidth /> เหตุผลการ Reject
                                   </p>
-                                  <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl px-3 py-2">
-                                    <p className="text-sm text-red-700 dark:text-red-400 font-medium leading-relaxed">{req.rejectReason}</p>
+                                  <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2">
+                                    <p className="text-sm leading-relaxed text-red-700">{req.rejectReason}</p>
                                   </div>
                                 </div>
                               )}
                               {req.requestType === 'Replacement' && (
                                 <div>
-                                  <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest flex items-center gap-1.5 mb-2">
-                                    <Calendar size={12} strokeWidth={3} /> วันที่ลาออก (LWD)
+                                  <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
+                                    <Calendar size={12} strokeWidth={1} absoluteStrokeWidth /> วันที่ลาออก (LWD)
                                   </p>
-                                  <p className="text-sm font-extrabold text-gray-700 dark:text-gray-200">{req.targetStartDate || '—'}</p>
+                                  <p className="text-sm font-bold text-neutral-700">{req.targetStartDate || '—'}</p>
                                 </div>
                               )}
                               {req.requestType === 'Replacement' && req.replacementFor && (
                                 <div>
-                                  <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest mb-2">ทดแทนพนักงานเดิม</p>
-                                  <p className="text-sm font-extrabold text-emerald-600 dark:text-emerald-500 drop-shadow-sm">{req.replacementFor}</p>
+                                  <p className="mb-2 text-[11px] font-bold text-neutral-400">ทดแทนพนักงานเดิม</p>
+                                  <p className="text-sm font-bold text-dark-green-700">{req.replacementFor}</p>
                                 </div>
                               )}
                             </div>
 
                             {/* เหตุผล */}
                             <div>
-                              <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest flex items-center gap-1.5 mb-2">
-                                <AlignLeft size={12} strokeWidth={3} /> เหตุผลในการขอ
+                              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
+                                <AlignLeft size={12} strokeWidth={1} absoluteStrokeWidth /> เหตุผลในการขอ
                               </p>
-                              <div className="bg-gray-50 dark:bg-slate-800/50 p-3 rounded-xl border border-gray-100 dark:border-slate-800">
-                                <p className="text-sm text-gray-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap italic font-medium">"{req.reason || '—'}"</p>
+                              <div className="rounded-xl border border-neutral-100 bg-neutral-50 p-3">
+                                <p className="whitespace-pre-wrap text-sm italic leading-relaxed text-neutral-700">"{req.reason || '—'}"</p>
                               </div>
                             </div>
 
                             {/* Requirements */}
                             <div>
-                              <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest flex items-center gap-1.5 mb-2">
-                                <ClipboardList size={12} strokeWidth={3} /> Requirements
+                              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
+                                <ClipboardList size={12} strokeWidth={1} absoluteStrokeWidth /> Requirements
                               </p>
-                              <div className="bg-gray-50 dark:bg-slate-800/50 p-3 rounded-xl border border-gray-100 dark:border-slate-800">
-                                <p className="text-sm text-gray-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap font-medium">{req.requirements || '—'}</p>
+                              <div className="rounded-xl border border-neutral-100 bg-neutral-50 p-3">
+                                <p className="whitespace-pre-wrap text-sm leading-relaxed text-neutral-700">{req.requirements || '—'}</p>
                               </div>
                               {/* วันทำงาน + กะ — แสดงเฉพาะ TA/Admin */}
                               {isTA && (req.workDaysPerWeek || req.shift) && (
                                 <div className="mt-4 flex gap-4">
                                   {req.workDaysPerWeek && (
-                                    <div className="flex-1 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl px-3 py-2 border border-indigo-100 dark:border-indigo-500/20">
-                                      <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">วัน/สัปดาห์</p>
-                                      <p className="text-sm font-black text-indigo-700 dark:text-indigo-300">{req.workDaysPerWeek} วัน</p>
+                                    <div className="flex-1 rounded-xl border border-purple-100 bg-purple-50 px-3 py-2">
+                                      <p className="mb-1 text-[11px] font-bold text-purple-400">วัน/สัปดาห์</p>
+                                      <p className="text-sm font-bold text-purple-900">{req.workDaysPerWeek} วัน</p>
                                     </div>
                                   )}
                                   {req.shift && (
-                                    <div className="flex-1 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl px-3 py-2 border border-indigo-100 dark:border-indigo-500/20">
-                                      <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">กะ</p>
-                                      <p className="text-sm font-black text-indigo-700 dark:text-indigo-300">{req.shift}</p>
+                                    <div className="flex-1 rounded-xl border border-purple-100 bg-purple-50 px-3 py-2">
+                                      <p className="mb-1 text-[11px] font-bold text-purple-400">กะ</p>
+                                      <p className="text-sm font-bold text-purple-900">{req.shift}</p>
                                     </div>
                                   )}
                                 </div>
@@ -1412,13 +1419,13 @@ export default function RequestTable({
                             {/* Meta */}
                             <div className="flex flex-col gap-5">
                               <div>
-                                <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest mb-2">ข้อมูลผู้ยื่น</p>
-                                <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{req.requesterName}</p>
-                                <p className="text-[11px] font-bold text-gray-400 dark:text-slate-600 transition-colors hover:text-[#008065]">{req.requesterEmail}</p>
+                                <p className="mb-2 text-[11px] font-bold text-neutral-400">ข้อมูลผู้ยื่น</p>
+                                <p className="text-sm font-bold text-neutral-900">{req.requesterName}</p>
+                                <p className="text-[11px] font-bold text-neutral-400 transition-colors hover:text-dark-green-700">{req.requesterEmail}</p>
                               </div>
                               <div>
-                                <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest mb-2">Timestamp</p>
-                                <p className="text-sm font-bold text-gray-500 dark:text-slate-400 font-mono italic">
+                                <p className="mb-2 text-[11px] font-bold text-neutral-400">Timestamp</p>
+                                <p className="font-mono text-sm font-bold text-neutral-500">
                                   {req.createdAt?.toDate?.().toLocaleString('th-TH') ?? '—'}
                                 </p>
                               </div>
@@ -1427,16 +1434,16 @@ export default function RequestTable({
 
                           {/* ── CV Files — TA อัพโหลด/ลบได้, Manager ดูอย่างเดียว ── */}
                           {(isTA || role === 'manager' || isOwner) && (
-                            <div className="mt-4 border border-gray-100 dark:border-slate-800 rounded-2xl p-4 bg-white dark:bg-slate-900">
-                              <div className="flex items-center justify-between mb-3">
-                                <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
-                                  <File size={12} strokeWidth={3} /> CV / Resume
+                            <div className="mt-4 rounded-2xl border border-neutral-100 bg-white p-4">
+                              <div className="mb-3 flex items-center justify-between">
+                                <p className="flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
+                                  <File size={12} strokeWidth={1} absoluteStrokeWidth /> CV / Resume
                                 </p>
                                 {isTA && (
-                                  <label className={`flex items-center gap-1.5 cursor-pointer text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg border-2 transition-all ${cvUploading.has(req.id) ? 'opacity-50 pointer-events-none' : 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'}`}>
+                                  <label className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-colors ${cvUploading.has(req.id) ? 'pointer-events-none opacity-50' : 'border-dark-green-100 text-dark-green-700 hover:bg-dark-green-50'}`}>
                                     {cvUploading.has(req.id)
-                                      ? <><Loader2 size={12} strokeWidth={3} className="animate-spin" /> กำลังอัพโหลด...</>
-                                      : <><Upload size={12} strokeWidth={3} /> อัพโหลด CV</>
+                                      ? <><Loader2 size={12} strokeWidth={1} absoluteStrokeWidth className="animate-spin" /> กำลังอัพโหลด...</>
+                                      : <><Upload size={12} strokeWidth={1} absoluteStrokeWidth /> อัพโหลด CV</>
                                     }
                                     <input
                                       type="file"
@@ -1449,28 +1456,28 @@ export default function RequestTable({
                                 )}
                               </div>
                               {(!req.cvFiles || req.cvFiles.length === 0) ? (
-                                <p className="text-xs text-gray-400 dark:text-slate-600 italic">ยังไม่มีไฟล์ CV</p>
+                                <p className="text-xs italic text-neutral-400">ยังไม่มีไฟล์ CV</p>
                               ) : (
                                 <div className="flex flex-col gap-1.5">
                                   {req.cvFiles.map((cv, idx) => (
-                                    <div key={idx} className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-gray-50 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-800 group">
+                                    <div key={idx} className="group flex items-center justify-between gap-2 rounded-xl border border-neutral-100 bg-neutral-50 px-3 py-2">
                                       <button
                                         onClick={async (e) => { e.stopPropagation(); const url = await getCVSignedUrl(cv.path); if (url) window.open(url, '_blank') }}
-                                        className="flex items-center gap-2 text-xs font-bold text-gray-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors truncate"
+                                        className="flex items-center gap-2 truncate text-xs font-bold text-neutral-700 transition-colors hover:text-dark-green-700"
                                         title={cv.name}
                                       >
-                                        <FileText size={13} strokeWidth={2.5} className="shrink-0 text-emerald-500" />
-                                        <span className="truncate max-w-[200px]">{cv.name}</span>
+                                        <FileText size={13} strokeWidth={1} absoluteStrokeWidth className="shrink-0 text-dark-green-600" />
+                                        <span className="max-w-[200px] truncate">{cv.name}</span>
                                       </button>
-                                      <div className="flex items-center gap-2 shrink-0">
-                                        <span className="text-[10px] text-gray-400 dark:text-slate-600 hidden group-hover:inline">{cv.uploadedBy?.split('@')[0]}</span>
+                                      <div className="flex shrink-0 items-center gap-2">
+                                        <span className="hidden text-[11px] text-neutral-400 group-hover:inline">{cv.uploadedBy?.split('@')[0]}</span>
                                         {isTA && (
                                           <button
                                             onClick={(e) => { e.stopPropagation(); handleDeleteCV(req.id, cv) }}
-                                            className="text-gray-300 dark:text-slate-700 hover:text-red-500 transition-colors"
+                                            className="text-neutral-300 transition-colors hover:text-red-600"
                                             title="ลบไฟล์"
                                           >
-                                            <X size={13} strokeWidth={3} />
+                                            <X size={13} strokeWidth={1} absoluteStrokeWidth />
                                           </button>
                                         )}
                                       </div>
@@ -1485,12 +1492,12 @@ export default function RequestTable({
                           {req.statusHistory?.length > 0 && (() => {
                             const KEY_STAGES = ['Open', 'Offering', 'Onboarding', 'Rejected', 'Closed', 'Cancelled']
                             const STAGE_CFG = {
-                              Open:       { label: 'Open',       dot: 'bg-gray-400',    badge: 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400',             text: 'text-gray-500 dark:text-slate-400' },
-                              Offering:   { label: 'Offering',   dot: 'bg-indigo-500',  badge: 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400',     text: 'text-indigo-600 dark:text-indigo-400' },
-                              Onboarding: { label: 'W.Onboarding', dot: 'bg-teal-500', badge: 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400',             text: 'text-teal-600 dark:text-teal-400' },
-                              Rejected:   { label: 'Rejected',   dot: 'bg-red-500',     badge: 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400',                 text: 'text-red-500 dark:text-red-400' },
-                              Closed:     { label: 'Closed',     dot: 'bg-emerald-500', badge: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400', text: 'text-emerald-600 dark:text-emerald-400' },
-                              Cancelled:  { label: 'Cancelled',  dot: 'bg-slate-400',   badge: 'bg-slate-100 dark:bg-slate-800 text-slate-500',                               text: 'text-slate-400' },
+                              Open:       { label: 'Open',         dot: 'bg-neutral-400',    badge: 'bg-neutral-100 text-neutral-600',         text: 'text-neutral-500' },
+                              Offering:   { label: 'Offering',     dot: 'bg-purple-500',     badge: 'bg-purple-50 text-purple-900',            text: 'text-purple-700' },
+                              Onboarding: { label: 'W.Onboarding', dot: 'bg-teal-500',       badge: 'bg-teal-50 text-teal-900',                text: 'text-teal-700' },
+                              Rejected:   { label: 'Rejected',     dot: 'bg-red-500',        badge: 'bg-red-50 text-red-700',                  text: 'text-red-600' },
+                              Closed:     { label: 'Closed',       dot: 'bg-green-fresh-500', badge: 'bg-green-fresh-50 text-green-fresh-900', text: 'text-green-fresh-700' },
+                              Cancelled:  { label: 'Cancelled',    dot: 'bg-neutral-300',    badge: 'bg-neutral-100 text-neutral-500',         text: 'text-neutral-400' },
                             }
 
                             // เรียง history ตามเวลา
@@ -1522,13 +1529,13 @@ export default function RequestTable({
                             const isDone = ['Closed', 'Cancelled'].includes(req.status)
 
                             return (
-                              <div className="mt-4 rounded-2xl border border-gray-100 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-900/50 p-4">
-                                <div className="flex items-center justify-between mb-3">
-                                  <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest">⏱ Stage Duration</p>
+                              <div className="mt-4 rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
+                                <div className="mb-3 flex items-center justify-between">
+                                  <p className="text-[11px] font-bold text-neutral-400">Stage Duration</p>
                                   <div className="flex items-center gap-1">
-                                    <span className="text-[10px] text-gray-400 dark:text-slate-600">รวม</span>
-                                    <span className="text-sm font-black text-gray-700 dark:text-gray-200 tabular-nums">{totalDays}</span>
-                                    <span className="text-[10px] text-gray-400 dark:text-slate-500">วัน</span>
+                                    <span className="text-[11px] text-neutral-400">รวม</span>
+                                    <span className="text-sm font-bold text-neutral-700 tabular-nums">{totalDays}</span>
+                                    <span className="text-[11px] text-neutral-400">วัน</span>
                                   </div>
                                 </div>
                                 <div className="flex flex-col">
@@ -1537,19 +1544,19 @@ export default function RequestTable({
                                     const isLast = i === segments.length - 1
                                     return (
                                       <div key={i} className="flex items-stretch gap-3">
-                                        <div className="flex flex-col items-center w-4 flex-shrink-0 pt-1.5">
-                                          <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${c.dot} ${seg.isCurrent && !isDone ? 'animate-pulse' : ''}`}/>
-                                          {!isLast && <span className="flex-1 w-px bg-gray-200 dark:bg-slate-700 my-1"/>}
+                                        <div className="flex w-4 flex-shrink-0 flex-col items-center pt-1.5">
+                                          <span className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${c.dot} ${seg.isCurrent && !isDone ? 'animate-pulse' : ''}`}/>
+                                          {!isLast && <span className="my-1 w-px flex-1 bg-neutral-100"/>}
                                         </div>
-                                        <div className={`flex items-center justify-between flex-1 ${isLast ? 'pb-0' : 'pb-3'}`}>
+                                        <div className={`flex flex-1 items-center justify-between ${isLast ? 'pb-0' : 'pb-3'}`}>
                                           <div className="flex items-center gap-2">
-                                            <span className={`text-[11px] font-black uppercase tracking-wide ${c.text}`}>{c.label}</span>
-                                            <span className="text-[10px] text-gray-400 dark:text-slate-600">{seg.dateStr}</span>
+                                            <span className={`text-[11px] font-bold ${c.text}`}>{c.label}</span>
+                                            <span className="text-[11px] text-neutral-400">{seg.dateStr}</span>
                                             {seg.isCurrent && !isDone && (
-                                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">กำลังดำเนินการ</span>
+                                              <span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">กำลังดำเนินการ</span>
                                             )}
                                           </div>
-                                          <span className={`text-[11px] font-black tabular-nums px-2 py-0.5 rounded-lg ${c.badge}`}>
+                                          <span className={`rounded-lg px-2 py-0.5 text-[11px] font-bold tabular-nums ${c.badge}`}>
                                             {seg.isCurrent && !isDone ? `${seg.days}+ วัน` : `${seg.days} วัน`}
                                           </span>
                                         </div>
@@ -1572,25 +1579,25 @@ export default function RequestTable({
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-900/50">
-              <span className="text-xs text-gray-400 dark:text-slate-500 font-medium">
+            <div className="flex items-center justify-between border-t border-neutral-100 bg-neutral-50 px-4 py-3">
+              <span className="text-xs font-bold text-neutral-400">
                 {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, displayed.length)} จาก {displayed.length} รายการ
               </span>
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="px-3 py-1.5 text-xs font-bold rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  className="rounded-lg border border-neutral-100 px-3 py-1.5 text-xs font-bold text-neutral-600 transition-colors hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   ← ก่อนหน้า
                 </button>
-                <span className="px-3 py-1.5 text-xs font-bold text-gray-500 dark:text-slate-400">
+                <span className="px-3 py-1.5 text-xs font-bold text-neutral-500">
                   {page} / {totalPages}
                 </span>
                 <button
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="px-3 py-1.5 text-xs font-bold rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  className="rounded-lg border border-neutral-100 px-3 py-1.5 text-xs font-bold text-neutral-600 transition-colors hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   ถัดไป →
                 </button>
@@ -1609,29 +1616,29 @@ export default function RequestTable({
       {/* ── Offering Modal: กรอกวันเริ่มงาน ── */}
       {/* Reject Modal — กรอกเหตุผลการ Reject */}
       {rejectModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-sm mx-4 p-6">
-            <h3 className="text-lg font-black text-gray-800 dark:text-gray-100 mb-1">Reject ผู้สมัคร</h3>
-            <p className="text-sm text-gray-500 dark:text-slate-400 mb-5">กรุณาระบุเหตุผลการ Reject (ถ้ามี)</p>
-            <label className="block text-[10px] font-black text-gray-500 dark:text-slate-500 uppercase tracking-widest mb-2">เหตุผล</label>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/45">
+          <div className="mx-4 w-full max-w-sm rounded-[24px] border border-neutral-100 bg-white p-6 shadow-xl">
+            <h3 className="mb-1 text-lg font-bold text-neutral-900">Reject ผู้สมัคร</h3>
+            <p className="mb-5 text-sm text-neutral-500">กรุณาระบุเหตุผลการ Reject (ถ้ามี)</p>
+            <label className="mb-2 block text-[11px] font-bold text-neutral-500">เหตุผล</label>
             <textarea
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               placeholder="เช่น ผู้สมัครขอถอนตัว,ป่วย,ไม่สะดวกมาเริ่มงานแล้ว (แอ๊บ) (ถ้าไม่ใส่จะขึ้นว่า No Reason)"
               rows={3}
-              className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500/30 text-sm font-medium resize-none"
+              className="w-full resize-none rounded-lg border border-neutral-100 bg-white px-4 py-2.5 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
               autoFocus
             />
-            <div className="flex gap-3 mt-6">
+            <div className="mt-6 flex gap-3">
               <button
                 onClick={() => { setRejectModal({ isOpen: false, id: null }); setRejectReason('') }}
-                className="flex-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                className="flex-1 rounded-lg border border-neutral-100 px-4 py-2.5 text-sm font-bold text-neutral-600 transition-colors hover:bg-neutral-50"
               >
                 ยกเลิก
               </button>
               <button
                 onClick={handleRejectConfirm}
-                className="flex-1 px-4 py-2.5 text-sm font-bold rounded-xl bg-red-600 text-white hover:bg-red-700 transition-colors shadow-md shadow-red-500/20"
+                className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold text-neutral-50 transition-colors hover:bg-red-700"
               >
                 ยืนยัน Reject
               </button>
@@ -1642,32 +1649,32 @@ export default function RequestTable({
 
       {/* ── Admin: แก้ SLA ย้อนหลัง Modal ── */}
       {slaTestModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-sm mx-4 p-6">
-            <h3 className="text-base font-black text-gray-800 dark:text-gray-100 mb-1">⏱ แก้ SLA ย้อนหลัง</h3>
-            <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/45">
+          <div className="mx-4 w-full max-w-sm rounded-[24px] border border-neutral-100 bg-white p-6 shadow-xl">
+            <h3 className="mb-1 text-base font-bold text-neutral-900">แก้ SLA ย้อนหลัง</h3>
+            <p className="mb-4 text-xs text-neutral-500">
               กำหนดวันเปิดเคส (SLA Start) สำหรับ record นี้<br/>
-              <span className="text-amber-600 dark:text-amber-400">createdAt จริงไม่ถูกแก้</span> — ใช้ field แยก <code className="text-[10px] bg-gray-100 dark:bg-slate-800 px-1 rounded">slaStartDate</code>
+              <span className="text-banana-700">createdAt จริงไม่ถูกแก้</span> — ใช้ field แยก <code className="rounded bg-neutral-50 px-1 text-[11px]">slaStartDate</code>
             </p>
-            <label className="block text-[10px] font-black text-gray-500 dark:text-slate-500 uppercase tracking-widest mb-2">วันเปิดเคส (SLA Start)</label>
+            <label className="mb-2 block text-[11px] font-bold text-neutral-500">วันเปิดเคส (SLA Start)</label>
             <input
               id="sla-fix-date" name="sla-fix-date"
               type="date"
               value={slaTestDate}
               onChange={(e) => setSlaTestDate(e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500/30 text-sm font-medium"
+              className="w-full rounded-lg border border-neutral-100 bg-white px-4 py-2.5 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
               autoFocus
             />
-            <div className="flex gap-3 mt-5">
+            <div className="mt-5 flex gap-3">
               <button
                 onClick={() => { setSlaTestModal({ isOpen: false, id: null }); setSlaTestDate('') }}
-                className="flex-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                className="flex-1 rounded-lg border border-neutral-100 px-4 py-2.5 text-sm font-bold text-neutral-600 transition-colors hover:bg-neutral-50"
               >
                 ยกเลิก
               </button>
               <button
                 onClick={() => handleSlaFixSave('')}  // '' = reset → slaStartDate = null
-                className="px-3 py-2.5 text-xs font-bold rounded-xl border border-red-200 dark:border-red-800 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                className="rounded-lg border border-red-100 px-3 py-2.5 text-xs font-bold text-red-600 transition-colors hover:bg-red-50"
                 title="ล้าง slaStartDate กลับไปใช้ createdAt auto"
               >
                 รีเซ็ต
@@ -1675,7 +1682,7 @@ export default function RequestTable({
               <button
                 onClick={() => handleSlaFixSave()}
                 disabled={!slaTestDate}
-                className="flex-1 px-4 py-2.5 text-sm font-bold rounded-xl bg-amber-500 hover:bg-amber-600 text-white transition-colors shadow-md shadow-amber-500/20 disabled:opacity-50"
+                className="flex-1 rounded-lg bg-banana-600 px-4 py-2.5 text-sm font-bold text-neutral-50 transition-colors hover:bg-banana-700 disabled:opacity-50"
               >
                 บันทึก
               </button>
@@ -1685,16 +1692,16 @@ export default function RequestTable({
       )}
 
       {offeringModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-sm mx-4 p-6">
-            <h3 className="text-lg font-black text-gray-800 dark:text-gray-100 mb-1">
-              {offeringModal.mode === 'offering' ? '📋 Offering' : '🟦 Waiting Onboarding'}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/45">
+          <div className="mx-4 w-full max-w-sm rounded-[24px] border border-neutral-100 bg-white p-6 shadow-xl">
+            <h3 className="mb-1 text-lg font-bold text-neutral-900">
+              {offeringModal.mode === 'offering' ? 'Offering' : 'Waiting Onboarding'}
             </h3>
-            <p className="text-sm text-gray-500 dark:text-slate-400 mb-5">
+            <p className="mb-5 text-sm text-neutral-500">
               {offeringModal.mode === 'offering' ? 'กรอกชื่อผู้สมัครที่ได้รับ offer' : 'กรุณากรอกข้อมูลผู้สมัครที่รับ offer'}
             </p>
 
-            <label className="block text-[10px] font-black text-gray-500 dark:text-slate-500 uppercase tracking-widest mb-2">
+            <label className="mb-2 block text-[11px] font-bold text-neutral-500">
               ชื่อ Candidate {offeringModal.mode === 'onboarding' ? '*' : '(optional)'}
             </label>
             <input
@@ -1703,13 +1710,13 @@ export default function RequestTable({
               value={offeringCandidateName}
               onChange={(e) => setOfferingCandidateName(e.target.value)}
               placeholder="ชื่อ-นามสกุล ผู้สมัคร"
-              className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-sm font-medium mb-4"
+              className="mb-4 w-full rounded-lg border border-neutral-100 bg-white px-4 py-2.5 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
               autoFocus
             />
 
             {offeringModal.mode === 'offering' && (
               <>
-                <label className="block text-[10px] font-black text-gray-500 dark:text-slate-500 uppercase tracking-widest mb-2">
+                <label className="mb-2 block text-[11px] font-bold text-neutral-500">
                   ลิ้ง CV (optional)
                 </label>
                 <input
@@ -1718,45 +1725,45 @@ export default function RequestTable({
                   value={offeringCvUrl}
                   onChange={(e) => setOfferingCvUrl(e.target.value)}
                   placeholder="https://drive.google.com/..."
-                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-sm font-medium mb-4"
+                  className="mb-4 w-full rounded-lg border border-neutral-100 bg-white px-4 py-2.5 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
                 />
-                <label className="block text-[10px] font-black text-gray-500 dark:text-slate-500 uppercase tracking-widest mb-2">
-                  วัน Offering <span className="text-gray-400 font-normal normal-case">(optional — ปล่อยว่าง = วันนี้)</span>
+                <label className="mb-2 block text-[11px] font-bold text-neutral-500">
+                  วัน Offering <span className="font-normal text-neutral-400">(optional — ปล่อยว่าง = วันนี้)</span>
                 </label>
                 <input
                   id="offering-custom-date" name="offering-custom-date"
                   type="date"
                   value={offeringCustomDate}
                   onChange={(e) => setOfferingCustomDate(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-sm font-medium mb-4"
+                  className="mb-4 w-full rounded-lg border border-neutral-100 bg-white px-4 py-2.5 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
                 />
               </>
             )}
 
             {offeringModal.mode === 'onboarding' && (
               <>
-                <label className="block text-[10px] font-black text-gray-500 dark:text-slate-500 uppercase tracking-widest mb-2">วันเริ่มงาน *</label>
+                <label className="mb-2 block text-[11px] font-bold text-neutral-500">วันเริ่มงาน *</label>
                 <input
                   id="offering-start-date" name="offering-start-date"
                   type="date"
                   value={offeringStartDate}
                   onChange={(e) => setOfferingStartDate(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-sm font-medium"
+                  className="w-full rounded-lg border border-neutral-100 bg-white px-4 py-2.5 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
                 />
               </>
             )}
 
-            <div className="flex gap-3 mt-6">
+            <div className="mt-6 flex gap-3">
               <button
                 onClick={() => { setOfferingModal({ isOpen: false, id: null, mode: 'onboarding' }); setOfferingStartDate(''); setOfferingCandidateName(''); setOfferingCvUrl(''); setOfferingCustomDate('') }}
-                className="flex-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                className="flex-1 rounded-lg border border-neutral-100 px-4 py-2.5 text-sm font-bold text-neutral-600 transition-colors hover:bg-neutral-50"
               >
                 ยกเลิก
               </button>
               <button
                 onClick={handleOfferingConfirm}
                 disabled={offeringModal.mode === 'onboarding' && (!offeringStartDate || !offeringCandidateName.trim())}
-                className={`flex-1 px-4 py-2.5 text-sm font-bold rounded-xl text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-md ${offeringModal.mode === 'offering' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20' : 'bg-teal-600 hover:bg-teal-700 shadow-teal-500/20'}`}
+                className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-bold text-neutral-50 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${offeringModal.mode === 'offering' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-teal-600 hover:bg-teal-700'}`}
               >
                 {offeringModal.mode === 'offering' ? 'ยืนยัน Offering' : 'ยืนยัน Onboarding'}
               </button>

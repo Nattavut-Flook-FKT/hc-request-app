@@ -35,6 +35,7 @@ import { Loader2, CheckCircle, ChevronDown, X, Paperclip, FileText, ExternalLink
 import { HQ_JG_LEVELS, OPERATION_JG_LEVELS } from '../../data/jobGrades'
 import { fetchSheetsData, getDepartmentByEmail, getEmployeesByDepartment, getPositionsByDepartment } from '../../services/sheetsData'
 import { DIVISIONS, getDepartments, getSections, getBusinessUnits, getDivisionByDepartment } from '../../data/orgStructure'
+import { grantedKeys } from '../../utils/grants'
 
 // ─── ค่าเริ่มต้นของฟอร์ม ───────────────────────────────────────────────────
 // ใช้เป็น template สำหรับ reset หลัง submit สำเร็จ
@@ -225,20 +226,20 @@ function PositionCombobox({ value, onChange, positions, required }) {
           onFocus={handleFocus}
           required={required}
           placeholder={value || 'เลือกหรือพิมพ์ตำแหน่ง...'}
-          className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-medium"
+          className="h-10 w-full rounded-lg border border-neutral-100 bg-white px-4 pr-10 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
         />
-        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-600 pointer-events-none" />
+        <ChevronDown size={16} strokeWidth={1} absoluteStrokeWidth className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400" />
       </div>
       {open && (
-        <div className="absolute z-20 w-full mt-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl shadow-xl max-h-52 overflow-y-auto ring-1 ring-black/5 transition-all">
+        <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-neutral-100 bg-white shadow-md">
           {filtered.length > 0 ? (
             filtered.map((p) => (
               <button
                 key={p}
                 type="button"
                 onClick={() => select(p)}
-                className={`w-full text-left px-4 py-2.5 text-sm hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors font-medium ${
-                  p === value ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 font-bold' : 'text-gray-700 dark:text-gray-300'
+                className={`w-full rounded text-left px-3 py-2 text-sm transition-colors hover:bg-dark-green-50 ${
+                  p === value ? 'bg-dark-green-50 text-dark-green-900' : 'text-neutral-900'
                 }`}
               >
                 {p}
@@ -246,7 +247,7 @@ function PositionCombobox({ value, onChange, positions, required }) {
             ))
           ) : (
             // ไม่พบตำแหน่งในรายการ → แจ้งว่าจะถูกบันทึกเป็นตำแหน่งใหม่
-            <div className="px-4 py-3 text-sm text-gray-400 dark:text-slate-600 italic">
+            <div className="px-4 py-3 text-sm text-neutral-400">
               ไม่พบ — จะใช้ "{searchText}" เป็นตำแหน่งใหม่
             </div>
           )}
@@ -279,8 +280,11 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   const [positionsByDept, setPositionsByDept] = useState({})  // map: department → string[] positions (จาก GAS Sheets)
   const [employees, setEmployees] = useState({})              // map: department → string[] employee names (จาก GAS Sheets)
   const [deptAutoFilled, setDeptAutoFilled] = useState(false) // true ถ้า department ถูก auto-fill จาก email ของ user
+  const [grantedDepts, setGrantedDepts] = useState([])         // แผนกที่ Admin grant ให้ manager คนนี้ (settings/deptManagers) — ถ้ามี จะจำกัด Division/แผนกที่เลือกได้
+  const [grantedDivisions, setGrantedDivisions] = useState([]) // division ที่ Admin grant ทั้งสาย (settings/divisionManagers) — Head of Division เห็นทุกแผนกในนั้น
   const [allDepts, setAllDepts] = useState(DEPARTMENTS)       // รายชื่อแผนกทั้งหมด (อัพเดตจาก Sheets)
   const [customPositions, setCustomPositions] = useState([])  // ตำแหน่งที่เพิ่มเองจาก Firestore 'custom_positions'
+  const [customDepts, setCustomDepts] = useState([])          // แผนกที่เพิ่มเองผ่านหน้า Custom Positions (ไม่อยู่ใน orgStructure.js)
 
   // ─── Preset State ─────────────────────────────────────────────────────────
   // บันทึก/โหลด template fields ที่ใช้บ่อยใน localStorage (per user)
@@ -315,6 +319,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   const [jdFile, setJdFile] = useState(null)            // ไฟล์ JD ที่ user เลือก (File object)
   const [uploadProgress, setUploadProgress] = useState('') // ข้อความแสดงสถานะการ upload
   const [replacementCustomMode, setReplacementCustomMode] = useState(false) // true = พิมพ์ชื่อเอง
+  const [shiftCustomMode, setShiftCustomMode] = useState(false) // true = เลือก "อื่นๆ" ในกะการทำงาน → กรอกเวลาเอง
 
   // ─── JD Sidebar / Preview State ───────────────────────────────────────────
   const [existingJD, setExistingJD] = useState(null)    // ข้อมูล request ที่มี JD อยู่แล้วสำหรับตำแหน่งเดียวกัน
@@ -329,8 +334,12 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   // เรียกครั้งเดียวตอน mount พร้อม auto-fill department จาก email ของ user
   // fetchSheetsData() ดึงข้อมูลจาก Google Apps Script endpoint
   useEffect(() => {
-    fetchSheetsData()
-      .then(({ managers, positions: pos, employees: emp }) => {
+    Promise.all([
+      fetchSheetsData(),
+      getDoc(doc(db, 'settings', 'deptManagers')),
+      getDoc(doc(db, 'settings', 'divisionManagers')),
+    ])
+      .then(([{ managers, positions: pos, employees: emp }, deptManagersSnap, divisionManagersSnap]) => {
         // อัพเดต positions map (department → string[]) จาก Sheets
         if (pos && typeof pos === 'object') {
           setPositionsByDept(pos)
@@ -339,12 +348,27 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
         // อัพเดต employees map สำหรับ Replacement dropdown
         if (emp) setEmployees(emp)
 
-        // ค้นหาแผนกของ user จาก managers list แล้ว auto-fill
-        const dept = getDepartmentByEmail(managers, user.email)
+        // grantedKeys รองรับทั้งค่าเก่า (อีเมลเดี่ยว) และใหม่ (array — 1 แผนกหลาย Manager)
+        // แผนกที่ Admin grant ให้ user คนนี้โดยตรง (settings/deptManagers ที่หน้า Users)
+        const deptManagersMap = deptManagersSnap.exists() ? deptManagersSnap.data() : {}
+        const granted = grantedKeys(deptManagersMap, user.email)
+        setGrantedDepts(granted)
+
+        // Division ที่ Admin grant ทั้งสายให้ user คนนี้ (Head of Division — settings/divisionManagers)
+        const divisionManagersMap = divisionManagersSnap.exists() ? divisionManagersSnap.data() : {}
+        const grantedDivs = grantedKeys(divisionManagersMap, user.email)
+        setGrantedDivisions(grantedDivs)
+
+        // Auto-fill priority: แผนกที่ grant ตรงๆ ก่อน → ถ้าไม่มีแต่มี division grant ให้เติมแค่ division
+        // (ปล่อยแผนกว่างไว้ให้เลือกเอง เพราะ Head of Division ดูแลหลายแผนก) → สุดท้าย fallback ไป Sheets
+        const dept = granted[0] || getDepartmentByEmail(managers, user.email)
         if (dept) {
           const cfg = getTrackConfigByDepartment(dept)
           const div = getDivisionByDepartment(dept)   // หา division จาก department
           setForm((prev) => ({ ...prev, department: dept, division: div, orgTrack: cfg.defaultTrack }))
+          setDeptAutoFilled(true)
+        } else if (grantedDivs.length > 0) {
+          setForm((prev) => ({ ...prev, division: grantedDivs[0] }))
           setDeptAutoFilled(true)
         }
       })
@@ -377,6 +401,31 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
     loadCustomPositions()
     return () => { cancelled = true } // cleanup: ยกเลิกถ้า department เปลี่ยนก่อน
   }, [form.department])
+
+  // ─── Effect: โหลดแผนกที่เพิ่มเองผ่านหน้า Custom Positions ─────────────────
+  // แผนกใหม่ที่ไม่อยู่ใน orgStructure.js (เพิ่มผ่าน /custom-positions) ต้องโผล่ใน dropdown แผนกด้วย
+  // re-run ทุกครั้งที่ division เปลี่ยน
+  useEffect(() => {
+    if (!form.division) {
+      setCustomDepts([])
+      return
+    }
+
+    let cancelled = false
+    async function loadCustomDepts() {
+      try {
+        const q = query(collection(db, 'custom_positions'), where('division', '==', form.division))
+        const snap = await getDocs(q)
+        if (cancelled) return
+        setCustomDepts([...new Set(snap.docs.map((d) => d.data().department).filter(Boolean))])
+      } catch (e) {
+        console.error('Error loading custom departments:', e)
+      }
+    }
+
+    loadCustomDepts()
+    return () => { cancelled = true }
+  }, [form.division])
 
   // ─── Effect: ค้นหา Existing JD สำหรับ Sidebar ─────────────────────────────
   // เมื่อ position + department เปลี่ยน → ค้นหา request ที่มี jdFilePath
@@ -648,6 +697,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       setForm((prev) => ({ ...INITIAL_FORM, division: prev.division, department: prev.department, section: prev.section, orgTrack: prev.orgTrack }))
       setJdFile(null)        // ล้างไฟล์ JD ที่แนบมา
       setPreviewUrl(null)    // ปิด JD preview sidebar
+      setShiftCustomMode(false) // กลับไปโหมดเลือกกะจาก dropdown
       setTimeout(() => setSuccess(false), 4000) // ซ่อน success banner หลัง 4 วินาที
     } catch (err) {
       console.error('Submit error:', err)
@@ -658,6 +708,14 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   }
 
   // ─── Derived Values ────────────────────────────────────────────────────────
+  // deptRestricted: true ถ้า Admin grant แผนกหรือ division ให้ manager คนนี้
+  // (settings/deptManagers = แผนกเดี่ยว, settings/divisionManagers = ทั้งสาย — Head of Division)
+  // → จำกัด Division/แผนกที่เลือกได้เฉพาะที่ grant ไว้เท่านั้น (ไม่ใช้กับ admin ที่ยื่นแทนได้ทุกแผนก)
+  const deptRestricted = role === 'manager' && (grantedDepts.length > 0 || grantedDivisions.length > 0)
+  const visibleDivisions = deptRestricted
+    ? [...new Set([...grantedDepts.map(getDivisionByDepartment), ...grantedDivisions])]
+    : DIVISIONS
+
   // trackConfig: config ของ Location track ตาม department ที่เลือก
   const trackConfig = getTrackConfigByDepartment(form.department)
 
@@ -686,42 +744,42 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
     <div className="max-w-7xl mx-auto flex gap-5 items-start">
       {/* ── Main Form Card ── */}
       <div className="flex-1 min-w-0">
-      <div ref={feedbackTopRef} className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-200 dark:border-slate-800 p-8 shadow-xl shadow-emerald-900/5 transition-all">
+      <div ref={feedbackTopRef} className="rounded-3xl border border-neutral-100 bg-white p-8">
         {/* ── Header row: Title + Preset button ── */}
-        <div className="flex items-start justify-between gap-3 mb-6">
-          <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 italic tracking-tight">ยื่นคำขออัตรากำลัง (HC Request)</h2>
+        <div className="mb-6 flex items-start justify-between gap-3">
+          <h2 className="text-xl font-bold text-neutral-900">ยื่นคำขออัตรากำลัง (HC Request)</h2>
           <button
             type="button"
             onClick={() => { setShowSaveInput(v => !v); setPresetName('') }}
-            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold border border-emerald-500/40 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-all uppercase tracking-wide"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg bg-dark-green-50 px-3 py-1.5 text-xs font-bold text-dark-green-800 transition-colors hover:bg-dark-green-100"
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-            Preset {presets.length > 0 && <span className="bg-emerald-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px]">{presets.length}</span>}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Preset {presets.length > 0 && <span className="flex h-4 w-4 items-center justify-center rounded-full bg-dark-green-600 text-[9px] text-neutral-50">{presets.length}</span>}
           </button>
         </div>
 
         {/* ── Preset Panel ── */}
         {(showSaveInput || presets.length > 0) && (
-          <div className="mb-6 p-4 bg-gray-50 dark:bg-slate-800/60 border border-gray-200 dark:border-slate-700 rounded-2xl flex flex-col gap-3">
+          <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
 
             {/* รายการ Presets ที่บันทึกไว้ */}
             {presets.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {presets.map(p => (
-                  <div key={p.id} className="flex items-center gap-0 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm">
+                  <div key={p.id} className="flex items-center overflow-hidden rounded-lg border border-neutral-100 bg-white">
                     <button
                       type="button"
                       onClick={() => loadPreset(p)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-gray-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-400 transition-all"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-neutral-700 transition-colors hover:bg-dark-green-50 hover:text-dark-green-800"
                     >
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
                       {p.name}
-                      {p.fields.position && <span className="text-gray-400 dark:text-slate-500 font-normal">· {p.fields.position.length > 18 ? p.fields.position.slice(0, 18) + '…' : p.fields.position}</span>}
+                      {p.fields.position && <span className="font-normal text-neutral-400">· {p.fields.position.length > 18 ? p.fields.position.slice(0, 18) + '…' : p.fields.position}</span>}
                     </button>
                     <button
                       type="button"
                       onClick={() => deletePreset(p.id)}
-                      className="px-2 py-1.5 text-gray-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all text-xs"
+                      className="px-2 py-1.5 text-xs text-neutral-300 transition-colors hover:bg-red-50 hover:text-red-600"
                       title="ลบ Preset"
                     >✕</button>
                   </div>
@@ -739,36 +797,36 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); savePreset() } if (e.key === 'Escape') setShowSaveInput(false) }}
                   placeholder="ชื่อ Preset เช่น พนักงานประจำ-Sales, Daily-DC..."
                   autoFocus
-                  className="flex-1 px-3 py-1.5 text-sm border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                  className="h-9 flex-1 rounded-lg border border-neutral-100 bg-white px-3 text-sm text-neutral-900 focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
                 />
                 <button type="button" onClick={savePreset}
-                  className="px-3 py-1.5 text-[11px] font-bold bg-[#008065] text-white rounded-xl hover:bg-emerald-700 transition-all uppercase tracking-wide disabled:opacity-40"
+                  className="rounded-lg bg-dark-green-600 px-3 py-1.5 text-xs font-bold text-neutral-50 transition-colors hover:bg-dark-green-700 disabled:bg-neutral-50 disabled:text-neutral-300"
                   disabled={!presetName.trim()}
                 >บันทึก</button>
                 <button type="button" onClick={() => setShowSaveInput(false)}
-                  className="px-3 py-1.5 text-[11px] font-bold border border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-400 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700 transition-all uppercase tracking-wide"
+                  className="rounded-lg bg-neutral-50 px-3 py-1.5 text-xs font-bold text-neutral-700 transition-colors hover:bg-neutral-100"
                 >ยกเลิก</button>
               </div>
             )}
 
             {/* Feedback message */}
             {presetMsg && (
-              <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">{presetMsg}</p>
+              <p className="text-xs font-bold text-dark-green-700">{presetMsg}</p>
             )}
           </div>
         )}
 
         {/* ── Success Banner: แสดง 4 วินาทีหลัง submit สำเร็จ ── */}
         {success && (
-          <div className="flex items-center gap-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-2xl px-5 py-4 mb-8 shadow-sm transition-all animate-in fade-in slide-in-from-top-4">
-            <CheckCircle size={20} />
+          <div className="mb-8 flex items-center gap-3 rounded-lg bg-green-fresh-50 px-5 py-4 text-green-fresh-900">
+            <CheckCircle size={20} strokeWidth={1} absoluteStrokeWidth />
             <p className="font-bold">ยื่นคำขอสำเร็จแล้ว! ข้อมูลถูกส่งเข้าระบบเรียบร้อย</p>
           </div>
         )}
 
         {/* ── Error Banner: แสดงเมื่อ submit ล้มเหลว ── */}
         {error && (
-          <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 rounded-2xl px-5 py-4 mb-8 shadow-sm font-bold">
+          <div className="mb-8 rounded-lg bg-red-50 px-5 py-4 font-bold text-red-700">
             {error}
           </div>
         )}
@@ -780,7 +838,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
            * 'New HC': เพิ่มอัตราใหม่ → แสดงฟิลด์ headcount (จำนวน)
            */}
           <div>
-            <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest ml-1 mb-2">ประเภทคำขอ *</label>
+            <label className="block text-[13px] font-bold text-neutral-900 ml-1 mb-1">ประเภทคำขอ *</label>
             <div className="flex gap-6">
               {['Replacement', 'New HC'].map((type) => (
                 <label key={type} className="flex items-center gap-2.5 cursor-pointer group">
@@ -790,9 +848,9 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                     value={type}
                     checked={form.requestType === type}
                     onChange={handleChange}
-                    className="w-4 h-4 accent-emerald-600 dark:accent-emerald-500 cursor-pointer"
+                    className="w-4 h-4 accent-dark-green-600 cursor-pointer"
                   />
-                  <span className={`text-sm font-bold transition-colors ${form.requestType === type ? 'text-gray-900 dark:text-white' : 'text-gray-400 group-hover:text-gray-600 dark:group-hover:text-slate-300'}`}>{type}</span>
+                  <span className={`text-sm font-bold transition-colors ${form.requestType === type ? 'text-neutral-900' : 'text-neutral-400 group-hover:text-neutral-600'}`}>{type}</span>
                 </label>
               ))}
             </div>
@@ -800,7 +858,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
 
           {/* ── Emp. Type ──────────────────────────────────────────────────── */}
           <div>
-            <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest ml-1 mb-2">Emp. Type *</label>
+            <label className="block text-[13px] font-bold text-neutral-900 ml-1 mb-1">Emp. Type *</label>
             <div className="flex gap-5">
               {['Monthly', 'Daily', 'Contract', 'Intern'].map((t) => (
                 <label key={t} className="flex items-center gap-2 cursor-pointer group">
@@ -810,9 +868,9 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                     value={t}
                     checked={form.employmentType === t}
                     onChange={handleChange}
-                    className="w-4 h-4 accent-emerald-600 dark:accent-emerald-500 cursor-pointer"
+                    className="w-4 h-4 accent-dark-green-600 cursor-pointer"
                   />
-                  <span className={`text-sm font-bold transition-colors ${form.employmentType === t ? 'text-gray-900 dark:text-white' : 'text-gray-400 group-hover:text-gray-600 dark:group-hover:text-slate-300'}`}>{t}</span>
+                  <span className={`text-sm font-bold transition-colors ${form.employmentType === t ? 'text-neutral-900' : 'text-neutral-400 group-hover:text-neutral-600'}`}>{t}</span>
                 </label>
               ))}
             </div>
@@ -825,16 +883,16 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Division: ระดับสูงสุดขององค์กร */}
             <div>
-              <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest ml-1 mb-2">Division *</label>
+              <label className="block text-[13px] font-bold text-neutral-900 ml-1 mb-1">Division *</label>
               <select
                 name="division"
                 value={form.division}
                 onChange={handleChange}
                 required
-                className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-bold"
+                className="w-full h-10 rounded-lg border border-neutral-100 bg-white px-4 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
               >
                 <option value="">เลือก Division</option>
-                {DIVISIONS.map((d) => (
+                {visibleDivisions.map((d) => (
                   <option key={d} value={d}>{d}</option>
                 ))}
               </select>
@@ -842,11 +900,13 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
 
             {/* Department: cascade จาก Division, disabled ถ้ายังไม่ได้เลือก Division */}
             <div>
-              <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest ml-1 mb-2">
+              <label className="block text-[13px] font-bold text-neutral-900 ml-1 mb-1">
                 แผนก *
                 {/* Badge "Auto Filled" แสดงเฉพาะ non-admin ที่มีการ auto-fill จาก email */}
                 {deptAutoFilled && role !== 'admin' && (
-                  <span className="ml-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 px-2 py-0.5 rounded-full text-[9px] uppercase font-black tracking-tighter">Auto Filled</span>
+                  <span className="ml-2 rounded-full bg-dark-green-50 px-2 py-0.5 text-[10px] font-bold text-dark-green-800">
+                    {deptRestricted ? 'Admin กำหนด' : 'Auto filled'}
+                  </span>
                 )}
               </label>
               <select
@@ -855,12 +915,14 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                 onChange={handleChange}
                 required
                 disabled={!form.division}
-                className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full h-10 rounded-lg border border-neutral-100 bg-white px-4 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="">{form.division ? 'เลือกแผนก' : 'เลือก Division ก่อน'}</option>
-                {getDepartments(form.division).map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
+                {[...new Set([...getDepartments(form.division), ...customDepts])]
+                  .filter((d) => !deptRestricted || grantedDepts.includes(d) || grantedDivisions.includes(getDivisionByDepartment(d)))
+                  .map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
               </select>
             </div>
           </div>
@@ -870,12 +932,12 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Section: cascade จาก Department */}
               <div>
-                <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest ml-1 mb-2">Section</label>
+                <label className="block text-[13px] font-bold text-neutral-900 ml-1 mb-1">Section</label>
                 <select
                   name="section"
                   value={form.section}
                   onChange={handleChange}
-                  className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-bold"
+                  className="w-full h-10 rounded-lg border border-neutral-100 bg-white px-4 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
                 >
                   <option value="">เลือก Section (ถ้ามี)</option>
                   {getSections(form.division, form.department).map((s) => (
@@ -887,12 +949,12 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
               {/* Business Unit: cascade จาก Section, แสดงเฉพาะเมื่อมี BU สำหรับ section นั้น */}
               {form.section && getBusinessUnits(form.division, form.department, form.section).length > 0 && (
                 <div>
-                  <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest ml-1 mb-2">Business Unit</label>
+                  <label className="block text-[13px] font-bold text-neutral-900 ml-1 mb-1">Business Unit</label>
                   <select
                     name="businessUnit"
                     value={form.businessUnit}
                     onChange={handleChange}
-                    className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-bold"
+                    className="w-full h-10 rounded-lg border border-neutral-100 bg-white px-4 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
                   >
                     <option value="">เลือก Business Unit (ถ้ามี)</option>
                     {getBusinessUnits(form.division, form.department, form.section).map((b) => (
@@ -913,7 +975,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {/* ตำแหน่ง: ใช้ PositionCombobox เพื่อรองรับ free-text custom position */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest ml-1">ตำแหน่งที่ต้องการ *</label>
+              <label className="text-[13px] font-bold text-neutral-900 ml-1">ตำแหน่งที่ต้องการ *</label>
               <PositionCombobox
                 value={form.position}
                 onChange={(val) => setForm((prev) => ({ ...prev, position: val }))}
@@ -921,20 +983,20 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                 required
               />
               {form.department && positionOptions.length === 0 && (
-                <p className="text-[10px] font-bold text-gray-400 ml-1 uppercase italic">กำลังโหลด...</p>
+                <p className="ml-1 text-xs text-neutral-400">กำลังโหลด...</p>
               )}
             </div>
 
             {/* Location (orgTrack): locked = readonly input, ไม่ locked = dropdown */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest ml-1">Location *</label>
+              <label className="text-[13px] font-bold text-neutral-900 ml-1">Location *</label>
               {trackConfig.locked ? (
                 // แสดงเป็น readonly input เมื่อ track ถูกกำหนดอัตโนมัติจาก department
                 <input
                   type="text"
                   value={trackConfig.defaultTrack || '—'}
                   readOnly
-                  className="w-full border border-gray-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm bg-gray-50/50 dark:bg-slate-950/20 text-gray-500 dark:text-slate-400 cursor-not-allowed font-bold"
+                  className="h-10 w-full cursor-not-allowed rounded-lg border border-neutral-100 bg-neutral-50 px-4 text-sm text-neutral-500"
                 />
               ) : (
                 // แสดง dropdown เฉพาะแผนก hybrid (ยังไม่มีในปัจจุบัน)
@@ -943,7 +1005,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                   value={form.orgTrack}
                   onChange={handleChange}
                   required
-                  className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-bold"
+                  className="w-full h-10 rounded-lg border border-neutral-100 bg-white px-4 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
                 >
                   <option value="">เลือก Location</option>
                   {trackConfig.options.map((opt) => (
@@ -955,14 +1017,14 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
 
             {/* Job Grade: disabled จนกว่าจะเลือก orgTrack เพราะ options ต่างกัน */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest ml-1">Job Grade *</label>
+              <label className="text-[13px] font-bold text-neutral-900 ml-1">Job Grade *</label>
               <select
                 name="jg"
                 value={form.jg}
                 onChange={handleChange}
                 required
                 disabled={!form.orgTrack}
-                className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full h-10 rounded-lg border border-neutral-100 bg-white px-4 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="">{form.orgTrack ? 'เลือก JG' : 'เลือก Location ก่อน'}</option>
                 {jgLevels.map(({ value, label }) => (
@@ -977,7 +1039,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
            */}
           {form.requestType === 'New HC' ? (
             <div>
-              <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest ml-1 mb-2">จำนวนที่ต้องการ (HC) *</label>
+              <label className="block text-[13px] font-bold text-neutral-900 ml-1 mb-1">จำนวนที่ต้องการ (HC) *</label>
               <input
                 type="number"
                 name="headcount"
@@ -985,7 +1047,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                 onChange={handleChange}
                 min={1}
                 required
-                className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-bold tabular-nums"
+                className="w-full h-10 rounded-lg border border-neutral-100 bg-white px-4 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none tabular-nums"
               />
             </div>
           ) : null}
@@ -997,7 +1059,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
           {form.requestType === 'Replacement' && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
-                <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest ml-1 mb-2">พนักงานที่ต้องการทดแทน *</label>
+                <label className="block text-[13px] font-bold text-neutral-900 ml-1 mb-1">พนักงานที่ต้องการทดแทน *</label>
                 {!replacementCustomMode ? (
                   <>
                     <select
@@ -1012,7 +1074,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                         }
                       }}
                       required
-                      className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-bold"
+                      className="w-full h-10 rounded-lg border border-neutral-100 bg-white px-4 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
                     >
                       <option value="">เลือกพนักงาน</option>
                       {getEmployeesByDepartment(employees, form.department, form.section).map((name) => (
@@ -1021,7 +1083,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                       <option value="__custom__">— พิมพ์ชื่อเอง (พนักงานที่ลาออกแล้ว) —</option>
                     </select>
                     {form.department && getEmployeesByDepartment(employees, form.department, form.section).length === 0 && (
-                      <p className="text-[10px] font-bold text-amber-500 ml-1 mt-1.5 uppercase italic">ไม่พบพนักงานใน Maindata</p>
+                      <p className="ml-1 mt-1.5 text-xs text-yellow-700">ไม่พบพนักงานใน Maindata</p>
                     )}
                   </>
                 ) : (
@@ -1034,12 +1096,12 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                       required
                       autoFocus
                       placeholder="พิมพ์ชื่อพนักงาน..."
-                      className="flex-1 border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-bold"
+                      className="h-10 flex-1 rounded-lg border border-neutral-100 bg-white px-4 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
                     />
                     <button
                       type="button"
                       onClick={() => { setReplacementCustomMode(false); setForm(p => ({ ...p, replacementFor: '' })) }}
-                      className="px-3 py-2 text-xs font-bold text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 border border-gray-200 dark:border-slate-700 rounded-xl transition-colors"
+                      className="rounded-lg border border-neutral-100 px-3 text-xs font-bold text-neutral-500 transition-colors hover:text-neutral-700"
                     >
                       ← รายการ
                     </button>
@@ -1048,14 +1110,14 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
               </div>
               <div>
                 {/* ใช้ชื่อ field เดียวกัน (targetStartDate) แต่ label แตกต่างตาม requestType */}
-                <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest ml-1 mb-2">วันลาออก (Last Working Day) *</label>
+                <label className="block text-[13px] font-bold text-neutral-900 ml-1 mb-1">วันลาออก (Last Working Day) *</label>
                 <input
                   type="date"
                   name="targetStartDate"
                   value={form.targetStartDate}
                   onChange={handleChange}
                   required
-                  className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-bold"
+                  className="w-full h-10 rounded-lg border border-neutral-100 bg-white px-4 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
                 />
               </div>
             </div>
@@ -1064,13 +1126,13 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
           {/* ── วันทำงาน + กะ ─────────────────────────────────────────────── */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest ml-1 mb-2">วันทำงานต่อสัปดาห์ *</label>
+              <label className="block text-[13px] font-bold text-neutral-900 ml-1 mb-1">วันทำงานต่อสัปดาห์ *</label>
               <select
                 name="workDaysPerWeek"
                 value={form.workDaysPerWeek}
                 onChange={handleChange}
                 required
-                className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-bold"
+                className="w-full h-10 rounded-lg border border-neutral-100 bg-white px-4 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
               >
                 <option value="">เลือกจำนวนวัน</option>
                 {[3, 4, 5, 6].map((d) => (
@@ -1079,26 +1141,47 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
               </select>
             </div>
             <div>
-              <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest ml-1 mb-2">กะการทำงาน *</label>
+              <label className="block text-[13px] font-bold text-neutral-900 ml-1 mb-1">กะการทำงาน *</label>
+              {/* เลือกช่วงเวลามาตรฐาน หรือ "อื่นๆ" เพื่อกรอกเวลาเอง (pattern เดียวกับ replacementCustomMode) */}
               <select
                 name="shift"
-                value={form.shift}
-                onChange={handleChange}
-                required
-                className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-bold"
+                value={shiftCustomMode ? 'อื่นๆ' : form.shift}
+                onChange={(e) => {
+                  if (e.target.value === 'อื่นๆ') {
+                    setShiftCustomMode(true)
+                    setForm((prev) => ({ ...prev, shift: '' }))   // เคลียร์ให้กรอกเองใน input ด้านล่าง
+                  } else {
+                    setShiftCustomMode(false)
+                    handleChange(e)
+                  }
+                }}
+                required={!shiftCustomMode}
+                className="w-full h-10 rounded-lg border border-neutral-100 bg-white px-4 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
               >
                 <option value="">เลือกกะ</option>
-                <option value="ปกติ">ปกติ</option>
-                <option value="เช้า">เช้า</option>
-                <option value="บ่าย">บ่าย</option>
-                <option value="ดึก">ดึก</option>
+                <option value="07:00-16:00">07:00-16:00</option>
+                <option value="08:00-17:00">08:00-17:00</option>
+                <option value="09:00-18:00">09:00-18:00</option>
+                <option value="10:00-19:00">10:00-19:00</option>
+                <option value="อื่นๆ">อื่นๆ (กรอกเอง)</option>
               </select>
+              {shiftCustomMode && (
+                <input
+                  type="text"
+                  name="shift"
+                  value={form.shift}
+                  onChange={handleChange}
+                  required
+                  placeholder="ระบุช่วงเวลา เช่น 06:00-15:00"
+                  className="mt-2 w-full h-10 rounded-lg border border-neutral-100 bg-white px-4 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
+                />
+              )}
             </div>
           </div>
 
           {/* ── เหตุผลในการขอ (Required) ──────────────────────────────────── */}
           <div>
-            <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest ml-1 mb-2">เหตุผลในการขอ *</label>
+            <label className="block text-[13px] font-bold text-neutral-900 ml-1 mb-1">เหตุผลในการขอ *</label>
             <textarea
               name="reason"
               value={form.reason}
@@ -1106,20 +1189,20 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
               required
               rows={3}
               placeholder="อธิบายเหตุผลและความจำเป็นในการขออัตรากำลัง..."
-              className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-medium resize-none shadow-sm"
+              className="w-full rounded-lg border border-neutral-100 bg-white px-4 py-3 text-sm text-neutral-900 transition-colors resize-none focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
             />
           </div>
 
           {/* ── คุณสมบัติที่ต้องการ (Optional) ───────────────────────────── */}
           <div>
-            <label className="block text-sm uppercase font-black text-gray-400 dark:text-slate-500 tracking-wider ml-1 mb-2">Requirement (Optional)</label>
+            <label className="block text-[13px] font-bold text-neutral-900 ml-1 mb-1">Requirement (optional)</label>
             <textarea
               name="requirements"
               value={form.requirements}
               onChange={handleChange}
               rows={4}
               placeholder={`เช่น\n- ประสบการณ์ 3+ ปี ในสายงานตรง\n- ทักษะการสื่อสารดีเยี่ยม\n- ตรงต่อเวลาและรับผิดชอบสูง`}
-              className="w-full border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 bg-white dark:bg-slate-900 dark:text-gray-100 transition-all font-medium resize-none shadow-sm"
+              className="w-full rounded-lg border border-neutral-100 bg-white px-4 py-3 text-sm text-neutral-900 transition-colors resize-none focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
             />
           </div>
 
@@ -1129,37 +1212,37 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
            * หลัง upload สำเร็จ: อัพเดต jdFileUrl + jdFilePath + jdFileName ลง Firestore
            */}
           <div>
-            <label className="block text-[10px] uppercase font-black text-gray-500 dark:text-slate-500 tracking-widest ml-1 mb-2">
+            <label className="block text-[13px] font-bold text-neutral-900 ml-1 mb-1">
               แนบไฟล์ JD (Optional)
             </label>
             {jdFile ? (
               // แสดง preview ของไฟล์ที่เลือก พร้อมปุ่ม X เพื่อลบออก
-              <div className="flex items-center gap-3 border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/20 rounded-2xl px-4 py-3 shadow-md animate-in zoom-in-95">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-600 shrink-0">
-                  <FileText size={20} strokeWidth={3} />
+              <div className="flex items-center gap-3 rounded-2xl bg-dark-green-50 px-4 py-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-dark-green-100 text-dark-green-700">
+                  <FileText size={20} strokeWidth={1} absoluteStrokeWidth />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400 truncate">{jdFile.name}</p>
-                  <p className="text-[10px] font-black text-emerald-600/60 uppercase">{(jdFile.size / 1024).toFixed(0)} KB</p>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-dark-green-900">{jdFile.name}</p>
+                  <p className="text-xs text-dark-green-700">{(jdFile.size / 1024).toFixed(0)} KB</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setJdFile(null)}
-                  className="p-2 text-emerald-400 hover:text-red-500 transition-all hover:rotate-90"
+                  className="rounded-lg p-2 text-dark-green-600 transition-colors hover:bg-red-50 hover:text-red-600"
                 >
-                  <X size={18} strokeWidth={3} />
+                  <X size={18} strokeWidth={1} absoluteStrokeWidth />
                 </button>
               </div>
             ) : libraryJD ? (
               // มี JD ใน Library สำหรับตำแหน่งนี้ — แสดง card พร้อมตัวเลือกอัพโหลดใหม่
-              <div className="border-2 border-dashed border-emerald-300 dark:border-emerald-500/30 rounded-2xl overflow-hidden">
-                <div className="flex items-center gap-3 px-5 py-4 bg-emerald-50 dark:bg-emerald-500/10">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-600 shrink-0">
-                    <FileText size={20} strokeWidth={2.5} />
+              <div className="overflow-hidden rounded-2xl border border-dark-green-100">
+                <div className="flex items-center gap-3 bg-dark-green-50 px-5 py-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-dark-green-100 text-dark-green-700">
+                    <FileText size={20} strokeWidth={1} absoluteStrokeWidth />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-black text-emerald-700 dark:text-emerald-400">มี JD สำหรับตำแหน่งนี้</p>
-                    <p className="text-[10px] font-bold text-emerald-600/70 dark:text-emerald-500/70 truncate">{libraryJD.fileName || 'JD Library'}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-dark-green-900">มี JD สำหรับตำแหน่งนี้</p>
+                    <p className="truncate text-xs text-dark-green-700">{libraryJD.fileName || 'JD Library'}</p>
                   </div>
                   <button
                     type="button"
@@ -1167,16 +1250,16 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                       const url = await getJDSignedUrl(libraryJD.filePath)
                       if (url) window.open(url, '_blank')
                     }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-colors shrink-0"
+                    className="flex shrink-0 items-center gap-1.5 rounded-lg bg-dark-green-600 px-3 py-1.5 text-xs font-bold text-neutral-50 transition-colors hover:bg-dark-green-700"
                   >
-                    <ExternalLink size={11} />
+                    <ExternalLink size={13} strokeWidth={1} absoluteStrokeWidth />
                     ดู JD
                   </button>
                 </div>
-                <label className="flex items-center justify-center gap-2 px-5 py-3 bg-white dark:bg-slate-900 cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-500/5 transition-colors group border-t border-emerald-100 dark:border-emerald-500/20">
-                  <Paperclip size={13} className="text-gray-400 group-hover:text-emerald-500 transition-colors" />
-                  <p className="text-[11px] font-bold text-gray-400 dark:text-slate-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                    อัพโหลดใหม่เพื่อ Update JD
+                <label className="group flex cursor-pointer items-center justify-center gap-2 border-t border-dark-green-100 bg-white px-5 py-3 transition-colors hover:bg-dark-green-50">
+                  <Paperclip size={14} strokeWidth={1} absoluteStrokeWidth className="text-neutral-400 transition-colors group-hover:text-dark-green-600" />
+                  <p className="text-xs font-bold text-neutral-400 transition-colors group-hover:text-dark-green-700">
+                    อัพโหลดใหม่เพื่อ update JD
                   </p>
                   <input
                     type="file"
@@ -1188,13 +1271,13 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
               </div>
             ) : (
               // Drop zone สำหรับเลือกไฟล์ใหม่
-              <label className="flex flex-col items-center gap-2 border-2 border-dashed border-gray-200 dark:border-slate-800 rounded-2xl px-8 py-8 cursor-pointer hover:border-emerald-500 dark:hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/5 transition-all group shadow-inner">
-                <div className="w-12 h-12 rounded-full bg-gray-50 dark:bg-slate-800 flex items-center justify-center text-gray-400 group-hover:bg-emerald-500 group-hover:text-white transition-all shadow-md">
-                  <Paperclip size={20} strokeWidth={3} />
+              <label className="group flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-neutral-100 px-8 py-8 transition-colors hover:border-dark-green-600 hover:bg-dark-green-50">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-50 text-neutral-400 transition-colors group-hover:bg-dark-green-600 group-hover:text-neutral-50">
+                  <Paperclip size={20} strokeWidth={1} absoluteStrokeWidth />
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-bold text-gray-600 dark:text-slate-400">คลิกเพื่ออัพโหลดไฟล์ JD</p>
-                  <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest mt-1">PDF, Word, Images (Up to 10MB)</p>
+                  <p className="text-sm font-bold text-neutral-700">คลิกเพื่ออัพโหลดไฟล์ JD</p>
+                  <p className="mt-1 text-xs text-neutral-400">PDF, Word, images (up to 10MB)</p>
                 </div>
                 <input
                   type="file"
@@ -1206,8 +1289,8 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
             )}
             {/* แสดง progress text ขณะกำลัง upload ไปยัง Supabase */}
             {uploadProgress && (
-              <div className="flex items-center gap-2 mt-3 px-3 py-1.5 bg-emerald-500/10 text-emerald-600 rounded-lg text-xs font-black uppercase tracking-tighter animate-pulse">
-                <Loader2 size={12} className="animate-spin" /> {uploadProgress}
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-dark-green-50 px-3 py-1.5 text-xs font-bold text-dark-green-700">
+                <Loader2 size={14} strokeWidth={1} absoluteStrokeWidth className="animate-spin" /> {uploadProgress}
               </div>
             )}
           </div>
@@ -1216,16 +1299,16 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
            * แสดงชื่อและ email ของผู้ยื่น (ดึงจาก Firebase Auth user object)
            * ข้อมูลนี้จะถูกบันทึกเป็น requesterName + requesterEmail ใน Firestore
            */}
-          <div className="bg-gray-50 dark:bg-slate-950/50 rounded-2xl border border-gray-100 dark:border-slate-800/50 px-5 py-4 flex items-center gap-4 transition-colors">
+          <div className="flex items-center gap-4 rounded-2xl border border-neutral-100 bg-neutral-50 px-5 py-4">
             {user.photoURL ? (
-              <img src={user.photoURL} alt="" className="w-10 h-10 rounded-full ring-2 ring-emerald-500/20 shadow-md" referrerPolicy="no-referrer" />
+              <img src={user.photoURL} alt="" className="h-10 w-10 rounded-full" style={{ border: '1px solid rgba(0,128,101,0.2)' }} referrerPolicy="no-referrer" />
             ) : (
               // Fallback avatar ใช้ตัวอักษรแรกของชื่อ
-              <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center text-white text-lg font-black shadow-md">{user.displayName?.[0]}</div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-dark-green-600 text-lg font-bold text-neutral-50">{user.displayName?.[0]}</div>
             )}
             <div className="leading-tight">
-              <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest">Requester</p>
-              <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{user.displayName} <span className="text-xs font-normal text-gray-400 mx-1">|</span> {user.email}</p>
+              <p className="text-xs font-bold text-neutral-400">Requester</p>
+              <p className="text-sm font-bold text-neutral-700">{user.displayName} <span className="mx-1 text-xs font-normal text-neutral-400">|</span> {user.email}</p>
             </div>
           </div>
 
@@ -1233,9 +1316,9 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
           <button
             type="submit"
             disabled={loading}
-            className="flex items-center justify-center gap-3 bg-[#008065] text-white text-base font-black py-4 rounded-2xl hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-emerald-500/20 active:scale-[0.98]"
+            className="flex items-center justify-center gap-3 rounded-2xl bg-dark-green-600 py-4 text-base font-bold text-neutral-50 transition-colors hover:bg-dark-green-700 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-300"
           >
-            {loading ? <Loader2 size={18} className="animate-spin" strokeWidth={3} /> : <FileText size={18} strokeWidth={3} />}
+            {loading ? <Loader2 size={18} strokeWidth={1} absoluteStrokeWidth className="animate-spin" /> : <FileText size={18} strokeWidth={1} absoluteStrokeWidth />}
             {loading ? 'กำลังส่งข้อมูลเข้าระบบ...' : 'ยื่นคำขออัตรากำลัง'}
           </button>
         </form>
@@ -1252,27 +1335,27 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
        */}
       {existingJD && (
         <div className="hidden lg:flex w-[460px] shrink-0 flex-col sticky top-6 animate-in fade-in slide-in-from-right-4 duration-300">
-          <div className="rounded-3xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/20 overflow-hidden shadow-sm flex flex-col">
+          <div className="flex flex-col overflow-hidden rounded-3xl border border-dark-green-100 bg-dark-green-50">
 
             {/* Header row: ชื่อไฟล์ + ปุ่มเปิดในแท็บใหม่ + ปุ่ม toggle preview */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-emerald-200/60 dark:border-emerald-800/60">
+            <div className="flex items-center justify-between border-b border-dark-green-100 px-4 py-3">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
-                  <FileText size={14} />
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-dark-green-100 text-dark-green-700">
+                  <FileText size={14} strokeWidth={1} absoluteStrokeWidth />
                 </div>
                 <div>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-500">JD ที่มีในระบบ</p>
-                  <p className="text-xs font-bold text-gray-700 dark:text-gray-200 truncate max-w-[280px]">{existingJD.jdFileName || 'ไฟล์ JD'}</p>
+                  <p className="text-[11px] font-bold text-dark-green-700">JD ที่มีในระบบ</p>
+                  <p className="max-w-[280px] truncate text-xs font-bold text-neutral-700">{existingJD.jdFileName || 'ไฟล์ JD'}</p>
                 </div>
               </div>
               <div className="flex items-center gap-1">
                 {/* ปุ่มเปิดในแท็บใหม่: แสดงเฉพาะเมื่อมี previewUrl แล้ว */}
                 {previewUrl && (
                   <a href={previewUrl} target="_blank" rel="noreferrer"
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+                    className="rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-dark-green-100 hover:text-dark-green-700"
                     title="เปิดในแท็บใหม่"
                   >
-                    <ExternalLink size={13} />
+                    <ExternalLink size={14} strokeWidth={1} absoluteStrokeWidth />
                   </a>
                 )}
                 {/* ปุ่ม toggle: ถ้า previewUrl มีอยู่ → ซ่อน (X), ถ้าไม่มี → เปิด (FileText) */}
@@ -1280,10 +1363,10 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                   type="button"
                   onClick={previewUrl ? () => setPreviewUrl(null) : handleOpenExistingJD}
                   disabled={openingJD}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors disabled:opacity-50"
+                  className="rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-dark-green-100 hover:text-dark-green-700 disabled:opacity-50"
                   title={previewUrl ? 'ซ่อน PDF' : 'ดู PDF'}
                 >
-                  {openingJD ? <Loader2 size={13} className="animate-spin" /> : previewUrl ? <X size={13} /> : <FileText size={13} />}
+                  {openingJD ? <Loader2 size={14} strokeWidth={1} absoluteStrokeWidth className="animate-spin" /> : previewUrl ? <X size={14} strokeWidth={1} absoluteStrokeWidth /> : <FileText size={14} strokeWidth={1} absoluteStrokeWidth />}
                 </button>
               </div>
             </div>
@@ -1295,17 +1378,17 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
             {previewUrl ? (
               <iframe
                 src={previewUrl}
-                className="w-full border-0 bg-gray-100 dark:bg-slate-800"
+                className="w-full border-0 bg-neutral-100"
                 style={{ height: 'calc(100vh - 160px)', minHeight: '600px' }}
                 title="JD Preview"
               />
             ) : (
-              <div className="flex flex-col items-center justify-center gap-3 py-8 px-5">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center text-emerald-500">
-                  <FileText size={22} />
+              <div className="flex flex-col items-center justify-center gap-3 px-5 py-8">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-dark-green-100 text-dark-green-700">
+                  <FileText size={22} strokeWidth={1} absoluteStrokeWidth />
                 </div>
                 <div className="text-center">
-                  <p className="text-[11px] text-gray-400 dark:text-slate-500">
+                  <p className="text-xs text-neutral-500">
                     อัพโหลดเมื่อ {existingJD.createdAt?.toDate?.().toLocaleDateString('th-TH') || '—'}
                   </p>
                 </div>
@@ -1313,12 +1396,12 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                   type="button"
                   onClick={handleOpenExistingJD}
                   disabled={openingJD}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold rounded-2xl bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 text-[#008065] dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors disabled:opacity-60 shadow-sm"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dark-green-100 bg-white px-4 py-2.5 text-sm font-bold text-dark-green-700 transition-colors hover:bg-dark-green-50 disabled:opacity-60"
                 >
-                  {openingJD ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+                  {openingJD ? <Loader2 size={14} strokeWidth={1} absoluteStrokeWidth className="animate-spin" /> : <FileText size={14} strokeWidth={1} absoluteStrokeWidth />}
                   เปิดดูไฟล์ JD
                 </button>
-                <p className="text-[10px] text-emerald-700/40 dark:text-emerald-500/40 text-center">
+                <p className="text-center text-xs text-dark-green-700/60">
                   อัพโหลดใหม่ได้ในฟอร์มด้านซ้าย
                 </p>
               </div>

@@ -24,9 +24,11 @@
 import { useEffect, useState, useRef } from 'react'
 import { doc, onSnapshot, collection, setDoc, deleteDoc, getDoc, getDocs, query, limit, orderBy } from 'firebase/firestore'
 import { db } from '../services/firebase'
-import { UserPlus, Trash2, Building2, ChevronDown, ChevronUp, X } from 'lucide-react'
+import { UserPlus, Trash2, Building2, Network, ChevronDown, ChevronUp, X, Clock3 } from 'lucide-react'
 import Layout from '../components/Shared/Layout'
 import ConfirmModal from '../components/Shared/ConfirmModal'
+import { DIVISIONS } from '../data/orgStructure'
+import { grantEmails, grantedKeys } from '../utils/grants'
 
 // roles ที่อนุญาตให้กำหนดได้ในระบบ — ใช้ validate ทั้งตอน add และ update
 const VALID_ROLES = ['manager', 'ta', 'admin']
@@ -61,6 +63,15 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
   const [editDeptOpen, setEditDeptOpen] = useState(false)
   const deptRef = useRef(null)
   const editDeptRef = useRef(null)
+
+  // ── Division assignment (Head of Division — คุม "ทั้ง Division" แทนที่จะ grant ทีละแผนก) ───
+  const [divisionMapping, setDivisionMapping] = useState({})   // settings/divisionManagers { division: email }
+  const [selectedDivisions, setSelectedDivisions] = useState([]) // เลือก division ในฟอร์ม
+  const [divOpen,    setDivOpen]    = useState(false) // toggle dropdown เลือก division
+  const [editDivFor, setEditDivFor] = useState(null) // email ของ row ที่กำลัง edit division
+  const [editDivOpen, setEditDivOpen] = useState(false)
+  const divRef = useRef(null)
+  const editDivRef = useRef(null)
 
   /**
    * useEffect — ตั้ง realtime listener สำหรับ `users` collection
@@ -97,17 +108,19 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
     return () => { unsubscribe(); document.removeEventListener('visibilitychange', handleVisibility) }
   }, [])
 
-  /** โหลด departments ทั้งหมด + deptMapping เมื่อ component mount */
+  /** โหลด departments ทั้งหมด + deptMapping + divisionMapping เมื่อ component mount */
   useEffect(() => {
     async function loadDeptData() {
-      const [reqSnap, settingsSnap] = await Promise.all([
+      const [reqSnap, settingsSnap, divSnap] = await Promise.all([
         getDocs(query(collection(db, 'hc_requests'), limit(3000))),
         getDoc(doc(db, 'settings', 'deptManagers')),
+        getDoc(doc(db, 'settings', 'divisionManagers')),
       ])
       const deptSet = new Set()
       reqSnap.docs.forEach(d => { if (d.data().department) deptSet.add(d.data().department) })
       setAllDepts([...deptSet].sort((a, b) => a.localeCompare(b, 'th')))
       setDeptMapping(settingsSnap.exists() ? settingsSnap.data() : {})
+      setDivisionMapping(divSnap.exists() ? divSnap.data() : {})
     }
     loadDeptData()
 
@@ -115,22 +128,47 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
     const handleClick = (e) => {
       if (deptRef.current && !deptRef.current.contains(e.target)) setDeptOpen(false)
       if (editDeptRef.current && !editDeptRef.current.contains(e.target)) { setEditDeptFor(null); setEditDeptOpen(false) }
+      if (divRef.current && !divRef.current.contains(e.target)) setDivOpen(false)
+      if (editDivRef.current && !editDivRef.current.contains(e.target)) { setEditDivFor(null); setEditDivOpen(false) }
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  /** รับ dept list ของ manager email นั้นๆ จาก deptMapping */
+  /** รับ dept list ของ manager email นั้นๆ จาก deptMapping (รองรับทั้งค่าเก่า string และใหม่ array) */
   function getManagerDepts(email) {
-    return Object.entries(deptMapping)
-      .filter(([, v]) => v === email.toLowerCase())
-      .map(([dept]) => dept)
+    return grantedKeys(deptMapping, email)
   }
 
   /** อัปเดต deptMapping ใน Firestore + local state */
   async function saveDeptMapping(newMapping) {
     await setDoc(doc(db, 'settings', 'deptManagers'), newMapping)
     setDeptMapping(newMapping)
+  }
+
+  /** รับ division list ของ manager email นั้นๆ จาก divisionMapping */
+  function getManagerDivisions(email) {
+    return grantedKeys(divisionMapping, email)
+  }
+
+  /** อัปเดต divisionMapping ใน Firestore + local state */
+  async function saveDivisionMapping(newMapping) {
+    await setDoc(doc(db, 'settings', 'divisionManagers'), newMapping)
+    setDivisionMapping(newMapping)
+  }
+
+  /** เพิ่มอีเมลเข้า grant ของ key นั้น (เก็บเป็น array เสมอ — 1 แผนกมีได้หลาย Manager) */
+  function addToGrant(mapping, key, email) {
+    return { ...mapping, [key]: [...new Set([...grantEmails(mapping[key]), email.toLowerCase()])] }
+  }
+
+  /** ถอดอีเมลออกจาก grant ของ key นั้น — ถ้าไม่เหลือใครให้ลบ key ทิ้ง */
+  function removeFromGrant(mapping, key, email) {
+    const rest = grantEmails(mapping[key]).filter(e => e !== email.toLowerCase())
+    const next = { ...mapping }
+    if (rest.length === 0) delete next[key]
+    else next[key] = rest
+    return next
   }
 
   /**
@@ -167,15 +205,23 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
       })
 
       // ถ้าเป็น manager และเลือกแผนกไว้ → อัปเดต deptMapping
+      // (ถอด email นี้ออกจากแผนกเดิมทั้งหมดก่อนแล้วเพิ่มเข้าแผนกที่เลือก — ไม่กระทบ Manager คนอื่นที่ถือแผนกร่วมกัน)
       if (roleSelect === 'manager' && selectedDepts.length > 0) {
-        const newMapping = { ...deptMapping }
-        // ลบ mapping เดิมของ email นี้ก่อน (กรณี re-assign)
-        Object.keys(newMapping).forEach(k => { if (newMapping[k] === email) delete newMapping[k] })
-        selectedDepts.forEach(dept => { newMapping[dept] = email })
+        let newMapping = { ...deptMapping }
+        Object.keys(newMapping).forEach(k => { newMapping = removeFromGrant(newMapping, k, email) })
+        selectedDepts.forEach(dept => { newMapping = addToGrant(newMapping, dept, email) })
         await saveDeptMapping(newMapping)
       }
 
-      setEmailInput(''); setNameInput(''); setRoleSelect('manager'); setSelectedDepts([])
+      // ถ้าเป็น manager และเลือก division ไว้ (Head of Division) → อัปเดต divisionMapping
+      if (roleSelect === 'manager' && selectedDivisions.length > 0) {
+        let newDivMapping = { ...divisionMapping }
+        Object.keys(newDivMapping).forEach(k => { newDivMapping = removeFromGrant(newDivMapping, k, email) })
+        selectedDivisions.forEach(division => { newDivMapping = addToGrant(newDivMapping, division, email) })
+        await saveDivisionMapping(newDivMapping)
+      }
+
+      setEmailInput(''); setNameInput(''); setRoleSelect('manager'); setSelectedDepts([]); setSelectedDivisions([])
     } catch (e) {
       setPageError('เพิ่มผู้ใช้ไม่สำเร็จ: ' + e.message)
       setTimeout(() => setPageError(''), 4000)
@@ -217,37 +263,68 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
       <div className="flex flex-col gap-8">
         {/* แสดง error banner เมื่อมีข้อผิดพลาด */}
         {pageError && (
-          <div className="flex items-center gap-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 rounded-2xl px-5 py-3 text-sm font-bold animate-in fade-in slide-in-from-top-2">
+          <div className="rounded-2xl border border-red-100 bg-red-50 px-5 py-3 text-sm font-bold text-red-700">
             {pageError}
           </div>
         )}
         <div>
-          <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100 italic tracking-tight">จัดการผู้ใช้</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">กำหนดบทบาท Admin, TA หรือ Manager ในระบบ</p>
+          <h1 className="text-xl font-bold text-neutral-900">จัดการผู้ใช้</h1>
+          <p className="mt-0.5 text-sm text-neutral-500">กำหนดบทบาท Admin, TA หรือ Manager ในระบบ</p>
         </div>
 
+        {/* Pending Approval — user ที่ login ครั้งแรกแล้วรอ Admin กำหนด role
+            แสดงแยกต่างหากด้านบนสุด ให้เห็นชัดทันทีว่าใครกำลังรออยู่ ไม่ต้องไล่หาในตารางรวม */}
+        {users.filter(u => u.role === 'pending').length > 0 && (
+          <div className="rounded-3xl border border-yellow-100 bg-yellow-50 p-6">
+            <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-yellow-900">
+              <Clock3 size={16} strokeWidth={1} absoluteStrokeWidth />
+              รออนุมัติ ({users.filter(u => u.role === 'pending').length})
+            </h2>
+            <div className="flex flex-col gap-2">
+              {users.filter(u => u.role === 'pending').map(u => (
+                <div key={u.email} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-yellow-100 bg-white px-4 py-3">
+                  <div className="flex flex-col">
+                    <span className="font-bold text-neutral-900">{u.name || '---'}</span>
+                    <span className="text-xs text-neutral-400">{u.email}</span>
+                  </div>
+                  <select
+                    defaultValue=""
+                    onChange={(e) => e.target.value && handleUpdateRole(u.email, e.target.value)}
+                    className="rounded-full border border-neutral-100 bg-neutral-50 px-3 py-1.5 text-xs font-bold text-neutral-700 transition-colors focus:outline-none"
+                  >
+                    <option value="" disabled>เลือก Role...</option>
+                    <option value="manager">Manager</option>
+                    <option value="ta">TA</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Add User Form */}
-        <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-6 rounded-3xl shadow-xl shadow-gray-200/40 dark:shadow-none">
-          <h2 className="text-sm font-black text-[#008065] dark:text-emerald-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-            <UserPlus size={16} /> กำหนด Role ใหม่
+        <div className="rounded-3xl border border-neutral-100 bg-white p-6">
+          <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-dark-green-700">
+            <UserPlus size={16} strokeWidth={1} absoluteStrokeWidth /> กำหนด Role ใหม่
           </h2>
           <form onSubmit={handleAdd} className="flex flex-col gap-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
               <input
                 id="user-email" name="user-email"
                 type="email" required placeholder="User Email (freshket.co)"
                 value={emailInput} onChange={e => setEmailInput(e.target.value)}
-                className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                className="rounded-lg border border-neutral-100 bg-white px-4 py-2 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
               />
               <input
                 id="user-name" name="user-name"
                 type="text" placeholder="Full Name"
                 value={nameInput} onChange={e => setNameInput(e.target.value)}
-                className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                className="rounded-lg border border-neutral-100 bg-white px-4 py-2 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
               />
               <select
-                value={roleSelect} onChange={e => { setRoleSelect(e.target.value); setSelectedDepts([]) }}
-                className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                value={roleSelect} onChange={e => { setRoleSelect(e.target.value); setSelectedDepts([]); setSelectedDivisions([]) }}
+                className="rounded-lg border border-neutral-100 bg-white px-4 py-2 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
               >
                 <option value="manager">Manager</option>
                 <option value="ta">TA / People Experience</option>
@@ -255,7 +332,7 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
               </select>
               <button
                 type="submit" disabled={isBusy}
-                className="bg-[#008065] text-white font-bold rounded-xl py-2 shadow-lg shadow-emerald-500/20 transition-all hover:bg-[#006651] disabled:opacity-50"
+                className="rounded-lg bg-dark-green-600 py-2 font-bold text-neutral-50 transition-colors hover:bg-dark-green-700 disabled:opacity-50"
               >
                 บันทึกสิทธิ์
               </button>
@@ -264,21 +341,21 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
             {/* Dept selector — แสดงเฉพาะเมื่อ role = manager */}
             {roleSelect === 'manager' && (
               <div className="flex items-start gap-3">
-                <Building2 size={15} className="text-orange-400 mt-2.5 shrink-0" />
+                <Building2 size={15} strokeWidth={1} absoluteStrokeWidth className="mt-2.5 shrink-0 text-orange-400" />
                 <div className="flex-1">
-                  <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5">แผนกที่ดูแล</p>
+                  <p className="mb-1.5 text-xs font-bold text-neutral-500">แผนกที่ดูแล</p>
                   {/* Selected chips */}
-                  <div className="flex flex-wrap gap-1.5 mb-2">
+                  <div className="mb-2 flex flex-wrap gap-1.5">
                     {selectedDepts.map(d => (
-                      <span key={d} className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400">
+                      <span key={d} className="flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-1 text-[11px] font-bold text-orange-900">
                         {d}
                         <button type="button" onClick={() => setSelectedDepts(s => s.filter(x => x !== d))}>
-                          <X size={10} />
+                          <X size={10} strokeWidth={1} absoluteStrokeWidth />
                         </button>
                       </span>
                     ))}
                     {selectedDepts.length === 0 && (
-                      <span className="text-[11px] text-gray-400 italic">ยังไม่ได้เลือกแผนก</span>
+                      <span className="text-[11px] italic text-neutral-400">ยังไม่ได้เลือกแผนก</span>
                     )}
                   </div>
                   {/* Dropdown */}
@@ -286,20 +363,68 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
                     <button
                       type="button"
                       onClick={() => setDeptOpen(v => !v)}
-                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border border-orange-200 dark:border-orange-800 bg-white dark:bg-slate-900 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                      className="flex items-center gap-1.5 rounded-lg border border-orange-100 bg-white px-3 py-1.5 text-xs font-bold text-orange-700 hover:bg-orange-50"
                     >
-                      <Building2 size={12}/> เลือกแผนก {deptOpen ? <ChevronUp size={11}/> : <ChevronDown size={11}/>}
+                      <Building2 size={12} strokeWidth={1} absoluteStrokeWidth/> เลือกแผนก {deptOpen ? <ChevronUp size={11} strokeWidth={1} absoluteStrokeWidth/> : <ChevronDown size={11} strokeWidth={1} absoluteStrokeWidth/>}
                     </button>
                     {deptOpen && (
-                      <div className="absolute top-full left-0 mt-1 z-20 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-xl py-2 min-w-56 max-h-60 overflow-y-auto">
+                      <div className="absolute left-0 top-full z-20 mt-1 max-h-60 min-w-56 overflow-y-auto rounded-2xl border border-neutral-100 bg-white py-2 shadow-xl">
                         {allDepts.map(d => (
                           <button
                             key={d} type="button"
                             onClick={() => setSelectedDepts(s => s.includes(d) ? s.filter(x => x !== d) : [...s, d])}
-                            className={`w-full text-left px-4 py-2 text-xs font-medium flex items-center justify-between gap-2 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors ${selectedDepts.includes(d) ? 'text-orange-600 dark:text-orange-400 font-bold' : 'text-gray-700 dark:text-gray-300'}`}
+                            className={`flex w-full items-center justify-between gap-2 px-4 py-2 text-left text-xs transition-colors hover:bg-neutral-50 ${selectedDepts.includes(d) ? 'font-bold text-orange-700' : 'text-neutral-700'}`}
                           >
                             {d}
-                            {selectedDepts.includes(d) && <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />}
+                            {selectedDepts.includes(d) && <span className="h-2 w-2 shrink-0 rounded-full bg-orange-400" />}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Division selector — สำหรับ Head of Division ที่ดูแลทั้ง division (ทุกแผนกในนั้นอัตโนมัติ) */}
+            {roleSelect === 'manager' && (
+              <div className="flex items-start gap-3">
+                <Network size={15} strokeWidth={1} absoluteStrokeWidth className="mt-2.5 shrink-0 text-blue-400" />
+                <div className="flex-1">
+                  <p className="mb-1.5 text-xs font-bold text-neutral-500">Division ที่ดูแลทั้งหมด (Head of Division)</p>
+                  {/* Selected chips */}
+                  <div className="mb-2 flex flex-wrap gap-1.5">
+                    {selectedDivisions.map(d => (
+                      <span key={d} className="flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-bold text-blue-900">
+                        {d}
+                        <button type="button" onClick={() => setSelectedDivisions(s => s.filter(x => x !== d))}>
+                          <X size={10} strokeWidth={1} absoluteStrokeWidth />
+                        </button>
+                      </span>
+                    ))}
+                    {selectedDivisions.length === 0 && (
+                      <span className="text-[11px] italic text-neutral-400">ยังไม่ได้เลือก division (ไม่บังคับ — ใช้เมื่อต้องดูแลทุกแผนกในสาย)</span>
+                    )}
+                  </div>
+                  {/* Dropdown */}
+                  <div ref={divRef} className="relative inline-block">
+                    <button
+                      type="button"
+                      onClick={() => setDivOpen(v => !v)}
+                      className="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50"
+                    >
+                      <Network size={12} strokeWidth={1} absoluteStrokeWidth/> เลือก Division {divOpen ? <ChevronUp size={11} strokeWidth={1} absoluteStrokeWidth/> : <ChevronDown size={11} strokeWidth={1} absoluteStrokeWidth/>}
+                    </button>
+                    {divOpen && (
+                      <div className="absolute left-0 top-full z-20 mt-1 max-h-60 min-w-56 overflow-y-auto rounded-2xl border border-neutral-100 bg-white py-2 shadow-xl">
+                        {DIVISIONS.map(d => (
+                          <button
+                            key={d} type="button"
+                            onClick={() => setSelectedDivisions(s => s.includes(d) ? s.filter(x => x !== d) : [...s, d])}
+                            className={`flex w-full items-center justify-between gap-2 px-4 py-2 text-left text-xs transition-colors hover:bg-neutral-50 ${selectedDivisions.includes(d) ? 'font-bold text-blue-700' : 'text-neutral-700'}`}
+                          >
+                            {d}
+                            {selectedDivisions.includes(d) && <span className="h-2 w-2 shrink-0 rounded-full bg-blue-400" />}
                           </button>
                         ))}
                       </div>
@@ -312,40 +437,45 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
         </div>
 
         {/* Users list — แสดง users ทั้งหมดที่มี role พร้อม inline role editor */}
-        <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-3xl shadow-xl shadow-gray-200/40 dark:shadow-none overflow-hidden">
+        <div className="overflow-hidden rounded-3xl border border-neutral-100 bg-white">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
-              <thead className="bg-[#fcfdfd] dark:bg-slate-800/30 border-b border-gray-50 dark:border-slate-800/50">
+              <thead className="border-b border-neutral-100 bg-neutral-50">
                 <tr>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">User</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Current Role</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">แผนกที่ดูแล</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap text-right">Actions</th>
+                  <th className="whitespace-nowrap px-6 py-4 text-[11px] font-bold text-neutral-500">User</th>
+                  <th className="whitespace-nowrap px-6 py-4 text-[11px] font-bold text-neutral-500">Current Role</th>
+                  <th className="whitespace-nowrap px-6 py-4 text-[11px] font-bold text-neutral-500">แผนกที่ดูแล</th>
+                  <th className="whitespace-nowrap px-6 py-4 text-right text-[11px] font-bold text-neutral-500">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50 dark:divide-slate-800/50">
+              <tbody className="divide-y divide-neutral-100">
                 {users.map(u => {
                   const managerDepts = u.role === 'manager' ? getManagerDepts(u.email) : []
+                  const managerDivisions = u.role === 'manager' ? getManagerDivisions(u.email) : []
                   const isEditingDept = editDeptFor === u.email
+                  const isEditingDiv = editDivFor === u.email
                   return (
-                  <tr key={u.email} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                  <tr key={u.email} className="transition-colors hover:bg-neutral-50">
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        <span className="font-bold text-gray-800 dark:text-gray-200">{u.name || '---'}</span>
-                        <span className="text-xs text-gray-400 font-medium">{u.email}</span>
+                        <span className="font-bold text-neutral-900">{u.name || '---'}</span>
+                        <span className="text-xs text-neutral-400">{u.email}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      {/* Inline role dropdown — สีเปลี่ยนตาม role: indigo=admin, emerald=ta, orange=manager */}
+                      {/* Inline role dropdown — สีเปลี่ยนตาม role: purple=admin, dark-green=ta, orange=manager */}
                       <select
                         value={u.role}
                         onChange={(e) => handleUpdateRole(u.email, e.target.value)}
-                        className={`text-xs font-black px-3 py-1.5 rounded-full border border-gray-100 dark:border-slate-800 focus:outline-none transition-colors ${
-                          u.role === 'admin' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400' :
-                          u.role === 'ta' ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' :
-                          'bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
+                        className={`rounded-full border border-neutral-100 px-3 py-1.5 text-xs font-bold transition-colors focus:outline-none ${
+                          u.role === 'admin' ? 'bg-purple-50 text-purple-900' :
+                          u.role === 'ta' ? 'bg-dark-green-50 text-dark-green-900' :
+                          u.role === 'pending' ? 'bg-yellow-50 text-yellow-900' :
+                          'bg-orange-50 text-orange-900'
                         }`}
                       >
+                        {/* 'pending' = user เพิ่ง login ครั้งแรก รอ Admin เลือก role จริง — เลือกไม่ได้ มีไว้แสดงผลเท่านั้น */}
+                        {u.role === 'pending' && <option value="pending" disabled>รออนุมัติ</option>}
                         <option value="manager">Manager</option>
                         <option value="ta">TA</option>
                         <option value="admin">Admin</option>
@@ -353,61 +483,99 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
                     </td>
                     <td className="px-6 py-4">
                       {u.role === 'manager' ? (
-                        <div ref={isEditingDept ? editDeptRef : null} className="relative">
-                          {/* แสดง dept chips + ปุ่ม edit */}
-                          <div className="flex flex-wrap gap-1 items-center">
-                            {managerDepts.length > 0
-                              ? managerDepts.map(d => (
-                                  <span key={d} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">{d}</span>
-                                ))
-                              : <span className="text-[10px] text-gray-400 italic">ยังไม่ได้กำหนด</span>
-                            }
-                            <button
-                              onClick={() => { setEditDeptFor(u.email); setEditDeptOpen(true) }}
-                              className="text-[10px] text-gray-400 hover:text-orange-500 ml-1 flex items-center gap-0.5"
-                            >
-                              <Building2 size={11}/> แก้ไข
-                            </button>
-                          </div>
-                          {/* Dropdown edit แผนก */}
-                          {isEditingDept && editDeptOpen && (
-                            <div className="absolute top-full left-0 mt-1 z-20 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-xl py-2 min-w-56 max-h-60 overflow-y-auto">
-                              {allDepts.map(d => {
-                                const checked = managerDepts.includes(d)
-                                return (
-                                  <button
-                                    key={d}
-                                    onClick={async () => {
-                                      const newMapping = { ...deptMapping }
-                                      if (checked) {
-                                        delete newMapping[d]
-                                      } else {
-                                        // ถ้า dept นี้มี manager อื่นอยู่แล้ว ให้ override
-                                        newMapping[d] = u.email.toLowerCase()
-                                      }
-                                      await saveDeptMapping(newMapping)
-                                    }}
-                                    className={`w-full text-left px-4 py-2 text-xs font-medium flex items-center justify-between gap-2 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors ${checked ? 'text-orange-600 dark:text-orange-400 font-bold' : 'text-gray-700 dark:text-gray-300'}`}
-                                  >
-                                    {d}
-                                    {checked && <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />}
-                                  </button>
-                                )
-                              })}
+                        <div className="flex flex-col gap-1.5">
+                          {/* Division grant (Head of Division) */}
+                          <div ref={isEditingDiv ? editDivRef : null} className="relative">
+                            <div className="flex flex-wrap items-center gap-1">
+                              {managerDivisions.length > 0 && managerDivisions.map(d => (
+                                <span key={d} className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800">{d} (ทั้ง Division)</span>
+                              ))}
+                              <button
+                                onClick={() => { setEditDivFor(u.email); setEditDivOpen(true) }}
+                                className="flex items-center gap-0.5 text-[10px] text-neutral-400 hover:text-blue-600"
+                              >
+                                <Network size={11} strokeWidth={1} absoluteStrokeWidth/> {managerDivisions.length > 0 ? 'แก้ไข Division' : '+ Division'}
+                              </button>
                             </div>
-                          )}
+                            {/* Dropdown edit division */}
+                            {isEditingDiv && editDivOpen && (
+                              <div className="absolute left-0 top-full z-20 mt-1 max-h-60 min-w-56 overflow-y-auto rounded-2xl border border-neutral-100 bg-white py-2 shadow-xl">
+                                {DIVISIONS.map(d => {
+                                  const checked = managerDivisions.includes(d)
+                                  return (
+                                    <button
+                                      key={d}
+                                      onClick={async () => {
+                                        // toggle เฉพาะอีเมลคนนี้ใน array — ไม่กระทบ Manager คนอื่นที่ถือ division ร่วมกัน
+                                        const newMapping = checked
+                                          ? removeFromGrant(divisionMapping, d, u.email)
+                                          : addToGrant(divisionMapping, d, u.email)
+                                        await saveDivisionMapping(newMapping)
+                                      }}
+                                      className={`flex w-full items-center justify-between gap-2 px-4 py-2 text-left text-xs transition-colors hover:bg-neutral-50 ${checked ? 'font-bold text-blue-700' : 'text-neutral-700'}`}
+                                    >
+                                      {d}
+                                      {checked && <span className="h-2 w-2 shrink-0 rounded-full bg-blue-400" />}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Department grant — แสดงเฉพาะแผนกเดี่ยว (Head of Division ไม่จำเป็นต้องกำหนดตรงนี้) */}
+                          <div ref={isEditingDept ? editDeptRef : null} className="relative">
+                            <div className="flex flex-wrap items-center gap-1">
+                              {managerDepts.length > 0
+                                ? managerDepts.map(d => (
+                                    <span key={d} className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-800">{d}</span>
+                                  ))
+                                : managerDivisions.length === 0 && <span className="text-[10px] italic text-neutral-400">ยังไม่ได้กำหนด</span>
+                              }
+                              <button
+                                onClick={() => { setEditDeptFor(u.email); setEditDeptOpen(true) }}
+                                className="ml-1 flex items-center gap-0.5 text-[10px] text-neutral-400 hover:text-orange-600"
+                              >
+                                <Building2 size={11} strokeWidth={1} absoluteStrokeWidth/> แก้ไข
+                              </button>
+                            </div>
+                            {/* Dropdown edit แผนก */}
+                            {isEditingDept && editDeptOpen && (
+                              <div className="absolute left-0 top-full z-20 mt-1 max-h-60 min-w-56 overflow-y-auto rounded-2xl border border-neutral-100 bg-white py-2 shadow-xl">
+                                {allDepts.map(d => {
+                                  const checked = managerDepts.includes(d)
+                                  return (
+                                    <button
+                                      key={d}
+                                      onClick={async () => {
+                                        // toggle เฉพาะอีเมลคนนี้ใน array — ไม่ทับ Manager คนอื่นที่ถือแผนกร่วมกัน (เดิม override ทิ้งแบบเงียบๆ)
+                                        const newMapping = checked
+                                          ? removeFromGrant(deptMapping, d, u.email)
+                                          : addToGrant(deptMapping, d, u.email)
+                                        await saveDeptMapping(newMapping)
+                                      }}
+                                      className={`flex w-full items-center justify-between gap-2 px-4 py-2 text-left text-xs transition-colors hover:bg-neutral-50 ${checked ? 'font-bold text-orange-700' : 'text-neutral-700'}`}
+                                    >
+                                      {d}
+                                      {checked && <span className="h-2 w-2 shrink-0 rounded-full bg-orange-400" />}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       ) : (
-                        <span className="text-[10px] text-gray-300 dark:text-slate-600">—</span>
+                        <span className="text-[11px] text-neutral-300">—</span>
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">
                       {/* ปุ่มลบ — เปิด confirm modal ก่อนลบจริง */}
                       <button
                         onClick={() => setConfirmState({ isOpen: true, email: u.email })}
-                        className="p-2 text-gray-300 hover:text-red-500 transition-colors rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20"
+                        className="rounded-lg p-2 text-neutral-300 transition-colors hover:bg-red-50 hover:text-red-600"
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={16} strokeWidth={1} absoluteStrokeWidth />
                       </button>
                     </td>
                   </tr>
@@ -416,7 +584,7 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
                 {/* แสดงข้อความเมื่อยังไม่มี user ในระบบ (โหลดเสร็จแล้วแต่ list ว่าง) */}
                 {users.length === 0 && !loading && (
                   <tr>
-                    <td colSpan={3} className="px-6 py-12 text-center text-gray-400 font-medium italic">ไม่พบบทบาทผู้ใช้ในฐานข้อมูล</td>
+                    <td colSpan={3} className="px-6 py-12 text-center italic text-neutral-400">ไม่พบบทบาทผู้ใช้ในฐานข้อมูล</td>
                   </tr>
                 )}
               </tbody>

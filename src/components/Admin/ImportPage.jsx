@@ -118,12 +118,12 @@ const TYPE_MAP = {
 // ─── STATUS_COLOR: Tailwind classes สำหรับแสดง status badge ──────────────────
 // ใช้ใน preview table เพื่อให้แยกแยะ status ได้ด้วยสี
 const STATUS_COLOR = {
-  Closed:       'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-  Onboarding:   'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
-  Offering:     'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
-  Recruiting:   'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  Interviewing: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
-  Cancelled:    'bg-slate-100 text-slate-500',
+  Closed:       'bg-green-fresh-50 text-green-fresh-900',
+  Onboarding:   'bg-teal-50 text-teal-900',
+  Offering:     'bg-purple-50 text-purple-900',
+  Recruiting:   'bg-blue-50 text-blue-900',
+  Interviewing: 'bg-orange-50 text-orange-900',
+  Cancelled:    'bg-neutral-100 text-neutral-500',
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -797,10 +797,10 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
       <div className="max-w-5xl mx-auto py-8 px-4">
         {/* ── Page Header ── */}
         <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-900/20"><FolderOpen size={20} className="text-blue-600 dark:text-blue-400"/></div>
+          <div className="p-2 rounded-xl bg-blue-50"><FolderOpen size={20} strokeWidth={1} absoluteStrokeWidth className="text-blue-600"/></div>
           <div>
-            <h1 className="text-lg font-black text-gray-900 dark:text-gray-100">Import ข้อมูลย้อนหลัง</h1>
-            <p className="text-xs text-gray-500 dark:text-slate-400">รองรับ Excel (.xlsx) และ CSV (.csv) — import ทุกปี</p>
+            <h1 className="text-lg font-bold text-neutral-900">Import ข้อมูลย้อนหลัง</h1>
+            <p className="text-xs text-neutral-500">รองรับ Excel (.xlsx) และ CSV (.csv) — import ทุกปี</p>
           </div>
         </div>
 
@@ -812,45 +812,45 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
             {/* URL input — วาง Google Sheets link ได้เลย */}
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <Link size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 pointer-events-none"/>
+                <Link size={14} strokeWidth={1} absoluteStrokeWidth className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none"/>
                 <input
                   type="url"
                   value={csvUrl}
                   onChange={e => { setCsvUrl(e.target.value); setUrlError('') }}
                   onKeyDown={e => e.key === 'Enter' && !urlLoading && csvUrl.trim() && fetchFromUrl()}
                   placeholder="วาง Google Sheets URL หรือ CSV link แล้วกด Load..."
-                  className="w-full pl-9 pr-4 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition"
+                  className="w-full pl-9 pr-4 py-2.5 text-sm rounded-xl border border-neutral-100 bg-white text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition"
                 />
               </div>
               <button
                 onClick={fetchFromUrl}
                 disabled={!csvUrl.trim() || urlLoading}
-                className="flex items-center gap-2 px-4 py-2.5 text-sm font-black rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition shadow-md shadow-blue-500/20"
+                className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition"
               >
-                {urlLoading ? <Loader2 size={14} className="animate-spin"/> : <Link size={14}/>}
+                {urlLoading ? <Loader2 size={14} strokeWidth={1} absoluteStrokeWidth className="animate-spin"/> : <Link size={14} strokeWidth={1} absoluteStrokeWidth/>}
                 {urlLoading ? 'Loading...' : 'Load'}
               </button>
             </div>
 
             {/* Error message จาก URL fetch */}
             {urlError && (
-              <p className="text-xs font-bold text-red-500 dark:text-red-400 px-1">
+              <p className="text-xs font-bold text-red-600 px-1">
                 ⚠ {urlError}
               </p>
             )}
 
             {/* Divider */}
-            <div className="flex items-center gap-3 text-xs text-gray-400 dark:text-slate-600">
-              <div className="flex-1 border-t border-gray-200 dark:border-slate-800"/>
-              <span className="font-bold uppercase tracking-widest">หรืออัปโหลดไฟล์</span>
-              <div className="flex-1 border-t border-gray-200 dark:border-slate-800"/>
+            <div className="flex items-center gap-3 text-xs text-neutral-400">
+              <div className="flex-1 border-t border-neutral-100"/>
+              <span className="font-bold">หรืออัปโหลดไฟล์</span>
+              <div className="flex-1 border-t border-neutral-100"/>
             </div>
 
             {/* File Drop Zone */}
-            <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-gray-300 dark:border-slate-700 rounded-2xl cursor-pointer hover:border-blue-400 dark:hover:border-blue-600 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors">
-              <FolderOpen size={28} className="text-gray-300 dark:text-slate-600 mb-2"/>
-              <p className="text-sm font-bold text-gray-500 dark:text-slate-400">คลิกหรือลากไฟล์มาวาง</p>
-              <p className="text-xs text-gray-400 dark:text-slate-600 mt-0.5">.xlsx หรือ .csv</p>
+            <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-neutral-200 rounded-2xl cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition-colors">
+              <FolderOpen size={28} strokeWidth={1} absoluteStrokeWidth className="text-neutral-300 mb-2"/>
+              <p className="text-sm font-bold text-neutral-500">คลิกหรือลากไฟล์มาวาง</p>
+              <p className="text-xs text-neutral-400 mt-0.5">.xlsx หรือ .csv</p>
               <input id="import-file" name="import-file" type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} ref={fileRef}/>
             </label>
           </div>
@@ -865,13 +865,13 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
             {/* Header: ชื่อไฟล์, จำนวน rows, ปุ่มเปลี่ยนไฟล์, ปุ่ม Import */}
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-sm font-black text-gray-700 dark:text-gray-200">{fileName}</p>
-                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">พบ <span className="font-black text-blue-600 dark:text-blue-400">{rows.length}</span> รายการ</p>
+                <p className="text-sm font-bold text-neutral-700">{fileName}</p>
+                <p className="text-xs text-neutral-500 mt-0.5">พบ <span className="font-bold text-blue-600">{rows.length}</span> รายการ</p>
               </div>
               <div className="flex gap-2">
                 {/* ปุ่มเปลี่ยนไฟล์ */}
                 <button onClick={() => { setRows([]); setFileName('') }}
-                  className="px-3 py-1.5 text-xs font-bold rounded-xl border border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+                  className="px-3 py-1.5 text-xs font-bold rounded-xl border border-neutral-100 text-neutral-500 hover:bg-neutral-50 transition-colors">
                   เปลี่ยนไฟล์
                 </button>
                 {/* ปุ่ม Sync ไป Sheets เท่านั้น (ไม่แตะ Firestore) */}
@@ -882,42 +882,42 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
                     setTimeout(() => setSyncDone(false), 5000)
                   }}
                   disabled={syncing}
-                  className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-black rounded-xl border border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-50">
-                  {syncing ? <><RefreshCw size={12} className="animate-spin"/> Syncing...</> : syncDone ? <>✓ Synced!</> : <><RefreshCw size={12}/> Sheets Only</>}
+                  className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded-xl border border-purple-100 text-purple-700 hover:bg-purple-50 transition-colors disabled:opacity-50">
+                  {syncing ? <><RefreshCw size={12} strokeWidth={1} absoluteStrokeWidth className="animate-spin"/> Syncing...</> : syncDone ? <>✓ Synced!</> : <><RefreshCw size={12} strokeWidth={1} absoluteStrokeWidth/> Sheets Only</>}
                 </button>
                 {/* ปุ่ม Import: แสดง progress (imported/total) ขณะกำลัง import */}
                 <button onClick={handleImport} disabled={importing}
-                  className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-black rounded-xl bg-[#008065] text-white hover:bg-[#006b54] transition-colors shadow-md shadow-emerald-500/20 disabled:opacity-60">
-                  {importing ? <><Settings2 size={12} className="animate-spin"/> กำลัง Import {imported}/{rows.length}</> : <><Plus size={12}/> Import {rows.length} รายการ</>}
+                  className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded-xl bg-dark-green-600 text-white hover:bg-dark-green-700 transition-colors disabled:opacity-60">
+                  {importing ? <><Settings2 size={12} strokeWidth={1} absoluteStrokeWidth className="animate-spin"/> กำลัง Import {imported}/{rows.length}</> : <><Plus size={12} strokeWidth={1} absoluteStrokeWidth/> Import {rows.length} รายการ</>}
                 </button>
               </div>
             </div>
 
             {/* Preview Table: แสดงข้อมูลหลักของแต่ละ row ก่อน import */}
-            <div className="rounded-2xl border border-gray-200 dark:border-slate-800 overflow-hidden">
+            <div className="rounded-2xl border border-neutral-100 overflow-hidden">
               <div className="overflow-x-auto max-h-[480px]">
                 <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
+                  <thead className="sticky top-0 bg-neutral-50 border-b border-neutral-100">
                     <tr>
                       {['#','ตำแหน่ง','แผนก','JG','TA (PIC)','Status','Candidate','วันเริ่ม'].map(h => (
-                        <th key={h} className="px-3 py-2.5 text-left font-black text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                        <th key={h} className="px-3 py-2.5 text-left font-bold text-neutral-500 whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+                  <tbody className="divide-y divide-neutral-100">
                     {rows.map((r, i) => (
-                      <tr key={i} className="hover:bg-gray-50 dark:hover:bg-slate-800/50">
-                        <td className="px-3 py-2 text-gray-400 dark:text-slate-600 tabular-nums">{r._rowNum}</td>
-                        <td className="px-3 py-2 font-bold text-gray-800 dark:text-gray-200 max-w-[160px] truncate">{r.position}</td>
-                        <td className="px-3 py-2 text-gray-600 dark:text-slate-400 max-w-[120px] truncate">{r.department}</td>
-                        <td className="px-3 py-2 text-gray-500 dark:text-slate-500">{r.jg}</td>
-                        <td className="px-3 py-2 text-gray-600 dark:text-slate-400">{r.assignedToName}</td>
+                      <tr key={i} className="hover:bg-neutral-50">
+                        <td className="px-3 py-2 text-neutral-400 tabular-nums">{r._rowNum}</td>
+                        <td className="px-3 py-2 font-bold text-neutral-800 max-w-[160px] truncate">{r.position}</td>
+                        <td className="px-3 py-2 text-neutral-600 max-w-[120px] truncate">{r.department}</td>
+                        <td className="px-3 py-2 text-neutral-500">{r.jg}</td>
+                        <td className="px-3 py-2 text-neutral-600">{r.assignedToName}</td>
                         <td className="px-3 py-2">
                           {/* Status badge สีตาม STATUS_COLOR */}
                           <span className={`inline-flex px-2 py-0.5 rounded-full font-bold text-[10px] ${STATUS_COLOR[r.status] || ''}`}>{r.status}</span>
                         </td>
-                        <td className="px-3 py-2 text-gray-600 dark:text-slate-400 max-w-[120px] truncate">{r.candidateName}</td>
-                        <td className="px-3 py-2 text-gray-500 dark:text-slate-500 whitespace-nowrap">{r.startDate}</td>
+                        <td className="px-3 py-2 text-neutral-600 max-w-[120px] truncate">{r.candidateName}</td>
+                        <td className="px-3 py-2 text-neutral-500 whitespace-nowrap">{r.startDate}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -936,28 +936,28 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
           const patchable = rows.filter(r => r.hcId && r.status === 'Closed')
           if (!patchable.length) return null
           return (
-            <div className="mt-4 p-4 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/15">
+            <div className="mt-4 p-4 rounded-2xl border border-banana-100 bg-banana-50">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-start gap-3">
-                  <Wrench size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <Wrench size={16} strokeWidth={1} absoluteStrokeWidth className="text-banana-700 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-black text-amber-800 dark:text-amber-300">Patch Onboard Dates</p>
-                    <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5">
-                      พบ <span className="font-black">{patchable.length}</span> records ที่มี Onboard Date —
+                    <p className="text-sm font-bold text-banana-900">Patch Onboard Dates</p>
+                    <p className="text-xs text-banana-700 mt-0.5">
+                      พบ <span className="font-bold">{patchable.length}</span> records ที่มี Onboard Date —
                       อัปเดต <code className="font-mono">startDate</code> + <code className="font-mono">closedAt</code> ใน Firestore โดย match กับ HCID
                     </p>
                     {patchDone && (
                       <div className="mt-1 flex flex-col gap-0.5">
-                        <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                        <p className="text-xs font-bold text-dark-green-700">
                           ✓ อัปเดตแล้ว {patchCount} records
                         </p>
                         {patchSkipped > 0 && (
-                          <p className="text-xs text-amber-600 dark:text-amber-500">
+                          <p className="text-xs text-banana-700">
                             ข้าม {patchSkipped} (startDate เหมือนเดิม / createdAt ถูกแล้ว)
                           </p>
                         )}
                         {patchNotFound > 0 && (
-                          <p className="text-xs text-red-500 dark:text-red-400 font-bold">
+                          <p className="text-xs text-red-600 font-bold">
                             ⚠ ไม่พบใน Firestore {patchNotFound} records (hcId ไม่ match)
                           </p>
                         )}
@@ -968,11 +968,11 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
                 <button
                   onClick={handlePatchDates}
                   disabled={patching}
-                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-black rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition-colors shadow-sm disabled:opacity-60 shrink-0"
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-banana-600 text-white hover:bg-banana-700 transition-colors disabled:opacity-60 shrink-0"
                 >
                   {patching
-                    ? <><Loader2 size={12} className="animate-spin" /> กำลัง Patch...</>
-                    : <><Wrench size={12} /> Patch {patchable.length} records</>
+                    ? <><Loader2 size={12} strokeWidth={1} absoluteStrokeWidth className="animate-spin" /> กำลัง Patch...</>
+                    : <><Wrench size={12} strokeWidth={1} absoluteStrokeWidth /> Patch {patchable.length} records</>
                   }
                 </button>
               </div>
@@ -986,17 +986,17 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
          * ปุ่ม: Import ไฟล์ใหม่ (reset ทั้งหมด), Sync ไป Sheets อีกครั้ง
          */}
         {done && (
-          <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-8 text-center">
+          <div className="rounded-2xl border border-green-fresh-100 bg-green-fresh-50 p-8 text-center">
             <p className="text-4xl mb-3">✅</p>
-            <p className="text-lg font-black text-emerald-700 dark:text-emerald-400">Import เสร็จสมบูรณ์</p>
-            <p className="text-sm text-emerald-600 dark:text-emerald-500 mt-1">นำเข้าแล้ว <span className="font-black">{imported}</span> รายการเข้า Firestore</p>
+            <p className="text-lg font-bold text-green-fresh-900">Import เสร็จสมบูรณ์</p>
+            <p className="text-sm text-green-fresh-700 mt-1">นำเข้าแล้ว <span className="font-bold">{imported}</span> รายการเข้า Firestore</p>
 
             {/* Google Sheets sync status indicator */}
             <div className={`mt-4 flex items-center justify-center gap-2 text-sm font-bold ${
-              syncing ? 'text-indigo-500' : syncDone ? 'text-[#008065]' : 'text-gray-400'
+              syncing ? 'text-purple-600' : syncDone ? 'text-dark-green-700' : 'text-neutral-400'
             }`}>
               {syncing
-                ? <><Settings2 size={14} className="animate-spin" /> กำลัง Sync ไป Google Sheets...</>
+                ? <><Settings2 size={14} strokeWidth={1} absoluteStrokeWidth className="animate-spin" /> กำลัง Sync ไป Google Sheets...</>
                 : syncDone
                 ? <>✓ Sync ไป Google Sheets แล้ว ({importedRows.length} rows)</>
                 : null
@@ -1005,22 +1005,22 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
 
             {/* Error list: แสดงเฉพาะเมื่อมี batch ที่ล้มเหลว */}
             {errors.length > 0 && (
-              <div className="mt-4 text-left bg-red-50 dark:bg-red-900/20 rounded-xl p-3">
-                {errors.map((e, i) => <p key={i} className="text-xs text-red-600 dark:text-red-400">{e}</p>)}
+              <div className="mt-4 text-left bg-red-50 rounded-xl p-3">
+                {errors.map((e, i) => <p key={i} className="text-xs text-red-700">{e}</p>)}
               </div>
             )}
 
             <div className="flex items-center justify-center gap-3 mt-5">
               {/* ปุ่ม Import ไฟล์ใหม่: reset state ทั้งหมดกลับไปหน้าเลือกไฟล์ */}
               <button onClick={() => { setRows([]); setFileName(''); setDone(false); setImported(0); setSyncDone(false); setImportedRows([]) }}
-                className="px-5 py-2 text-sm font-bold rounded-xl bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors">
+                className="px-5 py-2 text-sm font-bold rounded-xl bg-white border border-green-fresh-100 text-green-fresh-900 hover:bg-green-fresh-50 transition-colors">
                 Import ไฟล์ใหม่
               </button>
               {/* ปุ่ม Re-sync: แสดงเฉพาะเมื่อมี importedRows (import สำเร็จแล้ว) */}
               {importedRows.length > 0 && (
                 <button onClick={handleResync} disabled={syncing}
-                  className="flex items-center gap-1.5 px-5 py-2 text-sm font-bold rounded-xl bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50">
-                  <RefreshCw size={13} className={syncing ? 'animate-spin' : ''} />
+                  className="flex items-center gap-1.5 px-5 py-2 text-sm font-bold rounded-xl bg-white border border-purple-100 text-purple-700 hover:bg-purple-50 transition-colors disabled:opacity-50">
+                  <RefreshCw size={13} strokeWidth={1} absoluteStrokeWidth className={syncing ? 'animate-spin' : ''} />
                   Sync ไป Sheets อีกครั้ง
                 </button>
               )}
@@ -1031,11 +1031,11 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
          * Diagnostic: หา record ที่อยู่ใน Firestore แต่ไม่อยู่ใน CSV (extra +1)
          * โหลด CSV ก่อนเพื่อเทียบ — หรือถ้าไม่มี CSV จะแสดง REQ-2026 Closed ทั้งหมด
          */}
-        <div className="mt-6 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30">
+        <div className="mt-6 p-4 rounded-2xl border border-neutral-100 bg-neutral-50">
           <div className="flex items-center justify-between gap-4 mb-3">
             <div>
-              <p className="text-sm font-black text-slate-700 dark:text-slate-200">🔍 ค้นหา REQ-2026 Closed ที่ไม่อยู่ใน CSV</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              <p className="text-sm font-bold text-neutral-700">ค้นหา REQ-2026 Closed ที่ไม่อยู่ใน CSV</p>
+              <p className="text-xs text-neutral-500 mt-0.5">
                 {rows.length > 0
                   ? `โหลด CSV แล้ว (${rows.filter(r => r.hcId?.startsWith('REQ-2026-') && r.status === 'Closed').length} REQ-2026 Closed ใน CSV) — กดเพื่อเทียบกับ Firestore`
                   : 'ยังไม่โหลด CSV — กดเพื่อดึง REQ-2026 Closed ทั้งหมดจาก Firestore'}
@@ -1044,9 +1044,9 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
             <button
               onClick={handleFindExtra}
               disabled={findingExtra}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-black rounded-xl bg-slate-600 text-white hover:bg-slate-700 transition-colors shadow-sm disabled:opacity-60 shrink-0"
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-neutral-600 text-white hover:bg-neutral-700 transition-colors disabled:opacity-60 shrink-0"
             >
-              {findingExtra ? <><Loader2 size={12} className="animate-spin" /> กำลังค้นหา...</> : '🔍 ค้นหา'}
+              {findingExtra ? <><Loader2 size={12} strokeWidth={1} absoluteStrokeWidth className="animate-spin" /> กำลังค้นหา...</> : 'ค้นหา'}
             </button>
           </div>
 
@@ -1054,15 +1054,15 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
             <div className="mt-2 space-y-3">
               {/* Summary */}
               <div className="flex gap-3 text-xs font-bold">
-                <span className="px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                <span className="px-2 py-1 rounded-lg bg-blue-50 text-blue-900">
                   Firestore: {extraResult.firestoreIds.length} REQ-2026 Closed
                 </span>
                 {rows.length > 0 && (
-                  <span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                  <span className="px-2 py-1 rounded-lg bg-neutral-100 text-neutral-600">
                     CSV: {extraResult.csvIds.size} REQ-2026 Closed
                   </span>
                 )}
-                <span className={`px-2 py-1 rounded-lg font-black ${extraResult.extra.length > 0 ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'}`}>
+                <span className={`px-2 py-1 rounded-lg font-bold ${extraResult.extra.length > 0 ? 'bg-red-50 text-red-700' : 'bg-green-fresh-50 text-green-fresh-900'}`}>
                   Extra: {extraResult.extra.length} records
                 </span>
               </div>
@@ -1075,27 +1075,27 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
                 )
                 if (!missingInFirestore.length) return null
                 return (
-                  <div className="rounded-xl border border-orange-200 dark:border-orange-800 overflow-hidden">
-                    <p className="px-3 py-2 text-xs font-black text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20">
-                      ⚠️ อยู่ใน CSV แต่ยังไม่อยู่ใน Firestore ({missingInFirestore.length} records) — ยังไม่ได้ import!
+                  <div className="rounded-xl border border-orange-100 overflow-hidden">
+                    <p className="px-3 py-2 text-xs font-bold text-orange-900 bg-orange-50">
+                      อยู่ใน CSV แต่ยังไม่อยู่ใน Firestore ({missingInFirestore.length} records) — ยังไม่ได้ import!
                     </p>
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
-                        <thead className="bg-orange-50 dark:bg-orange-900/10">
+                        <thead className="bg-orange-50">
                           <tr>
                             {['HCID','ตำแหน่ง','แผนก','Candidate','Onboard Date'].map(h => (
-                              <th key={h} className="px-3 py-1.5 text-left font-black text-orange-600 dark:text-orange-400 whitespace-nowrap">{h}</th>
+                              <th key={h} className="px-3 py-1.5 text-left font-bold text-orange-700 whitespace-nowrap">{h}</th>
                             ))}
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-orange-100 dark:divide-orange-900/20">
+                        <tbody className="divide-y divide-orange-100">
                           {missingInFirestore.map(r => (
-                            <tr key={r.hcId} className="bg-white dark:bg-slate-900">
-                              <td className="px-3 py-2 font-black text-orange-700 dark:text-orange-400 whitespace-nowrap">{r.hcId}</td>
-                              <td className="px-3 py-2 text-gray-800 dark:text-gray-200 max-w-[180px] truncate">{r.position}</td>
-                              <td className="px-3 py-2 text-gray-600 dark:text-slate-400">{r.department}</td>
-                              <td className="px-3 py-2 text-gray-600 dark:text-slate-400 max-w-[140px] truncate">{r.candidateName}</td>
-                              <td className="px-3 py-2 text-gray-500 dark:text-slate-500 whitespace-nowrap">{r.startDate}</td>
+                            <tr key={r.hcId} className="bg-white">
+                              <td className="px-3 py-2 font-bold text-orange-900 whitespace-nowrap">{r.hcId}</td>
+                              <td className="px-3 py-2 text-neutral-800 max-w-[180px] truncate">{r.position}</td>
+                              <td className="px-3 py-2 text-neutral-600">{r.department}</td>
+                              <td className="px-3 py-2 text-neutral-600 max-w-[140px] truncate">{r.candidateName}</td>
+                              <td className="px-3 py-2 text-neutral-500 whitespace-nowrap">{r.startDate}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1107,28 +1107,28 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
 
               {/* Extra records list */}
               {extraResult.extra.length > 0 && (
-                <div className="rounded-xl border border-red-200 dark:border-red-800 overflow-hidden">
-                  <p className="px-3 py-2 text-xs font-black text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20">
-                    🚨 อยู่ใน Firestore แต่ไม่อยู่ใน CSV ({extraResult.extra.length} records)
+                <div className="rounded-xl border border-red-100 overflow-hidden">
+                  <p className="px-3 py-2 text-xs font-bold text-red-700 bg-red-50">
+                    อยู่ใน Firestore แต่ไม่อยู่ใน CSV ({extraResult.extra.length} records)
                   </p>
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
-                      <thead className="bg-red-50 dark:bg-red-900/10">
+                      <thead className="bg-red-50">
                         <tr>
                           {['HCID','ตำแหน่ง','แผนก','Candidate','Onboard Date','Created'].map(h => (
-                            <th key={h} className="px-3 py-1.5 text-left font-black text-red-600 dark:text-red-400 whitespace-nowrap">{h}</th>
+                            <th key={h} className="px-3 py-1.5 text-left font-bold text-red-700 whitespace-nowrap">{h}</th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-red-100 dark:divide-red-900/20">
+                      <tbody className="divide-y divide-red-100">
                         {extraResult.extra.map(r => (
-                          <tr key={r.hcId} className="bg-white dark:bg-slate-900">
-                            <td className="px-3 py-2 font-black text-red-700 dark:text-red-400 whitespace-nowrap">{r.hcId}</td>
-                            <td className="px-3 py-2 text-gray-800 dark:text-gray-200 max-w-[180px] truncate">{r.position}</td>
-                            <td className="px-3 py-2 text-gray-600 dark:text-slate-400">{r.department}</td>
-                            <td className="px-3 py-2 text-gray-600 dark:text-slate-400 max-w-[140px] truncate">{r.candidateName}</td>
-                            <td className="px-3 py-2 text-gray-500 dark:text-slate-500 whitespace-nowrap">{r.startDate}</td>
-                            <td className="px-3 py-2 text-gray-400 dark:text-slate-600 whitespace-nowrap">{r.createdAt}</td>
+                          <tr key={r.hcId} className="bg-white">
+                            <td className="px-3 py-2 font-bold text-red-700 whitespace-nowrap">{r.hcId}</td>
+                            <td className="px-3 py-2 text-neutral-800 max-w-[180px] truncate">{r.position}</td>
+                            <td className="px-3 py-2 text-neutral-600">{r.department}</td>
+                            <td className="px-3 py-2 text-neutral-600 max-w-[140px] truncate">{r.candidateName}</td>
+                            <td className="px-3 py-2 text-neutral-500 whitespace-nowrap">{r.startDate}</td>
+                            <td className="px-3 py-2 text-neutral-400 whitespace-nowrap">{r.createdAt}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1141,16 +1141,16 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
               {extraResult.firestore2025cross && (
                 <div className="mt-1 space-y-2">
                   <div className="flex gap-3 text-xs font-bold">
-                    <span className="px-2 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                    <span className="px-2 py-1 rounded-lg bg-purple-50 text-purple-900">
                       Firestore REQ-2025 crossover (closedAt 2026): {extraResult.firestore2025cross.length}
                     </span>
                     {rows.length > 0 && (
-                      <span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                      <span className="px-2 py-1 rounded-lg bg-neutral-100 text-neutral-600">
                         CSV REQ-2025 crossover: {extraResult.csvSet2025cross.size}
                       </span>
                     )}
                     {rows.length > 0 && (
-                      <span className={`px-2 py-1 rounded-lg font-black ${extraResult.extra2025.length > 0 ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'}`}>
+                      <span className={`px-2 py-1 rounded-lg font-bold ${extraResult.extra2025.length > 0 ? 'bg-red-50 text-red-700' : 'bg-green-fresh-50 text-green-fresh-900'}`}>
                         Extra crossover: {extraResult.extra2025.length}
                       </span>
                     )}
@@ -1158,31 +1158,31 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
 
                   {/* REQ-2025 ที่ Firestore นับว่า crossover แต่ CSV ไม่นับ */}
                   {extraResult.extra2025.length > 0 && (
-                    <div className="rounded-xl border border-purple-200 dark:border-purple-800 overflow-hidden">
-                      <p className="px-3 py-2 text-xs font-black text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20">
-                        🔎 REQ-2025 ที่ Firestore closedAt ปี 2026 แต่ CSV Onboard Date ไม่ตรง ({extraResult.extra2025.length} records)
+                    <div className="rounded-xl border border-purple-100 overflow-hidden">
+                      <p className="px-3 py-2 text-xs font-bold text-purple-700 bg-purple-50">
+                        REQ-2025 ที่ Firestore closedAt ปี 2026 แต่ CSV Onboard Date ไม่ตรง ({extraResult.extra2025.length} records)
                       </p>
                       <div className="overflow-x-auto">
                         <table className="w-full text-xs">
-                          <thead className="bg-purple-50 dark:bg-purple-900/10">
+                          <thead className="bg-purple-50">
                             <tr>
                               {['HCID','ตำแหน่ง','แผนก','Candidate','startDate (Firestore)','closedAt (Firestore)','CSV startDate'].map(h => (
-                                <th key={h} className="px-3 py-1.5 text-left font-black text-purple-600 dark:text-purple-400 whitespace-nowrap">{h}</th>
+                                <th key={h} className="px-3 py-1.5 text-left font-bold text-purple-700 whitespace-nowrap">{h}</th>
                               ))}
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-purple-100 dark:divide-purple-900/20">
+                          <tbody className="divide-y divide-purple-100">
                             {extraResult.extra2025.map(r => {
                               const csvRow = rows.find(cr => cr.hcId === r.hcId)
                               return (
-                                <tr key={r.hcId} className="bg-white dark:bg-slate-900">
-                                  <td className="px-3 py-2 font-black text-purple-700 dark:text-purple-400 whitespace-nowrap">{r.hcId}</td>
-                                  <td className="px-3 py-2 text-gray-800 dark:text-gray-200 max-w-[160px] truncate">{r.position}</td>
-                                  <td className="px-3 py-2 text-gray-600 dark:text-slate-400">{r.department}</td>
-                                  <td className="px-3 py-2 text-gray-600 dark:text-slate-400 max-w-[140px] truncate">{r.candidateName}</td>
-                                  <td className="px-3 py-2 text-gray-500 dark:text-slate-500 whitespace-nowrap">{r.startDate}</td>
-                                  <td className="px-3 py-2 font-bold text-purple-600 dark:text-purple-400 whitespace-nowrap">{r.closedAtStr}</td>
-                                  <td className="px-3 py-2 text-gray-400 dark:text-slate-600 whitespace-nowrap">{csvRow?.startDate ?? '—'}</td>
+                                <tr key={r.hcId} className="bg-white">
+                                  <td className="px-3 py-2 font-bold text-purple-700 whitespace-nowrap">{r.hcId}</td>
+                                  <td className="px-3 py-2 text-neutral-800 max-w-[160px] truncate">{r.position}</td>
+                                  <td className="px-3 py-2 text-neutral-600">{r.department}</td>
+                                  <td className="px-3 py-2 text-neutral-600 max-w-[140px] truncate">{r.candidateName}</td>
+                                  <td className="px-3 py-2 text-neutral-500 whitespace-nowrap">{r.startDate}</td>
+                                  <td className="px-3 py-2 font-bold text-purple-700 whitespace-nowrap">{r.closedAtStr}</td>
+                                  <td className="px-3 py-2 text-neutral-400 whitespace-nowrap">{csvRow?.startDate ?? '—'}</td>
                                 </tr>
                               )
                             })}
@@ -1194,31 +1194,31 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
 
                   {/* All REQ-2025 crossover in Firestore (collapsed) */}
                   <details className="text-xs">
-                    <summary className="cursor-pointer text-slate-500 dark:text-slate-400 font-bold hover:text-slate-700 dark:hover:text-slate-300">
+                    <summary className="cursor-pointer text-neutral-500 font-bold hover:text-neutral-700">
                       ดู REQ-2025 crossover ทั้งหมดใน Firestore ({extraResult.firestore2025cross.length} records)
                     </summary>
-                    <div className="mt-2 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                    <div className="mt-2 rounded-xl border border-neutral-100 overflow-hidden">
                       <div className="overflow-x-auto max-h-64">
                         <table className="w-full text-xs">
-                          <thead className="sticky top-0 bg-slate-100 dark:bg-slate-700">
+                          <thead className="sticky top-0 bg-neutral-100">
                             <tr>
                               {['HCID','ตำแหน่ง','Candidate','startDate (Firestore)','closedAt (Firestore)','CSV startDate'].map(h => (
-                                <th key={h} className="px-3 py-1.5 text-left font-black text-slate-500 dark:text-slate-400 whitespace-nowrap">{h}</th>
+                                <th key={h} className="px-3 py-1.5 text-left font-bold text-neutral-500 whitespace-nowrap">{h}</th>
                               ))}
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          <tbody className="divide-y divide-neutral-100">
                             {extraResult.firestore2025cross.map(r => {
                               const csvRow = rows.find(cr => cr.hcId === r.hcId)
                               const isExtra = rows.length > 0 && !extraResult.csvSet2025cross.has(r.hcId)
                               return (
-                                <tr key={r.hcId} className={isExtra ? 'bg-purple-50 dark:bg-purple-900/10' : ''}>
-                                  <td className={`px-3 py-1.5 font-bold whitespace-nowrap ${isExtra ? 'text-purple-600 dark:text-purple-400' : 'text-slate-700 dark:text-slate-300'}`}>{r.hcId}</td>
-                                  <td className="px-3 py-1.5 text-gray-600 dark:text-slate-400 max-w-[160px] truncate">{r.position}</td>
-                                  <td className="px-3 py-1.5 text-gray-500 dark:text-slate-500 max-w-[130px] truncate">{r.candidateName}</td>
-                                  <td className="px-3 py-1.5 text-gray-500 dark:text-slate-500 whitespace-nowrap">{r.startDate}</td>
-                                  <td className="px-3 py-1.5 text-purple-600 dark:text-purple-400 whitespace-nowrap">{r.closedAtStr}</td>
-                                  <td className="px-3 py-1.5 text-gray-400 dark:text-slate-600 whitespace-nowrap">{csvRow?.startDate ?? '—'}</td>
+                                <tr key={r.hcId} className={isExtra ? 'bg-purple-50' : ''}>
+                                  <td className={`px-3 py-1.5 font-bold whitespace-nowrap ${isExtra ? 'text-purple-700' : 'text-neutral-700'}`}>{r.hcId}</td>
+                                  <td className="px-3 py-1.5 text-neutral-600 max-w-[160px] truncate">{r.position}</td>
+                                  <td className="px-3 py-1.5 text-neutral-500 max-w-[130px] truncate">{r.candidateName}</td>
+                                  <td className="px-3 py-1.5 text-neutral-500 whitespace-nowrap">{r.startDate}</td>
+                                  <td className="px-3 py-1.5 text-purple-700 whitespace-nowrap">{r.closedAtStr}</td>
+                                  <td className="px-3 py-1.5 text-neutral-400 whitespace-nowrap">{csvRow?.startDate ?? '—'}</td>
                                 </tr>
                               )
                             })}
@@ -1232,27 +1232,27 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
 
               {/* All Firestore REQ-2026 list (collapsed) */}
               <details className="text-xs">
-                <summary className="cursor-pointer text-slate-500 dark:text-slate-400 font-bold hover:text-slate-700 dark:hover:text-slate-300">
+                <summary className="cursor-pointer text-neutral-500 font-bold hover:text-neutral-700">
                   ดู REQ-2026 Closed ทั้งหมดใน Firestore ({extraResult.firestoreIds.length} records)
                 </summary>
-                <div className="mt-2 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div className="mt-2 rounded-xl border border-neutral-100 overflow-hidden">
                   <div className="overflow-x-auto max-h-64">
                     <table className="w-full text-xs">
-                      <thead className="sticky top-0 bg-slate-100 dark:bg-slate-700">
+                      <thead className="sticky top-0 bg-neutral-100">
                         <tr>
                           {['HCID','ตำแหน่ง','แผนก','Candidate','Onboard Date'].map(h => (
-                            <th key={h} className="px-3 py-1.5 text-left font-black text-slate-500 dark:text-slate-400 whitespace-nowrap">{h}</th>
+                            <th key={h} className="px-3 py-1.5 text-left font-bold text-neutral-500 whitespace-nowrap">{h}</th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      <tbody className="divide-y divide-neutral-100">
                         {extraResult.firestoreIds.map(r => (
-                          <tr key={r.hcId} className={`${rows.length > 0 && !extraResult.csvIds.has(r.hcId) ? 'bg-red-50 dark:bg-red-900/10' : ''}`}>
-                            <td className={`px-3 py-1.5 font-bold whitespace-nowrap ${rows.length > 0 && !extraResult.csvIds.has(r.hcId) ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300'}`}>{r.hcId}</td>
-                            <td className="px-3 py-1.5 text-gray-600 dark:text-slate-400 max-w-[180px] truncate">{r.position}</td>
-                            <td className="px-3 py-2 text-gray-500 dark:text-slate-500">{r.department}</td>
-                            <td className="px-3 py-2 text-gray-500 dark:text-slate-500 max-w-[140px] truncate">{r.candidateName}</td>
-                            <td className="px-3 py-2 text-gray-400 dark:text-slate-600 whitespace-nowrap">{r.startDate}</td>
+                          <tr key={r.hcId} className={`${rows.length > 0 && !extraResult.csvIds.has(r.hcId) ? 'bg-red-50' : ''}`}>
+                            <td className={`px-3 py-1.5 font-bold whitespace-nowrap ${rows.length > 0 && !extraResult.csvIds.has(r.hcId) ? 'text-red-700' : 'text-neutral-700'}`}>{r.hcId}</td>
+                            <td className="px-3 py-1.5 text-neutral-600 max-w-[180px] truncate">{r.position}</td>
+                            <td className="px-3 py-2 text-neutral-500">{r.department}</td>
+                            <td className="px-3 py-2 text-neutral-500 max-w-[140px] truncate">{r.candidateName}</td>
+                            <td className="px-3 py-2 text-neutral-400 whitespace-nowrap">{r.startDate}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1264,7 +1264,7 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
           )}
 
           {extraResult?.error && (
-            <p className="text-xs font-bold text-red-500 mt-2">⚠ Error: {extraResult.error}</p>
+            <p className="text-xs font-bold text-red-700 mt-2">⚠ Error: {extraResult.error}</p>
           )}
         </div>
 

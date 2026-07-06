@@ -25,8 +25,8 @@ export default function MyRequestsPage({ user, role, department, isDarkMode, tog
     <Layout user={user} role={role} isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode}>
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100 italic tracking-tight">คำขอของฉัน</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">คำขออัตรากำลังที่คุณยื่นทั้งหมด</p>
+          <h1 className="text-xl font-bold text-neutral-900">คำขอของฉัน</h1>
+          <p className="mt-0.5 text-sm text-neutral-500">คำขออัตรากำลังที่คุณยื่นทั้งหมด</p>
         </div>
 
         {/* Manager ใช้ ManagerRequestsView ที่ออกแบบมาเฉพาะ, role อื่นใช้ RequestTable */}

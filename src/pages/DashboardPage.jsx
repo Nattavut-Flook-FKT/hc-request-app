@@ -30,10 +30,9 @@ import TAWorkloadPanel from '../components/Dashboard/TAWorkloadPanel'
 import ReportPanel from '../components/Dashboard/ReportPanel'
 import YoYChart from '../components/Dashboard/YoYChart'
 import ManpowerPivot from '../components/Dashboard/ManpowerPivot'
-import { useState, useMemo, useEffect } from 'react'
+import StatsListener from '../components/Shared/StatsListener'
+import { useState, useMemo } from 'react'
 import { BarChart2, List, ChevronDown, ChevronUp } from 'lucide-react'
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore'
-import { db } from '../services/firebase'
 
 /**
  * คำนวณ stat ทั้ง 7 ตัวที่ StatCards ต้องการ
@@ -116,62 +115,62 @@ function ClosedBreakdown({ requests, yearFilter }) {
     const createdYr = r.createdAt?.toDate?.()?.getFullYear() ?? '?'
     const closedAtStr = r.closedAt?.toDate?.()?.toLocaleDateString('th-TH', { year:'numeric', month:'short', day:'numeric' }) ?? '—'
     return (
-      <tr className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
-        <td className="px-3 py-1.5 font-mono text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">{r.hcId}</td>
-        <td className="px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 max-w-[200px] truncate">{r.position}</td>
-        <td className="px-3 py-1.5 text-xs text-gray-500 dark:text-slate-400">{r.department}</td>
-        <td className="px-3 py-1.5 text-xs text-gray-500 dark:text-slate-400 max-w-[120px] truncate">{r.candidateName || '—'}</td>
-        <td className="px-3 py-1.5 text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">{r.startDate || '—'}</td>
-        <td className="px-3 py-1.5 text-xs text-gray-400 dark:text-slate-600 whitespace-nowrap">{closedAtStr}</td>
-        <td className="px-3 py-1.5 text-xs text-gray-400 dark:text-slate-600">{createdYr}</td>
+      <tr className="border-b border-neutral-100 transition-colors last:border-0 hover:bg-neutral-50">
+        <td className="whitespace-nowrap px-3 py-2 font-mono text-xs font-bold text-neutral-700">{r.hcId}</td>
+        <td className="max-w-[200px] truncate px-3 py-2 text-xs text-neutral-700">{r.position}</td>
+        <td className="px-3 py-2 text-xs text-neutral-500">{r.department}</td>
+        <td className="max-w-[120px] truncate px-3 py-2 text-xs text-neutral-500">{r.candidateName || '—'}</td>
+        <td className="whitespace-nowrap px-3 py-2 text-xs text-neutral-500">{r.startDate || '—'}</td>
+        <td className="whitespace-nowrap px-3 py-2 text-xs text-neutral-400">{closedAtStr}</td>
+        <td className="px-3 py-2 text-xs text-neutral-400">{createdYr}</td>
       </tr>
     )
   }
 
   const THead = () => (
-    <thead className="sticky top-0 bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
+    <thead className="sticky top-0 border-b border-neutral-100 bg-white">
       <tr>
-        {['HCID','ตำแหน่ง','แผนก','Candidate','Onboard Date','closedAt','เปิดปี'].map(h => (
-          <th key={h} className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-wider text-gray-400 dark:text-slate-500 whitespace-nowrap">{h}</th>
+        {['HCID','ตำแหน่ง','แผนก','Candidate','Onboard date','Closed at','เปิดปี'].map(h => (
+          <th key={h} className="whitespace-nowrap px-3 py-2 text-left text-[11px] font-bold text-neutral-500">{h}</th>
         ))}
       </tr>
     </thead>
   )
 
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900/50 overflow-hidden">
+    <div className="overflow-hidden rounded-[14px] border border-neutral-100 bg-white">
       {/* Header */}
       <button
         onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+        className="flex w-full items-center justify-between px-4 py-3 transition-colors hover:bg-neutral-50"
       >
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">🔍 Closed Breakdown {yearFilter}</span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold">
-            {closedAll.length} records total
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-bold text-neutral-900">Closed breakdown {yearFilter}</span>
+          <span className="rounded-full bg-neutral-50 px-2 py-0.5 text-xs font-bold text-neutral-600">
+            ทั้งหมด {closedAll.length}
           </span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold">
+          <span className="rounded-full bg-dark-green-50 px-2 py-0.5 text-xs font-bold text-dark-green-900">
             เปิดปี {yearFilter}: {sameYear.length}
           </span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 font-bold">
-            crossover จากปีก่อน: {crossover.length}
+          <span className="rounded-full bg-neutral-50 px-2 py-0.5 text-xs font-bold text-neutral-600">
+            crossover: {crossover.length}
           </span>
         </div>
-        {open ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
+        {open ? <ChevronUp size={16} strokeWidth={1} absoluteStrokeWidth className="text-neutral-400" /> : <ChevronDown size={16} strokeWidth={1} absoluteStrokeWidth className="text-neutral-400" />}
       </button>
 
       {open && (
-        <div className="border-t border-slate-200 dark:border-slate-700">
+        <div className="border-t border-neutral-100">
           {/* Crossover section */}
           {crossover.length > 0 && (
             <div>
-              <p className="px-4 py-2 text-[10px] font-black text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 uppercase tracking-wider">
-                🔀 Crossover จากปีก่อน — เปิดก่อนปี {yearFilter} แต่ปิดปี {yearFilter} ({crossover.length} records)
+              <p className="border-b border-neutral-100 bg-neutral-50 px-4 py-2 text-xs font-bold text-neutral-600">
+                Crossover จากปีก่อน — เปิดก่อนปี {yearFilter} แต่ปิดปี {yearFilter} ({crossover.length} รายการ)
               </p>
-              <div className="overflow-x-auto max-h-64">
+              <div className="max-h-64 overflow-x-auto">
                 <table className="w-full">
                   <THead />
-                  <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+                  <tbody>
                     {crossover.sort((a,b) => (a.hcId||'').localeCompare(b.hcId||'')).map(r => <Row key={r.id} r={r} />)}
                   </tbody>
                 </table>
@@ -182,13 +181,13 @@ function ClosedBreakdown({ requests, yearFilter }) {
           {/* Same-year section */}
           {sameYear.length > 0 && (
             <div>
-              <p className="px-4 py-2 text-[10px] font-black text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 uppercase tracking-wider border-t border-slate-200 dark:border-slate-700">
-                📋 เปิดและปิดในปี {yearFilter} ({sameYear.length} records)
+              <p className="border-y border-neutral-100 bg-neutral-50 px-4 py-2 text-xs font-bold text-neutral-600">
+                เปิดและปิดในปี {yearFilter} ({sameYear.length} รายการ)
               </p>
-              <div className="overflow-x-auto max-h-64">
+              <div className="max-h-64 overflow-x-auto">
                 <table className="w-full">
                   <THead />
-                  <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+                  <tbody>
                     {sameYear.sort((a,b) => (a.hcId||'').localeCompare(b.hcId||'')).map(r => <Row key={r.id} r={r} />)}
                   </tbody>
                 </table>
@@ -199,51 +198,6 @@ function ClosedBreakdown({ requests, yearFilter }) {
       )}
     </div>
   )
-}
-
-/**
- * StatsListener — Firestore listener น้ำหนักเบา ไม่มี DOM rendering
- * ─────────────────────────────────────────────────────────────────
- * ทำหน้าที่แทน hidden <RequestTable> เดิม:
- *   - subscribe onSnapshot บน hc_requests (limit 2000) แบบ realtime
- *   - หยุด listener เมื่อ browser tab ซ่อน → เปิดใหม่เมื่อกลับมา
- *   - ส่ง data ทั้งหมดขึ้นไปให้ DashboardPage ผ่าน onData callback
- *
- * ข้อดีเหนือ hidden RequestTable:
- *   - ไม่ render DOM เลย (return null)
- *   - ไม่มี filter/sort/pagination state
- *   - ไม่ต้องโหลด component หนักๆ ของ RequestTable
- */
-function StatsListener({ onData }) {
-  useEffect(() => {
-    const q = query(collection(db, 'hc_requests'), orderBy('createdAt', 'desc'), limit(2000))
-    let unsub = null
-
-    const subscribe = () => {
-      if (unsub) return
-      unsub = onSnapshot(q, snap => {
-        onData(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-      })
-    }
-
-    const unsubscribe = () => {
-      unsub?.()
-      unsub = null
-    }
-
-    subscribe()
-
-    // หยุด listener เมื่อ tab ซ่อน → ประหยัด Firestore reads
-    const onVisibility = () => document.hidden ? unsubscribe() : subscribe()
-    document.addEventListener('visibilitychange', onVisibility)
-
-    return () => {
-      unsubscribe()
-      document.removeEventListener('visibilitychange', onVisibility)
-    }
-  }, [onData])
-
-  return null
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -340,24 +294,24 @@ export default function DashboardPage({ user, role, department, isDarkMode, togg
     <Layout user={user} role={role} isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode}>
       <div className="flex flex-col gap-6">
 
-        {/* ── Page header + tab switcher ───────────────────────── */}
-        <div className="flex items-center justify-between gap-4">
+        {/* ── Page header + filters ────────────────────────────── */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-black text-gray-800 dark:text-gray-100 italic tracking-tight">Dashboard</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">ภาพรวมคำขออัตรากำลังทั้งหมด</p>
+            <h1 className="text-xl font-bold text-neutral-900">Dashboard</h1>
+            <p className="mt-0.5 text-sm text-neutral-500">ภาพรวมคำขออัตรากำลังทั้งหมด</p>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Year filter — ทั้งหมด / 2025 / 2026 */}
-            <div className="flex items-center gap-0.5 p-0.5 bg-gray-100 dark:bg-slate-800 rounded-xl">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Year filter — Pill Segmented (DS §15.2) */}
+            <div className="inline-flex items-center gap-0.5 rounded-full border border-neutral-100 p-0.5">
               {[null, 2025, 2026].map(y => (
                 <button
                   key={y ?? 'all'}
                   onClick={() => setYearFilter(y)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-normal transition-colors ${
                     yearFilter === y
-                      ? 'bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-100 shadow-sm'
-                      : 'text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
+                      ? 'bg-green-fresh-50 text-green-fresh-900'
+                      : 'text-neutral-900 hover:bg-neutral-50'
                   }`}
                 >
                   {y ?? 'ทั้งหมด'}
@@ -365,19 +319,19 @@ export default function DashboardPage({ user, role, department, isDarkMode, togg
               ))}
             </div>
 
-            {/* Tab switcher — เลือกระหว่าง ภาพรวม / รายการ */}
-            <div className="flex items-center gap-0.5 p-0.5 bg-gray-100 dark:bg-slate-800 rounded-xl">
+            {/* Tab switcher — Pill Segmented */}
+            <div className="inline-flex items-center gap-0.5 rounded-full border border-neutral-100 p-0.5">
               {TABS.map(t => (
                 <button
                   key={t.v}
                   onClick={() => setTab(t.v)}
-                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+                  className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-normal transition-colors ${
                     tab === t.v
-                      ? 'bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-100 shadow-sm'
-                      : 'text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
+                      ? 'bg-green-fresh-50 text-green-fresh-900'
+                      : 'text-neutral-900 hover:bg-neutral-50'
                   }`}
                 >
-                  <t.icon size={14} />
+                  <t.icon size={14} strokeWidth={1} absoluteStrokeWidth />
                   {t.label}
                 </button>
               ))}
@@ -391,17 +345,17 @@ export default function DashboardPage({ user, role, department, isDarkMode, togg
         ══════════════════════════════════════════════════════════ */}
         {tab === 'overview' && (
           <>
-            {/* Banner เมื่อกำลัง filter ตาม TA */}
+            {/* Banner เมื่อกำลัง filter ตาม TA — tinted (dark-green-50 · DS-#018) */}
             {selectedTA && (
-              <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
-                <p className="text-xs font-bold text-[#008065] dark:text-emerald-400">
+              <div className="flex items-center justify-between rounded-lg bg-dark-green-50 px-4 py-2.5">
+                <p className="text-sm font-bold text-dark-green-900">
                   แสดงเฉพาะเคสของ: {selectedTA}
                 </p>
                 <button
                   onClick={() => setSelectedTA(null)}
-                  className="text-[10px] font-black text-[#008065] dark:text-emerald-400 hover:underline uppercase tracking-wider"
+                  className="text-xs font-bold text-dark-green-700 hover:underline"
                 >
-                  ✕ ล้าง
+                  ล้างตัวกรอง
                 </button>
               </div>
             )}

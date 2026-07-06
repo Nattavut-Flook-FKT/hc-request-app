@@ -23,10 +23,17 @@ import { collection, getDocs, getDoc, setDoc, writeBatch, doc, runTransaction, u
 import { db } from '../services/firebase'
 import { Clock, Tag, FileText, Trash2, DatabaseZap, Settings2, AlertTriangle, RefreshCw, CheckCircle2, AlertCircle, UserCog, Users, ChevronDown, ChevronUp, Lock, Eye, EyeOff, Upload, Power, PowerOff, X } from 'lucide-react'
 
-const ADMIN_PIN = import.meta.env.VITE_ADMIN_TOOLS_PIN || 'Admin2025'
+// PIN อ่านจาก env เท่านั้น — ไม่มี fallback ใน source (ถ้า env ไม่ตั้ง = ล็อกตาย ปลดไม่ได้)
+const ADMIN_PIN = import.meta.env.VITE_ADMIN_TOOLS_PIN
 import { listJDFiles, deleteJDFile } from '../services/supabase'
 import { syncFromSheets, syncBatchToSheets, syncAllToSheets } from '../services/webhook'
 import Layout from '../components/Shared/Layout'
+import { grantEmails } from '../utils/grants'
+
+/** แปลง input คั่น comma → array อีเมล lowercase (รองรับ 1 แผนกหลาย Manager) */
+function parseEmails(input) {
+  return String(input || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
+}
 
 /** ตัดนามสกุลออก เหลือแค่ "ชื่อ (nickname)" — เหมือน RequestTable.shortName */
 function shortName(fullName) {
@@ -86,22 +93,25 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
   const [deptExpanded,  setDeptExpanded]  = useState(false)
   const lookupTimers = useRef({})
 
-  /** lookupEmail — debounce 600ms แล้ว getDoc จาก users collection */
-  const lookupEmail = useCallback((dept, email) => {
+  /** lookupEmail — debounce 600ms แล้ว getDoc จาก users collection
+   *  รองรับหลายอีเมลคั่น comma — ทุกอีเมลต้องมีใน users ถึงจะถือว่า found */
+  const lookupEmail = useCallback((dept, input) => {
     clearTimeout(lookupTimers.current[dept])
-    const trimmed = email.trim().toLowerCase()
-    if (!trimmed) {
+    const emails = parseEmails(input)
+    if (!emails.length) {
       setDeptLookup(l => ({ ...l, [dept]: null }))
       return
     }
     setDeptLookup(l => ({ ...l, [dept]: { loading: true } }))
     lookupTimers.current[dept] = setTimeout(async () => {
       try {
-        const snap = await getDoc(doc(db, 'users', trimmed))
-        if (snap.exists()) {
-          setDeptLookup(l => ({ ...l, [dept]: { loading: false, found: true, name: snap.data().name || trimmed } }))
+        const snaps = await Promise.all(emails.map(e => getDoc(doc(db, 'users', e))))
+        const missing = emails.filter((_, i) => !snaps[i].exists())
+        if (missing.length === 0) {
+          const names = snaps.map((s, i) => s.data().name || emails[i]).join(', ')
+          setDeptLookup(l => ({ ...l, [dept]: { loading: false, found: true, name: names } }))
         } else {
-          setDeptLookup(l => ({ ...l, [dept]: { loading: false, found: false } }))
+          setDeptLookup(l => ({ ...l, [dept]: { loading: false, found: false, missing } }))
         }
       } catch {
         setDeptLookup(l => ({ ...l, [dept]: { loading: false, found: false } }))
@@ -242,12 +252,13 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
         .sort((a, b) => a.name.localeCompare(b.name, 'th'))
 
       setDepartments(depts)
-      // pre-fill email จาก existing mapping
-      setDeptManagers(Object.fromEntries(depts.map(d => [d.name, existing[d.name] || ''])))
+      // pre-fill email จาก existing mapping — grantEmails รองรับทั้งค่าเก่า (string) และใหม่ (array)
+      setDeptManagers(Object.fromEntries(depts.map(d => [d.name, grantEmails(existing[d.name]).join(', ')])))
       // trigger lookup สำหรับ dept ที่มี email อยู่แล้ว
       setDeptLookup({})
-      Object.entries(existing).forEach(([dept, email]) => {
-        if (email) setTimeout(() => lookupEmail(dept, email), 0)
+      Object.entries(existing).forEach(([dept, value]) => {
+        const joined = grantEmails(value).join(', ')
+        if (joined) setTimeout(() => lookupEmail(dept, joined), 0)
       })
       setDeptState('ready')
       setDeptExpanded(true)
@@ -257,14 +268,21 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
     }
   }
 
-  /** saveDeptManagers — บันทึก mapping dept → email ลง settings/deptManagers */
+  /** saveDeptManagers — บันทึก mapping dept → [emails] ลง settings/deptManagers
+   *  เก็บเป็น array เสมอ (1 แผนกหลาย Manager) และ merge กับค่าเดิม
+   *  เพื่อไม่ทับ grant ที่ตั้งจากหน้า Users ของแผนกที่ไม่ได้แก้ในนี้ */
   async function saveDeptManagers() {
     setDeptState('saving')
     try {
-      // เอาเฉพาะ dept ที่ lookup found เท่านั้น
-      const mapping = {}
-      Object.entries(deptLookup).forEach(([dept, v]) => {
-        if (v?.found) mapping[dept] = deptManagers[dept].trim().toLowerCase()
+      const snap = await getDoc(doc(db, 'settings', 'deptManagers'))
+      const mapping = snap.exists() ? { ...snap.data() } : {}
+      departments.forEach(({ name }) => {
+        const emails = parseEmails(deptManagers[name])
+        if (emails.length === 0) {
+          delete mapping[name]                       // เคลียร์ช่อง = ถอด grant ของแผนกนั้น
+        } else if (deptLookup[name]?.found) {
+          mapping[name] = emails                     // บันทึกเฉพาะช่องที่ทุกอีเมลผ่านการตรวจ
+        }
       })
       await setDoc(doc(db, 'settings', 'deptManagers'), mapping)
       setDeptState('saved')
@@ -470,39 +488,39 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
   const TOOLS = [
     {
       key: 'auditlog',
-      icon: <Clock size={20} />,
+      icon: <Clock size={20} strokeWidth={1} absoluteStrokeWidth />,
       label: 'Audit Log',
       desc: 'ลบประวัติการเปลี่ยนแปลงทั้งหมดใน hc_logs',
-      color: 'text-orange-600 dark:text-orange-400',
-      bg: 'bg-orange-50 dark:bg-orange-900/20',
-      border: 'border-orange-200 dark:border-orange-800',
+      color: 'text-orange-700',
+      bg: 'bg-orange-50',
+      border: 'border-orange-100',
     },
     {
       key: 'positions',
-      icon: <Tag size={20} />,
+      icon: <Tag size={20} strokeWidth={1} absoluteStrokeWidth />,
       label: 'Custom Positions',
       desc: 'ลบ custom positions ทั้งหมดใน Firestore',
-      color: 'text-purple-600 dark:text-purple-400',
-      bg: 'bg-purple-50 dark:bg-purple-900/20',
-      border: 'border-purple-200 dark:border-purple-800',
+      color: 'text-purple-700',
+      bg: 'bg-purple-50',
+      border: 'border-purple-100',
     },
     {
       key: 'jd',
-      icon: <FileText size={20} />,
+      icon: <FileText size={20} strokeWidth={1} absoluteStrokeWidth />,
       label: 'JD Files (Supabase)',
       desc: 'ลบไฟล์ JD PDF ทั้งหมดใน Supabase Storage',
-      color: 'text-red-600 dark:text-red-400',
-      bg: 'bg-red-50 dark:bg-red-900/20',
-      border: 'border-red-200 dark:border-red-800',
+      color: 'text-red-700',
+      bg: 'bg-red-50',
+      border: 'border-red-100',
     },
     {
       key: 'requests',
-      icon: <Trash2 size={20} />,
+      icon: <Trash2 size={20} strokeWidth={1} absoluteStrokeWidth />,
       label: 'HC Requests (ทั้งหมด)',
-      desc: 'ลบ request ทั้งหมดใน hc_requests — ระวัง ไม่สามารถย้อนกลับได้',
-      color: 'text-rose-700 dark:text-rose-400',
-      bg: 'bg-rose-50 dark:bg-rose-900/20',
-      border: 'border-rose-300 dark:border-rose-800',
+      desc: 'ลบ request ทั้งหมดใน hc_requests — ระวัง ไม่สามารถย้อนกลับได้ และลบเฉพาะ Firestore (แถวใน Google Sheets ไม่ถูกแตะ ต้องจัดการเอง)',
+      color: 'text-pink-700',
+      bg: 'bg-pink-50',
+      border: 'border-pink-100',
     },
   ]
 
@@ -510,16 +528,16 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
   if (!unlocked) {
     return (
       <Layout user={user} role={role} isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode}>
-        <div className="min-h-[70vh] flex items-center justify-center px-4">
+        <div className="flex min-h-[70vh] items-center justify-center px-4">
           <div className="w-full max-w-sm">
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-200 dark:border-slate-800 shadow-xl p-8">
-              <div className="flex flex-col items-center gap-4 mb-8">
-                <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                  <Lock size={24} className="text-slate-500 dark:text-slate-400" />
+            <div className="rounded-3xl border border-neutral-100 bg-white p-8 shadow-xl">
+              <div className="mb-8 flex flex-col items-center gap-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-neutral-100">
+                  <Lock size={24} strokeWidth={1} absoluteStrokeWidth className="text-neutral-500" />
                 </div>
                 <div className="text-center">
-                  <h2 className="text-lg font-black text-gray-900 dark:text-gray-100">Admin Tools</h2>
-                  <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">กรอกรหัสผ่านเพื่อเข้าถึง</p>
+                  <h2 className="text-lg font-bold text-neutral-900">Admin Tools</h2>
+                  <p className="mt-1 text-xs text-neutral-500">กรอกรหัสผ่านเพื่อเข้าถึง</p>
                 </div>
               </div>
               <form onSubmit={handlePinSubmit} className="flex flex-col gap-3">
@@ -530,26 +548,26 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
                     onChange={(e) => { setPinInput(e.target.value); setPinError(false) }}
                     placeholder="รหัสผ่าน"
                     autoFocus
-                    className={`w-full px-4 py-3 pr-10 rounded-xl border text-sm font-bold focus:outline-none focus:ring-2 transition-all bg-white dark:bg-slate-950 dark:text-gray-100
+                    className={`w-full rounded-lg border bg-white px-4 py-3 pr-10 text-sm font-bold transition-colors focus:outline-none
                       ${pinError
-                        ? 'border-red-400 dark:border-red-600 focus:ring-red-500/20 text-red-600 dark:text-red-400'
-                        : 'border-gray-200 dark:border-slate-700 focus:ring-emerald-500/20 focus:border-emerald-500'
+                        ? 'border-red-400 text-red-600'
+                        : 'border-neutral-100 focus:border-[1.5px] focus:border-dark-green-600'
                       }`}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPin(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-slate-300"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
                   >
-                    {showPin ? <EyeOff size={15} /> : <Eye size={15} />}
+                    {showPin ? <EyeOff size={15} strokeWidth={1} absoluteStrokeWidth /> : <Eye size={15} strokeWidth={1} absoluteStrokeWidth />}
                   </button>
                 </div>
                 {pinError && (
-                  <p className="text-xs font-bold text-red-500 text-center">รหัสผ่านไม่ถูกต้อง</p>
+                  <p className="text-center text-xs font-bold text-red-600">รหัสผ่านไม่ถูกต้อง</p>
                 )}
                 <button
                   type="submit"
-                  className="w-full py-3 rounded-xl bg-[#008065] hover:bg-[#006d56] text-white text-sm font-black transition-colors shadow-md shadow-emerald-500/20"
+                  className="w-full rounded-lg bg-dark-green-600 py-3 text-sm font-bold text-neutral-50 transition-colors hover:bg-dark-green-700"
                 >
                   เข้าถึง Admin Tools
                 </button>
@@ -563,23 +581,23 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
 
   return (
     <Layout user={user} role={role} isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode}>
-      <div className="max-w-xl mx-auto py-8 px-4">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800"><DatabaseZap size={20} className="text-slate-600 dark:text-slate-400"/></div>
+      <div className="mx-auto max-w-xl px-4 py-8">
+        <div className="mb-8 flex items-center gap-3">
+          <div className="rounded-xl bg-neutral-100 p-2"><DatabaseZap size={20} strokeWidth={1} absoluteStrokeWidth className="text-neutral-600"/></div>
           <div>
-            <h1 className="text-lg font-black text-gray-900 dark:text-gray-100">Admin Tools</h1>
-            <p className="text-xs text-gray-500 dark:text-slate-400">Bulk clear database — ไม่สามารถย้อนกลับได้</p>
+            <h1 className="text-lg font-bold text-neutral-900">Admin Tools</h1>
+            <p className="text-xs text-neutral-500">Bulk clear database — ไม่สามารถย้อนกลับได้</p>
           </div>
         </div>
 
         {/* ── Sync from Sheets card ───────────────────────────────────────────── */}
-        <div className="rounded-2xl border p-5 bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800 mb-2">
+        <div className="mb-2 rounded-2xl border border-dark-green-100 bg-dark-green-50 p-5">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <span className="text-emerald-600 dark:text-emerald-400"><RefreshCw size={20} /></span>
+              <span className="text-dark-green-700"><RefreshCw size={20} strokeWidth={1} absoluteStrokeWidth /></span>
               <div>
-                <p className="text-sm font-black text-emerald-700 dark:text-emerald-400">Sync จาก Google Sheets → Firestore</p>
-                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                <p className="text-sm font-bold text-dark-green-800">Sync จาก Google Sheets → Firestore</p>
+                <p className="mt-0.5 text-xs text-neutral-500">
                   ดึง Status / PIC / Candidate ที่ TA แก้ใน Sheets อัปเดตกลับมา Firestore
                 </p>
               </div>
@@ -587,59 +605,59 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
             <button
               onClick={handleSyncSheets}
               disabled={syncState === 'running'}
-              className={`flex items-center gap-2 text-xs font-black px-4 py-2 rounded-xl border transition-all shrink-0 shadow-sm
+              className={`flex shrink-0 items-center gap-2 rounded-lg border px-4 py-2 text-xs font-bold transition-colors
                 ${syncState === 'running'
-                  ? 'bg-gray-100 dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-400 cursor-wait'
+                  ? 'cursor-wait border-neutral-100 bg-neutral-50 text-neutral-400'
                   : syncState === 'done'
-                    ? 'bg-emerald-100 dark:bg-emerald-800/40 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300'
+                    ? 'border-dark-green-100 bg-dark-green-100 text-dark-green-800'
                     : syncState === 'error'
-                      ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-800 text-red-600 dark:text-red-400'
-                      : 'bg-white dark:bg-slate-800 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-800/40'
+                      ? 'border-red-100 bg-red-50 text-red-600'
+                      : 'border-dark-green-100 bg-white text-dark-green-700 hover:bg-dark-green-100'
                 }`}
             >
               {syncState === 'running' ? (
-                <><Settings2 size={13} className="animate-spin"/> กำลัง Sync...</>
+                <><Settings2 size={13} strokeWidth={1} absoluteStrokeWidth className="animate-spin"/> กำลัง Sync...</>
               ) : syncState === 'done' ? (
-                <><CheckCircle2 size={13}/> Synced {syncResult?.synced ?? 0} / {syncResult?.total ?? 0} rows</>
+                <><CheckCircle2 size={13} strokeWidth={1} absoluteStrokeWidth/> Synced {syncResult?.synced ?? 0} / {syncResult?.total ?? 0} rows</>
               ) : syncState === 'error' ? (
-                <><AlertCircle size={13}/> {syncResult?.error || 'Error'}</>
+                <><AlertCircle size={13} strokeWidth={1} absoluteStrokeWidth/> {syncResult?.error || 'Error'}</>
               ) : (
-                <><RefreshCw size={13}/> Sync Now</>
+                <><RefreshCw size={13} strokeWidth={1} absoluteStrokeWidth/> Sync Now</>
               )}
             </button>
           </div>
 
           {/* แสดง error list ถ้ามี (สูงสุด 5 rows) */}
           {syncState === 'done' && syncResult?.errors?.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-emerald-200 dark:border-emerald-800">
-              <p className="text-[10px] font-black uppercase tracking-widest text-orange-500 dark:text-orange-400 mb-1">ไม่พบ HCID ({syncResult.errors.length} rows)</p>
+            <div className="mt-3 border-t border-dark-green-100 pt-3">
+              <p className="mb-1 text-[11px] font-bold text-orange-600">ไม่พบ HCID ({syncResult.errors.length} rows)</p>
               {syncResult.errors.slice(0, 5).map((e, i) => (
-                <p key={i} className="text-[10px] text-gray-400 dark:text-slate-500 font-mono">{e.hcId}: {e.error}</p>
+                <p key={i} className="font-mono text-[11px] text-neutral-400">{e.hcId}: {e.error}</p>
               ))}
             </div>
           )}
         </div>
 
         {/* ── App → Sheets card ───────────────────────────────────────────────── */}
-        <div className="rounded-2xl border p-5 bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800 mb-2">
+        <div className="mb-2 rounded-2xl border border-dark-green-100 bg-dark-green-50 p-5">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <span className="text-emerald-600 dark:text-emerald-400"><Upload size={20} /></span>
+              <span className="text-dark-green-700"><Upload size={20} strokeWidth={1} absoluteStrokeWidth /></span>
               <div>
-                <p className="text-sm font-black text-emerald-700 dark:text-emerald-400">App → Google Sheets</p>
-                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Push ข้อมูลจาก Firestore ขึ้น Sheets — ทั้งหมดหรือระบุ ID</p>
+                <p className="text-sm font-bold text-dark-green-800">App → Google Sheets</p>
+                <p className="mt-0.5 text-xs text-neutral-500">Push ข้อมูลจาก Firestore ขึ้น Sheets — ทั้งหมดหรือระบุ ID</p>
               </div>
             </div>
             {pushState === 'done' ? (
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-800/40 px-3 py-1.5 rounded-xl shrink-0">✓ {pushResult}</span>
+              <span className="shrink-0 rounded-lg bg-dark-green-100 px-3 py-1.5 text-xs font-bold text-dark-green-800">✓ {pushResult}</span>
             ) : pushState === 'running' ? (
-              <span className="text-xs font-bold text-gray-400 flex items-center gap-1.5 shrink-0"><Settings2 size={13} className="animate-spin"/> กำลัง Push...</span>
+              <span className="flex shrink-0 items-center gap-1.5 text-xs font-bold text-neutral-400"><Settings2 size={13} strokeWidth={1} absoluteStrokeWidth className="animate-spin"/> กำลัง Push...</span>
             ) : pushState === 'error' ? (
-              <span className="text-xs font-bold text-red-500 shrink-0">{pushResult || 'Error'}</span>
+              <span className="shrink-0 text-xs font-bold text-red-600">{pushResult || 'Error'}</span>
             ) : (
               <button onClick={() => setPushModal(true)}
-                className="flex items-center gap-2 text-xs font-black px-4 py-2 rounded-xl border bg-white dark:bg-slate-800 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-800/40 transition-all shrink-0 shadow-sm">
-                <Upload size={13}/> Push to Sheets
+                className="flex shrink-0 items-center gap-2 rounded-lg border border-dark-green-100 bg-white px-4 py-2 text-xs font-bold text-dark-green-700 transition-colors hover:bg-dark-green-100">
+                <Upload size={13} strokeWidth={1} absoluteStrokeWidth/> Push to Sheets
               </button>
             )}
           </div>
@@ -647,27 +665,27 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
 
         {/* ── Maintenance Toggle card ──────────────────────────────────────────── */}
         {toggleMaintenance && (
-          <div className={`rounded-2xl border p-5 mb-2 ${maintenanceMode
-            ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800'
-            : 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800'}`}>
+          <div className={`mb-2 rounded-2xl border p-5 ${maintenanceMode
+            ? 'border-dark-green-100 bg-dark-green-50'
+            : 'border-orange-100 bg-orange-50'}`}>
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <span className={maintenanceMode ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-500 dark:text-orange-400'}>
-                  {maintenanceMode ? <Power size={20}/> : <PowerOff size={20}/>}
+                <span className={maintenanceMode ? 'text-dark-green-700' : 'text-orange-600'}>
+                  {maintenanceMode ? <Power size={20} strokeWidth={1} absoluteStrokeWidth/> : <PowerOff size={20} strokeWidth={1} absoluteStrokeWidth/>}
                 </span>
                 <div>
-                  <p className={`text-sm font-black ${maintenanceMode ? 'text-emerald-700 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>
-                    {maintenanceMode ? '🔴 ระบบปิดอยู่' : 'ระบบเปิดอยู่'}
+                  <p className={`text-sm font-bold ${maintenanceMode ? 'text-dark-green-800' : 'text-orange-700'}`}>
+                    {maintenanceMode ? 'ระบบปิดอยู่' : 'ระบบเปิดอยู่'}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                  <p className="mt-0.5 text-xs text-neutral-500">
                     {maintenanceMode ? 'ผู้ใช้ทั่วไปไม่สามารถเข้าใช้งานได้' : 'ผู้ใช้ทุกคนเข้าใช้งานได้ตามปกติ'}
                   </p>
                 </div>
               </div>
               <button onClick={toggleMaintenance} disabled={togglingMaintenance}
-                className={`flex items-center gap-2 text-xs font-black px-4 py-2 rounded-xl text-white transition-all shrink-0 shadow-sm disabled:opacity-50
-                  ${maintenanceMode ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-orange-500 hover:bg-orange-600'}`}>
-                {togglingMaintenance ? <Settings2 size={13} className="animate-spin"/> : maintenanceMode ? <Power size={13}/> : <PowerOff size={13}/>}
+                className={`flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold text-neutral-50 transition-colors disabled:opacity-50
+                  ${maintenanceMode ? 'bg-dark-green-600 hover:bg-dark-green-700' : 'bg-orange-600 hover:bg-orange-700'}`}>
+                {togglingMaintenance ? <Settings2 size={13} strokeWidth={1} absoluteStrokeWidth className="animate-spin"/> : maintenanceMode ? <Power size={13} strokeWidth={1} absoluteStrokeWidth/> : <PowerOff size={13} strokeWidth={1} absoluteStrokeWidth/>}
                 {togglingMaintenance ? 'กำลังดำเนินการ...' : maintenanceMode ? 'เปิดระบบ' : 'ปิดระบบ'}
               </button>
             </div>
@@ -675,13 +693,13 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
         )}
 
         {/* ── Fix TA Names card ───────────────────────────────────────────────── */}
-        <div className="rounded-2xl border p-5 bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800 mb-2">
+        <div className="mb-2 rounded-2xl border border-blue-100 bg-blue-50 p-5">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <span className="text-blue-600 dark:text-blue-400"><UserCog size={20} /></span>
+              <span className="text-blue-700"><UserCog size={20} strokeWidth={1} absoluteStrokeWidth /></span>
               <div>
-                <p className="text-sm font-black text-blue-700 dark:text-blue-400">Fix TA Names (ชื่อสั้น)</p>
-                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                <p className="text-sm font-bold text-blue-800">Fix TA Names (ชื่อสั้น)</p>
+                <p className="mt-0.5 text-xs text-neutral-500">
                   แปลง "Jitlada (Mo) Mooltha" → "Jitlada (Mo)" ใน assignedToName + statusHistory ทุก request
                 </p>
               </div>
@@ -689,37 +707,37 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
             <button
               onClick={fixTANames}
               disabled={fixNamesState === 'running'}
-              className={`flex items-center gap-2 text-xs font-black px-4 py-2 rounded-xl border transition-all shrink-0 shadow-sm whitespace-nowrap
+              className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border px-4 py-2 text-xs font-bold transition-colors
                 ${fixNamesState === 'running'
-                  ? 'bg-gray-100 dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-400 cursor-wait'
+                  ? 'cursor-wait border-neutral-100 bg-neutral-50 text-neutral-400'
                   : fixNamesState === 'done'
-                    ? 'bg-blue-100 dark:bg-blue-800/40 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                    ? 'border-blue-100 bg-blue-100 text-blue-800'
                     : fixNamesState === 'error'
-                      ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-800 text-red-600 dark:text-red-400'
-                      : 'bg-white dark:bg-slate-800 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-800/40'
+                      ? 'border-red-100 bg-red-50 text-red-600'
+                      : 'border-blue-100 bg-white text-blue-700 hover:bg-blue-100'
                 }`}
             >
               {fixNamesState === 'running' ? (
-                <><Settings2 size={13} className="animate-spin"/> กำลังแก้ไข...</>
+                <><Settings2 size={13} strokeWidth={1} absoluteStrokeWidth className="animate-spin"/> กำลังแก้ไข...</>
               ) : fixNamesState === 'done' ? (
-                <><CheckCircle2 size={13}/> แก้แล้ว {fixNamesResult?.updated ?? 0} / {fixNamesResult?.total ?? 0} docs</>
+                <><CheckCircle2 size={13} strokeWidth={1} absoluteStrokeWidth/> แก้แล้ว {fixNamesResult?.updated ?? 0} / {fixNamesResult?.total ?? 0} docs</>
               ) : fixNamesState === 'error' ? (
-                <><AlertCircle size={13}/> {fixNamesResult?.error || 'Error'}</>
+                <><AlertCircle size={13} strokeWidth={1} absoluteStrokeWidth/> {fixNamesResult?.error || 'Error'}</>
               ) : (
-                <><UserCog size={13}/> Fix Names</>
+                <><UserCog size={13} strokeWidth={1} absoluteStrokeWidth/> Fix Names</>
               )}
             </button>
           </div>
         </div>
 
         {/* ── Fix Requester Email-as-Name card ──────────────────────────────── */}
-        <div className="rounded-2xl border p-5 bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800 mb-2">
+        <div className="mb-2 rounded-2xl border border-banana-100 bg-banana-50 p-5">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <span className="text-amber-600 dark:text-amber-400"><UserCog size={20} /></span>
+              <span className="text-banana-700"><UserCog size={20} strokeWidth={1} absoluteStrokeWidth /></span>
               <div>
-                <p className="text-sm font-black text-amber-700 dark:text-amber-400">Fix ชื่อผู้ยื่น (email → ชื่อจริง)</p>
-                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                <p className="text-sm font-bold text-banana-900">Fix ชื่อผู้ยื่น (email → ชื่อจริง)</p>
+                <p className="mt-0.5 text-xs text-neutral-500">
                   แก้ record ที่ requesterName เป็น email เช่น "chutikarn.s@freshket.co" → lookup ชื่อจริงจาก users
                 </p>
               </div>
@@ -727,41 +745,41 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
             <button
               onClick={fixRequesterEmailName}
               disabled={fixEmailNameState === 'running'}
-              className={`flex items-center gap-2 text-xs font-black px-4 py-2 rounded-xl border transition-all shrink-0 shadow-sm whitespace-nowrap
+              className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border px-4 py-2 text-xs font-bold transition-colors
                 ${fixEmailNameState === 'running'
-                  ? 'bg-gray-100 dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-400 cursor-wait'
+                  ? 'cursor-wait border-neutral-100 bg-neutral-50 text-neutral-400'
                   : fixEmailNameState === 'done'
-                    ? 'bg-amber-100 dark:bg-amber-800/40 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
+                    ? 'border-banana-100 bg-banana-100 text-banana-900'
                     : fixEmailNameState === 'error'
-                      ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-800 text-red-600 dark:text-red-400'
-                      : 'bg-white dark:bg-slate-800 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-800/40'
+                      ? 'border-red-100 bg-red-50 text-red-600'
+                      : 'border-banana-100 bg-white text-banana-700 hover:bg-banana-100'
                 }`}
             >
               {fixEmailNameState === 'running' ? (
-                <><Settings2 size={13} className="animate-spin"/> กำลังแก้ไข...</>
+                <><Settings2 size={13} strokeWidth={1} absoluteStrokeWidth className="animate-spin"/> กำลังแก้ไข...</>
               ) : fixEmailNameState === 'done' ? (
                 fixEmailNameResult?.updated === 0
-                  ? <><CheckCircle2 size={13}/> ไม่มี record ที่ต้องแก้</>
-                  : <><CheckCircle2 size={13}/> แก้แล้ว {fixEmailNameResult?.updated} docs{fixEmailNameResult?.skipped > 0 ? ` (ข้าม ${fixEmailNameResult.skipped})` : ''}</>
+                  ? <><CheckCircle2 size={13} strokeWidth={1} absoluteStrokeWidth/> ไม่มี record ที่ต้องแก้</>
+                  : <><CheckCircle2 size={13} strokeWidth={1} absoluteStrokeWidth/> แก้แล้ว {fixEmailNameResult?.updated} docs{fixEmailNameResult?.skipped > 0 ? ` (ข้าม ${fixEmailNameResult.skipped})` : ''}</>
               ) : fixEmailNameState === 'error' ? (
-                <><AlertCircle size={13}/> {fixEmailNameResult?.error || 'Error'}</>
+                <><AlertCircle size={13} strokeWidth={1} absoluteStrokeWidth/> {fixEmailNameResult?.error || 'Error'}</>
               ) : (
-                <><UserCog size={13}/> Fix Now</>
+                <><UserCog size={13} strokeWidth={1} absoluteStrokeWidth/> Fix Now</>
               )}
             </button>
           </div>
         </div>
 
         {/* ── Backfill Department Manager card ──────────────────────────────── */}
-        <div className="rounded-2xl border p-5 bg-violet-50 dark:bg-violet-900/10 border-violet-200 dark:border-violet-800 mb-2">
+        <div className="mb-2 rounded-2xl border border-purple-100 bg-purple-50 p-5">
           {/* Header row */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <span className="text-violet-600 dark:text-violet-400"><Users size={20} /></span>
+              <span className="text-purple-700"><Users size={20} strokeWidth={1} absoluteStrokeWidth /></span>
               <div>
-                <p className="text-sm font-black text-violet-700 dark:text-violet-400">กำหนด Manager ต่อแผนก</p>
-                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
-                  Manager เห็นเฉพาะแผนกที่ถูก assign — บันทึกใน settings/deptManagers
+                <p className="text-sm font-bold text-purple-800">กำหนด Manager ต่อแผนก</p>
+                <p className="mt-0.5 text-xs text-neutral-500">
+                  Manager เห็น + เลือก Division/แผนกได้เฉพาะที่ถูก assign — ใส่ได้หลายคนต่อแผนก คั่นด้วย comma
                 </p>
               </div>
             </div>
@@ -769,80 +787,83 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
             {deptState === 'idle' || deptState === 'error' ? (
               <button
                 onClick={loadDepartments}
-                className="flex items-center gap-2 text-xs font-black px-4 py-2 rounded-xl border transition-all shrink-0 shadow-sm bg-white dark:bg-slate-800 border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-800/40"
+                className="flex shrink-0 items-center gap-2 rounded-lg border border-purple-100 bg-white px-4 py-2 text-xs font-bold text-purple-700 transition-colors hover:bg-purple-100"
               >
-                <Users size={13}/> จัดการ
+                <Users size={13} strokeWidth={1} absoluteStrokeWidth/> จัดการ
               </button>
             ) : deptState === 'loading' ? (
-              <span className="text-xs font-bold text-gray-400 flex items-center gap-1.5 shrink-0">
-                <Settings2 size={13} className="animate-spin"/> กำลังโหลด...
+              <span className="flex shrink-0 items-center gap-1.5 text-xs font-bold text-neutral-400">
+                <Settings2 size={13} strokeWidth={1} absoluteStrokeWidth className="animate-spin"/> กำลังโหลด...
               </span>
             ) : deptState === 'saving' ? (
-              <span className="text-xs font-bold text-gray-400 flex items-center gap-1.5 shrink-0">
-                <Settings2 size={13} className="animate-spin"/> กำลังบันทึก...
+              <span className="flex shrink-0 items-center gap-1.5 text-xs font-bold text-neutral-400">
+                <Settings2 size={13} strokeWidth={1} absoluteStrokeWidth className="animate-spin"/> กำลังบันทึก...
               </span>
             ) : deptState === 'saved' ? (
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 shrink-0">
-                <CheckCircle2 size={13}/> บันทึกแล้ว
+              <span className="flex shrink-0 items-center gap-1.5 text-xs font-bold text-dark-green-700">
+                <CheckCircle2 size={13} strokeWidth={1} absoluteStrokeWidth/> บันทึกแล้ว
               </span>
             ) : null}
           </div>
 
           {/* Department table — แสดงเมื่อโหลดแล้ว */}
           {(deptState === 'ready' || deptState === 'saving' || deptState === 'saved') && departments.length > 0 && (
-            <div className="mt-4 border-t border-violet-200 dark:border-violet-800 pt-4">
+            <div className="mt-4 border-t border-purple-100 pt-4">
               {/* Toggle show/hide */}
               <button
                 onClick={() => setDeptExpanded(v => !v)}
-                className="flex items-center gap-1.5 text-[11px] font-black text-violet-600 dark:text-violet-400 uppercase tracking-wider mb-3"
+                className="mb-3 flex items-center gap-1.5 text-[11px] font-bold text-purple-700"
               >
-                {deptExpanded ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}
+                {deptExpanded ? <ChevronUp size={12} strokeWidth={1} absoluteStrokeWidth/> : <ChevronDown size={12} strokeWidth={1} absoluteStrokeWidth/>}
                 {departments.length} แผนก · assigned {Object.values(deptLookup).filter(v => v?.found).length}
               </button>
 
               {deptExpanded && (
                 <>
-                  <div className="flex flex-col gap-2 max-h-80 overflow-y-auto pr-1">
+                  <div className="flex max-h-80 flex-col gap-2 overflow-y-auto pr-1">
                     {departments.map(dept => (
-                      <div key={dept.name} className="flex items-center gap-3 bg-white dark:bg-slate-800/50 rounded-xl border border-violet-100 dark:border-violet-900/50 px-3 py-2">
+                      <div key={dept.name} className="flex items-center gap-3 rounded-xl border border-purple-100 bg-white px-3 py-2">
                         {/* Dept info */}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-gray-700 dark:text-gray-200 truncate">{dept.name}</p>
-                          <p className="text-[10px] text-gray-400 dark:text-slate-500">{dept.total} records</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-bold text-neutral-700">{dept.name}</p>
+                          <p className="text-[11px] text-neutral-400">{dept.total} records</p>
                         </div>
                         {/* Manager email input */}
                         <div className="flex flex-col items-end gap-1">
                           <input
-                            type="email"
-                            placeholder="email@freshket.co"
+                            type="text"
+                            placeholder="email1@freshket.co, email2@..."
                             value={deptManagers[dept.name] ?? ''}
                             onChange={e => {
                               setDeptManagers(m => ({ ...m, [dept.name]: e.target.value }))
                               lookupEmail(dept.name, e.target.value)
                             }}
                             disabled={deptState === 'saving' || deptState === 'saved'}
-                            className={`w-48 text-[11px] px-3 py-1.5 rounded-lg border bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 placeholder-gray-300 dark:placeholder-slate-600 focus:outline-none focus:ring-1 disabled:opacity-50
+                            className={`w-48 rounded-lg border bg-white px-3 py-1.5 text-[11px] text-neutral-700 transition-colors focus:outline-none disabled:opacity-50
                               ${deptLookup[dept.name]?.found === false
-                                ? 'border-red-300 dark:border-red-700 focus:ring-red-400'
+                                ? 'border-red-100 focus:border-red-400'
                                 : deptLookup[dept.name]?.found === true
-                                  ? 'border-emerald-300 dark:border-emerald-700 focus:ring-emerald-400'
-                                  : 'border-violet-200 dark:border-violet-700 focus:ring-violet-400'
+                                  ? 'border-dark-green-100 focus:border-dark-green-600'
+                                  : 'border-purple-100 focus:border-purple-400'
                               }`}
                           />
                           {/* Lookup status badge */}
                           {deptLookup[dept.name]?.loading && (
-                            <span className="text-[10px] text-gray-400 flex items-center gap-1">
-                              <Settings2 size={10} className="animate-spin"/> กำลังค้นหา...
+                            <span className="flex items-center gap-1 text-[11px] text-neutral-400">
+                              <Settings2 size={10} strokeWidth={1} absoluteStrokeWidth className="animate-spin"/> กำลังค้นหา...
                             </span>
                           )}
                           {deptLookup[dept.name]?.found === true && (
-                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                              <CheckCircle2 size={10}/> {deptLookup[dept.name].name}
+                            <span className="flex items-center gap-1 text-[11px] text-dark-green-700">
+                              <CheckCircle2 size={10} strokeWidth={1} absoluteStrokeWidth/> {deptLookup[dept.name].name}
                             </span>
                           )}
                           {deptLookup[dept.name]?.found === false && (
-                            <span className="text-[10px] text-red-500 dark:text-red-400 flex items-center gap-1">
-                              <AlertCircle size={10}/> ไม่พบใน users
+                            <span className="flex items-center gap-1 text-[11px] text-red-600">
+                              <AlertCircle size={10} strokeWidth={1} absoluteStrokeWidth/>
+                              {deptLookup[dept.name]?.missing?.length
+                                ? `ไม่พบใน users: ${deptLookup[dept.name].missing.join(', ')}`
+                                : 'ไม่พบใน users'}
                             </span>
                           )}
                         </div>
@@ -855,11 +876,11 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
                     <button
                       onClick={saveDeptManagers}
                       disabled={!Object.values(deptLookup).some(v => v?.found)}
-                      className="mt-3 w-full flex items-center justify-center gap-2 text-xs font-black px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors shadow-sm"
+                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2.5 text-xs font-bold text-neutral-50 transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {deptState === 'saved'
-                        ? <><CheckCircle2 size={13}/> บันทึกแล้ว</>
-                        : <><Users size={13}/> บันทึก {Object.values(deptLookup).filter(v => v?.found).length} แผนก</>
+                        ? <><CheckCircle2 size={13} strokeWidth={1} absoluteStrokeWidth/> บันทึกแล้ว</>
+                        : <><Users size={13} strokeWidth={1} absoluteStrokeWidth/> บันทึก {Object.values(deptLookup).filter(v => v?.found).length} แผนก</>
                       }
                     </button>
                   )}
@@ -870,37 +891,37 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
         </div>
 
         {/* Fix Duplicate HCIDs */}
-        <div className="rounded-2xl border p-5 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800">
+        <div className="mb-2 rounded-2xl border border-yellow-100 bg-yellow-50 p-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="text-amber-600 dark:text-amber-400"><DatabaseZap size={20}/></span>
+              <span className="text-yellow-700"><DatabaseZap size={20} strokeWidth={1} absoluteStrokeWidth/></span>
               <div>
-                <p className="text-sm font-black text-amber-600 dark:text-amber-400">Fix Duplicate HC IDs</p>
-                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                <p className="text-sm font-bold text-yellow-900">Fix Duplicate HC IDs</p>
+                <p className="mt-0.5 text-xs text-neutral-500">
                   หา hcId ที่ซ้ำ → เก็บ doc เก่าสุดไว้ (ตรงกับ Sheets) → กำหนด ID ใหม่ให้ที่เหลือ + push ไป Sheets
                 </p>
               </div>
             </div>
             {fixDupState === 'done' ? (
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1 rounded-full whitespace-nowrap">
+              <span className="whitespace-nowrap rounded-full bg-dark-green-50 px-3 py-1 text-xs font-bold text-dark-green-700">
                 {fixDupResult?.fixed === 0
                   ? '✓ ไม่มีซ้ำ'
                   : `✓ แก้ไขแล้ว ${fixDupResult?.fixed} รายการ`}
               </span>
             ) : fixDupState === 'running' ? (
-              <span className="text-xs font-bold text-gray-500 dark:text-slate-400 flex items-center gap-1.5 whitespace-nowrap">
-                <Settings2 size={13} className="animate-spin"/> กำลังตรวจสอบ...
+              <span className="flex items-center gap-1.5 whitespace-nowrap text-xs font-bold text-neutral-500">
+                <Settings2 size={13} strokeWidth={1} absoluteStrokeWidth className="animate-spin"/> กำลังตรวจสอบ...
               </span>
             ) : fixDupState === 'error' ? (
-              <span className="text-xs font-bold text-red-600 dark:text-red-400 whitespace-nowrap">
+              <span className="whitespace-nowrap text-xs font-bold text-red-600">
                 {fixDupResult?.error || 'เกิดข้อผิดพลาด'}
               </span>
             ) : (
               <button
                 onClick={fixDuplicateHCIDs}
-                className="flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors shadow-sm whitespace-nowrap"
+                className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-yellow-100 bg-white px-3 py-1.5 text-xs font-bold text-yellow-800 transition-colors hover:bg-yellow-100"
               >
-                <RefreshCw size={12}/> Fix Now
+                <RefreshCw size={12} strokeWidth={1} absoluteStrokeWidth/> Fix Now
               </button>
             )}
           </div>
@@ -916,28 +937,28 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
                   <div className="flex items-center gap-3">
                     <span className={t.color}>{t.icon}</span>
                     <div>
-                      <p className={`text-sm font-black ${t.color}`}>{t.label}</p>
-                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{t.desc}</p>
+                      <p className={`text-sm font-bold ${t.color}`}>{t.label}</p>
+                      <p className="mt-0.5 text-xs text-neutral-500">{t.desc}</p>
                     </div>
                   </div>
                   {/* แสดงผลตาม state: done → count badge | running → spinner | error → error text | default → clear button */}
                   {s?.state === 'done' ? (
-                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1 rounded-full">
+                    <span className="rounded-full bg-dark-green-50 px-3 py-1 text-xs font-bold text-dark-green-700">
                       ✓ ลบแล้ว {s.count} รายการ
                     </span>
                   ) : s?.state === 'running' ? (
-                    <span className="text-xs font-bold text-gray-500 dark:text-slate-400 flex items-center gap-1.5">
-                      <Settings2 size={13} className="animate-spin"/> กำลังลบ...
+                    <span className="flex items-center gap-1.5 text-xs font-bold text-neutral-500">
+                      <Settings2 size={13} strokeWidth={1} absoluteStrokeWidth className="animate-spin"/> กำลังลบ...
                     </span>
                   ) : s?.state === 'error' ? (
-                    <span className="text-xs font-bold text-red-600 dark:text-red-400">เกิดข้อผิดพลาด</span>
+                    <span className="text-xs font-bold text-red-600">เกิดข้อผิดพลาด</span>
                   ) : (
                     // ปุ่ม Clear จะเปิด confirm modal แทนที่จะ delete ทันที
                     <button
                       onClick={() => setConfirm(t.key)}
-                      className="flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors shadow-sm"
+                      className="flex items-center gap-1.5 rounded-lg border border-red-100 bg-white px-3 py-1.5 text-xs font-bold text-red-600 transition-colors hover:bg-red-50"
                     >
-                      <Trash2 size={12}/> Clear
+                      <Trash2 size={12} strokeWidth={1} absoluteStrokeWidth/> Clear
                     </button>
                   )}
                 </div>
@@ -950,22 +971,22 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
         {confirm && (() => {
           const t = TOOLS.find(x => x.key === confirm) // หา tool config จาก key ที่รอยืนยัน
           return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-sm mx-4 p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 rounded-xl bg-red-100 dark:bg-red-900/30"><AlertTriangle size={18} className="text-red-600 dark:text-red-400"/></div>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/45">
+              <div className="mx-4 w-full max-w-sm rounded-[24px] border border-neutral-100 bg-white p-6 shadow-xl">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="rounded-xl bg-red-50 p-2"><AlertTriangle size={18} strokeWidth={1} absoluteStrokeWidth className="text-red-600"/></div>
                   <div>
-                    <p className="font-black text-gray-900 dark:text-gray-100 text-sm">ยืนยันการลบ {t.label}?</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">การกระทำนี้ไม่สามารถย้อนกลับได้</p>
+                    <p className="text-sm font-bold text-neutral-900">ยืนยันการลบ {t.label}?</p>
+                    <p className="mt-0.5 text-xs text-neutral-500">การกระทำนี้ไม่สามารถย้อนกลับได้</p>
                   </div>
                 </div>
-                <div className="flex gap-2 mt-4">
+                <div className="mt-4 flex gap-2">
                   {/* ยกเลิก — ปิด modal โดยไม่ทำอะไร */}
-                  <button onClick={() => setConfirm(null)} className="flex-1 px-4 py-2 text-sm font-bold rounded-xl border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+                  <button onClick={() => setConfirm(null)} className="flex-1 rounded-lg border border-neutral-100 px-4 py-2 text-sm font-bold text-neutral-600 transition-colors hover:bg-neutral-50">
                     ยกเลิก
                   </button>
                   {/* ยืนยัน — เรียก runClear พร้อม key ที่รอยืนยัน */}
-                  <button onClick={() => runClear(confirm)} className="flex-1 px-4 py-2 text-sm font-black rounded-xl bg-red-600 text-white hover:bg-red-700 transition-colors shadow-md shadow-red-500/20">
+                  <button onClick={() => runClear(confirm)} className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-neutral-50 transition-colors hover:bg-red-700">
                     ลบทั้งหมด
                   </button>
                 </div>
@@ -977,34 +998,34 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
 
       {/* App → Sheets modal */}
       {pushModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-md mx-4 p-6">
-            <div className="flex items-center justify-between mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/45">
+          <div className="mx-4 w-full max-w-md rounded-[24px] border border-neutral-100 bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
               <div>
-                <p className="font-black text-gray-900 dark:text-gray-100 text-sm">App → Sheets</p>
-                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">เลือก push เฉพาะ ID หรือทั้งหมด</p>
+                <p className="text-sm font-bold text-neutral-900">App → Sheets</p>
+                <p className="mt-0.5 text-xs text-neutral-500">เลือก push เฉพาะ ID หรือทั้งหมด</p>
               </div>
-              <button onClick={() => setPushModal(false)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-400">
-                <X size={16}/>
+              <button onClick={() => setPushModal(false)} className="rounded-lg p-1 text-neutral-400 hover:bg-neutral-50">
+                <X size={16} strokeWidth={1} absoluteStrokeWidth/>
               </button>
             </div>
             <div className="mb-4">
-              <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+              <label className="mb-1.5 block text-xs font-bold text-neutral-500">
                 HC IDs — คั่นด้วยจุลภาคหรือ Enter (ว่างไว้ = push ทั้งหมด)
               </label>
               <textarea value={pushIds} onChange={e => setPushIds(e.target.value)}
                 placeholder={"REQ-2026-455\nREQ-2026-456"} rows={4}
-                className="w-full text-sm font-mono border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2.5 bg-gray-50 dark:bg-slate-800 text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-slate-600 focus:outline-none focus:border-emerald-400 resize-none"
+                className="w-full resize-none rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2.5 font-mono text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
               />
             </div>
             <div className="flex gap-2">
-              <button onClick={() => setPushModal(false)} className="flex-1 px-4 py-2 text-sm font-bold rounded-xl border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">ยกเลิก</button>
+              <button onClick={() => setPushModal(false)} className="flex-1 rounded-lg border border-neutral-100 px-4 py-2 text-sm font-bold text-neutral-600 transition-colors hover:bg-neutral-50">ยกเลิก</button>
               {pushIds.trim() ? (
-                <button onClick={handlePushSelected} className="flex-1 px-4 py-2 text-sm font-black rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-md">
+                <button onClick={handlePushSelected} className="flex-1 rounded-lg bg-dark-green-600 px-4 py-2 text-sm font-bold text-neutral-50 transition-colors hover:bg-dark-green-700">
                   Push {pushIds.split(/[\s,]+/).filter(Boolean).length} ID
                 </button>
               ) : (
-                <button onClick={handlePushAll} className="flex-1 px-4 py-2 text-sm font-black rounded-xl bg-gray-700 text-white hover:bg-gray-800 transition-colors">
+                <button onClick={handlePushAll} className="flex-1 rounded-lg bg-neutral-700 px-4 py-2 text-sm font-bold text-neutral-50 transition-colors hover:bg-neutral-800">
                   Push ทั้งหมด
                 </button>
               )}

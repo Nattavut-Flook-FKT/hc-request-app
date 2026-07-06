@@ -20,8 +20,8 @@ export default function MyCasesPage({ user, role, department, isDarkMode, toggle
     <Layout user={user} role={role} isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode}>
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100 italic tracking-tight">เคสของฉัน</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">คำขอที่คุณรับเป็น TA ดูแลอยู่</p>
+          <h1 className="text-xl font-bold text-neutral-900">เคสของฉัน</h1>
+          <p className="mt-0.5 text-sm text-neutral-500">คำขอที่คุณรับเป็น TA ดูแลอยู่</p>
         </div>
         {/* filterMyCases=true กรองเฉพาะ request ที่ user.uid ตรงกับ assignedTA */}
         <RequestTable user={user} role={role} department={department} filterMyCases />

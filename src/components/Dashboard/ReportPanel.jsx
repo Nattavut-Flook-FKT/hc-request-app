@@ -8,73 +8,9 @@
  */
 import { useState, useMemo } from 'react'
 import { Download, ChevronDown, ChevronUp, BarChart3 } from 'lucide-react'
+import { PRESETS, getDateRange, computeSLADays, getOfferingDate, escapeCSV, fmtDate } from '../../utils/reportUtils'
 
-// ─── Date presets ──────────────────────────────────────────
-const PRESETS = [
-  { label: 'เดือนนี้',      value: 'this_month'  },
-  { label: 'เดือนที่แล้ว', value: 'last_month'  },
-  { label: 'ไตรมาสนี้',    value: 'this_quarter'},
-  { label: 'ปีนี้',         value: 'this_year'   },
-  { label: 'ทั้งหมด',       value: 'all'         },
-]
-
-function getDateRange(preset) {
-  const now = new Date()
-  if (preset === 'this_month')  return { from: new Date(now.getFullYear(), now.getMonth(), 1),     to: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59) }
-  if (preset === 'last_month')  return { from: new Date(now.getFullYear(), now.getMonth() - 1, 1), to: new Date(now.getFullYear(), now.getMonth(),     0, 23, 59, 59) }
-  if (preset === 'this_quarter') {
-    const q = Math.floor(now.getMonth() / 3)
-    return { from: new Date(now.getFullYear(), q * 3, 1), to: new Date(now.getFullYear(), q * 3 + 3, 0, 23, 59, 59) }
-  }
-  if (preset === 'this_year') return { from: new Date(now.getFullYear(), 0, 1), to: new Date(now.getFullYear(), 11, 31, 23, 59, 59) }
-  return null // all time
-}
-
-// ─── SLA days (simplified — same logic as RequestTable) ───
-function computeSLADays(req) {
-  const createdAt = req.createdAt?.toDate?.()
-  if (!createdAt) return ''
-  const DONE = new Set(['Closed', 'Cancelled'])
-  const history = [...(req.statusHistory ?? [])]
-    .map(e => ({ status: e.status, t: new Date(e.changedAt) }))
-    .filter(e => !isNaN(e.t))
-    .sort((a, b) => a.t - b.t)
-
-  let acc = 0, start = createdAt, lastOnboarding = false
-  for (const { status, t } of history) {
-    if (status === 'Offering')    { if (start) { acc += t - start; start = null }; lastOnboarding = false }
-    else if (status === 'Onboarding') { if (start) { acc += t - start; start = null }; lastOnboarding = true  }
-    else if (status === 'Recruiting' || status === 'Interviewing') {
-      if (lastOnboarding) { acc = 0; start = t; lastOnboarding = false }
-      else if (!start) start = t
-    } else if (DONE.has(status)) { if (start) { acc += t - start; start = null }; lastOnboarding = false }
-  }
-  if (start) acc += new Date() - start
-  return Math.floor(acc / 86400000)
-}
-
-// ─── CSV Helpers ──────────────────────────────────────────
-function escapeCSV(val) {
-  if (val == null || val === '') return ''
-  const str = String(val)
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) return `"${str.replace(/"/g, '""')}"`
-  return str
-}
-
-function fmtDate(d) {
-  if (!d) return ''
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-  const dd = d.getDate()
-  return `${dd}-${months[d.getMonth()]}-${d.getFullYear()}`
-}
-
-function getOfferingDate(r) {
-  const h = [...(r.statusHistory ?? [])].find(e => e.status === 'Offering')
-  if (!h) return null
-  const d = new Date(h.changedAt)
-  return isNaN(d) ? null : d
-}
-
+// ─── SLA days wrapper ─────────────────────────────────────
 function slaDays(r) {
   const days = computeSLADays(r)
   return days === '' ? '' : days
@@ -209,27 +145,27 @@ function downloadCSV(rows, filename) {
   URL.revokeObjectURL(url)
 }
 
-// ─── Colour chips ──────────────────────────────────────────
+// ─── Colour chips — DS token families ─────────────────────
 const STATUS_DOT = {
   Open:        'bg-yellow-400',
-  Recruiting:  'bg-emerald-500',
+  Recruiting:  'bg-blue-500',
   Interviewing:'bg-orange-400',
-  Offering:    'bg-indigo-500',
+  Offering:    'bg-purple-500',
   Onboarding:  'bg-teal-400',
   Rejected:    'bg-red-400',
-  Closed:      'bg-slate-400',
-  Cancelled:   'bg-gray-300',
+  Closed:      'bg-green-fresh-500',
+  Cancelled:   'bg-neutral-300',
 }
 
 // ─── Mini progress bar ────────────────────────────────────
-function Bar({ value, max, color = 'bg-[#00ce7c]' }) {
+function Bar({ value, max, color = 'bg-green-fresh-600' }) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0
   return (
-    <div className="flex items-center gap-2 min-w-0">
-      <div className="flex-1 h-1.5 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
+    <div className="flex min-w-0 items-center gap-2">
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-100">
         <div className={`h-full rounded-full ${color} transition-all duration-500`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-xs font-black text-gray-700 dark:text-slate-300 tabular-nums w-5 text-right">{value}</span>
+      <span className="w-5 text-right text-xs font-bold text-neutral-700 tabular-nums">{value}</span>
     </div>
   )
 }
@@ -290,23 +226,23 @@ export default function ReportPanel({ requests }) {
   const filename = `hc-report_${preset}_${new Date().toISOString().slice(0,10)}.csv`
 
   return (
-    <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm transition-colors">
+    <div className="overflow-hidden rounded-2xl border border-neutral-100 bg-white">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-800">
+      <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-4">
         <button
           onClick={() => setOpen(o => !o)}
-          className="flex items-center gap-2.5 text-left group"
+          className="group flex items-center gap-2.5 text-left"
         >
-          <BarChart3 size={16} strokeWidth={2.5} className="text-[#008065] dark:text-emerald-500 shrink-0" />
+          <BarChart3 size={16} strokeWidth={1} absoluteStrokeWidth className="shrink-0 text-dark-green-600" />
           <div>
-            <p className="text-sm font-black text-gray-800 dark:text-gray-100 tracking-tight">Report & Export</p>
-            <p className="text-[10px] font-bold text-gray-400 dark:text-slate-600 uppercase tracking-widest">
+            <p className="text-sm font-bold text-neutral-900">Report & Export</p>
+            <p className="text-[11px] font-bold text-neutral-400">
               {filtered.length} รายการ {preset !== 'all' ? `· ${PRESETS.find(p => p.value === preset)?.label}` : '· ทั้งหมด'}
             </p>
           </div>
           {open
-            ? <ChevronUp size={14} strokeWidth={3} className="text-gray-300 dark:text-slate-700 ml-1" />
-            : <ChevronDown size={14} strokeWidth={3} className="text-gray-300 dark:text-slate-700 ml-1" />
+            ? <ChevronUp size={14} strokeWidth={1} absoluteStrokeWidth className="ml-1 text-neutral-300" />
+            : <ChevronDown size={14} strokeWidth={1} absoluteStrokeWidth className="ml-1 text-neutral-300" />
           }
         </button>
 
@@ -314,39 +250,39 @@ export default function ReportPanel({ requests }) {
           <button
             onClick={() => downloadPivotCSV(filtered, `hc-pivot_${preset}_${new Date().toISOString().slice(0,10)}.csv`)}
             disabled={filtered.length === 0}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none text-gray-600 dark:text-slate-400 text-xs font-black uppercase tracking-wider transition-colors"
+            className="flex items-center gap-2 rounded-lg border border-neutral-100 px-4 py-2 text-xs font-bold text-neutral-600 transition-colors hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-40"
           >
-            <Download size={13} strokeWidth={3} />
+            <Download size={13} strokeWidth={1} absoluteStrokeWidth />
             Pivot
           </button>
           <button
             onClick={() => downloadCSV(filtered, filename)}
             disabled={filtered.length === 0}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#008065] hover:bg-[#006b54] disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-black uppercase tracking-wider transition-colors shadow-sm shadow-[#008065]/20"
+            className="flex items-center gap-2 rounded-lg bg-dark-green-600 px-4 py-2 text-xs font-bold text-neutral-50 transition-colors hover:bg-dark-green-700 disabled:pointer-events-none disabled:opacity-40"
           >
-            <Download size={13} strokeWidth={3} />
+            <Download size={13} strokeWidth={1} absoluteStrokeWidth />
             Export CSV
             {filtered.length > 0 && (
-              <span className="bg-white/20 rounded-md px-1.5 py-0.5 text-[10px] font-black">{filtered.length}</span>
+              <span className="rounded-md bg-neutral-50/20 px-1.5 py-0.5 text-[11px] font-bold">{filtered.length}</span>
             )}
           </button>
         </div>
       </div>
 
       {open && (
-        <div className="p-6 flex flex-col gap-6">
+        <div className="flex flex-col gap-6 p-6">
           {/* ── Filters ── */}
           <div className="flex flex-wrap gap-3">
             {/* Date preset tabs */}
-            <div className="flex items-center gap-1 p-1 bg-gray-50 dark:bg-slate-800/60 rounded-xl border border-gray-100 dark:border-slate-800">
+            <div className="flex items-center gap-1 rounded-lg border border-neutral-100 bg-neutral-50 p-1">
               {PRESETS.map(p => (
                 <button
                   key={p.value}
                   onClick={() => setPreset(p.value)}
-                  className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${
+                  className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition-colors ${
                     preset === p.value
-                      ? 'bg-white dark:bg-slate-900 text-[#008065] dark:text-emerald-400 shadow-sm border border-gray-100 dark:border-slate-700'
-                      : 'text-gray-400 dark:text-slate-600 hover:text-gray-600 dark:hover:text-slate-400'
+                      ? 'border border-neutral-100 bg-white text-dark-green-700'
+                      : 'text-neutral-400 hover:text-neutral-600'
                   }`}
                 >
                   {p.label}
@@ -358,7 +294,7 @@ export default function ReportPanel({ requests }) {
             <select
               value={filterDept}
               onChange={e => setFilterDept(e.target.value)}
-              className="text-[11px] font-bold uppercase tracking-wider px-3 py-2 rounded-xl border border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/60 text-gray-600 dark:text-slate-400 focus:outline-none focus:border-[#008065] transition-colors"
+              className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2 text-[11px] font-bold text-neutral-600 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
             >
               <option value="">ทุกแผนก</option>
               {depts.map(d => <option key={d} value={d}>{d}</option>)}
@@ -368,7 +304,7 @@ export default function ReportPanel({ requests }) {
             <select
               value={filterStatus}
               onChange={e => setFilterStatus(e.target.value)}
-              className="text-[11px] font-bold uppercase tracking-wider px-3 py-2 rounded-xl border border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/60 text-gray-600 dark:text-slate-400 focus:outline-none focus:border-[#008065] transition-colors"
+              className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2 text-[11px] font-bold text-neutral-600 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
             >
               <option value="">ทุกสถานะ</option>
               {statuses.map(s => <option key={s} value={s}>{s}</option>)}
@@ -378,7 +314,7 @@ export default function ReportPanel({ requests }) {
             <select
               value={filterTA}
               onChange={e => setFilterTA(e.target.value)}
-              className="text-[11px] font-bold uppercase tracking-wider px-3 py-2 rounded-xl border border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/60 text-gray-600 dark:text-slate-400 focus:outline-none focus:border-[#008065] transition-colors"
+              className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2 text-[11px] font-bold text-neutral-600 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
             >
               <option value="">ทุก TA</option>
               {taNames.map(t => <option key={t} value={t}>{t}</option>)}
@@ -388,7 +324,7 @@ export default function ReportPanel({ requests }) {
             {(filterDept || filterStatus || filterTA || preset !== 'this_month') && (
               <button
                 onClick={() => { setFilterDept(''); setFilterStatus(''); setFilterTA(''); setPreset('this_month') }}
-                className="text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-xl border border-red-100 dark:border-red-900/30 text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
+                className="rounded-lg border border-red-100 px-3 py-2 text-[11px] font-bold text-red-500 transition-colors hover:bg-red-50"
               >
                 ✕ ล้าง
               </button>
@@ -396,17 +332,17 @@ export default function ReportPanel({ requests }) {
           </div>
 
           {filtered.length === 0 ? (
-            <p className="text-sm text-gray-400 dark:text-slate-600 italic text-center py-8">ไม่มีข้อมูลในช่วงเวลาที่เลือก</p>
+            <p className="py-8 text-center text-sm italic text-neutral-400">ไม่มีข้อมูลในช่วงเวลาที่เลือก</p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
               {/* ── By Status ── */}
               <div>
-                <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest mb-3">สถานะ</p>
+                <p className="mb-3 text-[11px] font-bold text-neutral-400">สถานะ</p>
                 <div className="flex flex-col gap-2">
                   {byStatus.map(([status, count]) => (
                     <div key={status} className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[status] ?? 'bg-gray-400'}`} />
-                      <span className="text-xs font-bold text-gray-600 dark:text-slate-400 flex-1 truncate">{status}</span>
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[status] ?? 'bg-neutral-400'}`} />
+                      <span className="flex-1 truncate text-xs font-bold text-neutral-600">{status}</span>
                       <Bar value={count} max={filtered.length} />
                     </div>
                   ))}
@@ -415,12 +351,12 @@ export default function ReportPanel({ requests }) {
 
               {/* ── By Department ── */}
               <div>
-                <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest mb-3">แผนก (Top 8)</p>
+                <p className="mb-3 text-[11px] font-bold text-neutral-400">แผนก (Top 8)</p>
                 <div className="flex flex-col gap-2">
                   {byDept.map(([dept, count]) => (
                     <div key={dept} className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-gray-600 dark:text-slate-400 flex-1 truncate" title={dept}>{dept}</span>
-                      <Bar value={count} max={maxDept} color="bg-indigo-400 dark:bg-indigo-500" />
+                      <span className="flex-1 truncate text-xs font-bold text-neutral-600" title={dept}>{dept}</span>
+                      <Bar value={count} max={maxDept} color="bg-purple-500" />
                     </div>
                   ))}
                 </div>
@@ -428,12 +364,12 @@ export default function ReportPanel({ requests }) {
 
               {/* ── By TA ── */}
               <div>
-                <p className="text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest mb-3">TA (Top 8)</p>
+                <p className="mb-3 text-[11px] font-bold text-neutral-400">TA (Top 8)</p>
                 <div className="flex flex-col gap-2">
                   {byTA.map(([ta, count]) => (
                     <div key={ta} className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-gray-600 dark:text-slate-400 flex-1 truncate" title={ta}>{ta}</span>
-                      <Bar value={count} max={maxTA} color="bg-[#008065]" />
+                      <span className="flex-1 truncate text-xs font-bold text-neutral-600" title={ta}>{ta}</span>
+                      <Bar value={count} max={maxTA} color="bg-dark-green-600" />
                     </div>
                   ))}
                 </div>

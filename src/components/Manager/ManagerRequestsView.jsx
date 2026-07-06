@@ -35,34 +35,35 @@
  *   Only `user.email` is consumed; the Firestore query is skipped entirely
  *   when this prop is absent.
  */
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { collection, onSnapshot, orderBy, query, where, limit, getDoc, doc } from 'firebase/firestore'
 import { db } from '../../services/firebase'
 import { getJDSignedUrl, getCVSignedUrl } from '../../services/supabase'
 import { Loader2, FileText, File, UserCheck, Calendar, ChevronDown, ChevronUp, FilePlus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { getDepartments } from '../../data/orgStructure'
+import { resolveDeptNames } from '../../data/deptMapping'
+import { grantedKeys } from '../../utils/grants'
 
 /**
- * STATUS — colour token map for every possible request status.
+ * STATUS — colour token map for every possible request status (DS tokens).
  *
- * Each key is a valid `req.status` string. Each value contains three
- * Tailwind class strings / CSS colour values used across the UI:
+ * Each key is a valid `req.status` string. Each value contains Tailwind
+ * class strings used across the UI:
  *  - `bar`  – the thin left-edge accent bar inside RequestRow
  *  - `pill` – the small status badge (background + text + border)
- *  - `dot`  – raw CSS colour hex used for the PipelineTrack circle and
- *             Scorecard accent bars (must be a CSS value, not a Tailwind
- *             class, because it is applied via inline `style` props)
+ *  - `ring` – ring color class for the active PipelineTrack dot
  */
 // ─── Status colour map ─────────────────────────────────────
 const STATUS = {
-  Open:         { bar: 'bg-amber-400',   pill: 'bg-amber-50 text-amber-700 border-amber-200',   dot: '#f59e0b' },
-  Recruiting:   { bar: 'bg-[#008065]',   pill: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: '#008065' },
-  Interviewing: { bar: 'bg-orange-400',  pill: 'bg-orange-50 text-orange-700 border-orange-200',  dot: '#fb923c' },
-  Offering:     { bar: 'bg-indigo-500',  pill: 'bg-indigo-50 text-indigo-700 border-indigo-200',  dot: '#6366f1' },
-  Onboarding:   { bar: 'bg-teal-400',    pill: 'bg-teal-50 text-teal-700 border-teal-200',        dot: '#2dd4bf' },
-  Closed:       { bar: 'bg-slate-300',   pill: 'bg-slate-50 text-slate-500 border-slate-200',     dot: '#94a3b8' },
-  Rejected:     { bar: 'bg-red-400',     pill: 'bg-red-50 text-red-600 border-red-200',           dot: '#f87171' },
-  Cancelled:    { bar: 'bg-gray-200',    pill: 'bg-gray-50 text-gray-400 border-gray-200',        dot: '#d1d5db' },
+  Open:         { bar: 'bg-yellow-600',     pill: 'bg-yellow-50 text-yellow-900 border-yellow-100',     ring: 'ring-yellow-600' },
+  Recruiting:   { bar: 'bg-dark-green-600', pill: 'bg-dark-green-50 text-dark-green-900 border-dark-green-100', ring: 'ring-dark-green-600' },
+  Interviewing: { bar: 'bg-orange-600',     pill: 'bg-orange-50 text-orange-900 border-orange-100',     ring: 'ring-orange-600' },
+  Offering:     { bar: 'bg-purple-600',     pill: 'bg-purple-50 text-purple-900 border-purple-100',     ring: 'ring-purple-600' },
+  Onboarding:   { bar: 'bg-teal-600',       pill: 'bg-teal-50 text-teal-900 border-teal-100',           ring: 'ring-teal-600' },
+  Closed:       { bar: 'bg-neutral-300',    pill: 'bg-neutral-50 text-neutral-500 border-neutral-100',  ring: 'ring-neutral-300' },
+  Rejected:     { bar: 'bg-red-600',        pill: 'bg-red-50 text-red-700 border-red-100',              ring: 'ring-red-600' },
+  Cancelled:    { bar: 'bg-neutral-200',    pill: 'bg-neutral-50 text-neutral-400 border-neutral-100',  ring: 'ring-neutral-200' },
 }
 
 /**
@@ -160,7 +161,7 @@ function PipelineTrack({ status }) {
   if (isEnded) {
     return (
       <div className="flex items-center gap-1.5">
-        <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded border ${STATUS[status]?.pill ?? ''}`}>
+        <span className={`rounded border px-2 py-0.5 text-[11px] font-bold ${STATUS[status]?.pill ?? ''}`}>
           {status}
         </span>
       </div>
@@ -168,39 +169,37 @@ function PipelineTrack({ status }) {
   }
 
   return (
-    <div className="flex items-center gap-0 w-full">
+    <div className="flex w-full items-center gap-0">
       {STAGES.map((stage, i) => {
         const done   = i < idx   // stage already passed
         const active = i === idx  // current stage
-        const future = i > idx   // stage not yet reached
         const last   = i === STAGES.length - 1 // no connector line after final stage
         const st     = STATUS[stage]
 
         return (
-          <div key={stage} className="flex items-center flex-1 min-w-0">
-            <div className="flex flex-col items-center gap-0.5 shrink-0" style={{ minWidth: 0 }}>
+          <div key={stage} className="flex min-w-0 flex-1 items-center">
+            <div className="flex shrink-0 flex-col items-center gap-0.5" style={{ minWidth: 0 }}>
               {/* Stage dot — colour from STATUS map; ring highlights the active stage */}
               <div
-                className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                className={`h-2 w-2 rounded-full transition-all duration-300 ${
                   done   ? st.bar + ' opacity-60' :
-                  active ? st.bar + ' ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-900' :
-                           'bg-gray-100 dark:bg-slate-800'
+                  active ? st.bar + ' ring-2 ring-offset-1 ring-offset-white ' + st.ring :
+                           'bg-neutral-100'
                 }`}
-                style={active ? { '--tw-ring-color': st.dot } : {}}
               />
               {/* Abbreviated stage label — Onboarding → "Onb", Interviewing → "Int", others sliced to 4 chars */}
-              <span className={`text-[8px] font-black uppercase tracking-tight leading-none whitespace-nowrap ${
-                active ? 'text-gray-700 dark:text-gray-300' :
-                done   ? 'text-gray-300 dark:text-slate-700' :
-                         'text-gray-200 dark:text-slate-800'
+              <span className={`whitespace-nowrap text-[9px] font-bold leading-none ${
+                active ? 'text-neutral-700' :
+                done   ? 'text-neutral-300' :
+                         'text-neutral-200'
               }`}>
                 {stage === 'Onboarding' ? 'Onb' : stage === 'Interviewing' ? 'Int' : stage.slice(0,4)}
               </span>
             </div>
             {/* Hairline connector between dots — hidden after the last stage */}
             {!last && (
-              <div className={`flex-1 h-px mx-0.5 transition-all ${
-                done ? 'bg-gray-300 dark:bg-slate-700' : 'bg-gray-100 dark:bg-slate-800'
+              <div className={`mx-0.5 h-px flex-1 transition-all ${
+                done ? 'bg-neutral-300' : 'bg-neutral-100'
               }`} />
             )}
           </div>
@@ -242,66 +241,66 @@ function ExpandedDetail({ req }) {
 
   return (
     <div className="px-6 pb-5 pt-2">
-      <div className="border-t border-gray-50 dark:border-slate-800 pt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+      <div className="grid grid-cols-1 gap-x-8 gap-y-4 border-t border-neutral-100 pt-4 sm:grid-cols-2">
         {/* Section 1: Manager's stated reason for the headcount request */}
         {req.reason && (
           <div>
-            <p className="text-[9px] font-black text-gray-300 dark:text-slate-700 uppercase tracking-widest mb-1.5">เหตุผลในการขอ</p>
-            <p className="text-sm text-gray-600 dark:text-slate-400 leading-relaxed">"{req.reason}"</p>
+            <p className="mb-1.5 text-[11px] font-bold text-neutral-300">เหตุผลในการขอ</p>
+            <p className="text-sm leading-relaxed text-neutral-600">"{req.reason}"</p>
           </div>
         )}
         {/* Section 2: Free-text candidate requirements */}
         {req.requirements && (
           <div>
-            <p className="text-[9px] font-black text-gray-300 dark:text-slate-700 uppercase tracking-widest mb-1.5">Requirements</p>
-            <p className="text-sm text-gray-600 dark:text-slate-400 leading-relaxed">{req.requirements}</p>
+            <p className="mb-1.5 text-[11px] font-bold text-neutral-300">Requirements</p>
+            <p className="text-sm leading-relaxed text-neutral-600">{req.requirements}</p>
           </div>
         )}
         {/* Section 3: Rejection reason — full-width, red styling to signal terminal failure */}
         {req.rejectReason && (
           <div className="col-span-full">
-            <p className="text-[9px] font-black text-red-300 uppercase tracking-widest mb-1.5">เหตุผลการ Reject</p>
-            <p className="text-sm text-red-500 dark:text-red-400">{req.rejectReason}</p>
+            <p className="mb-1.5 text-[11px] font-bold text-red-300">เหตุผลการ Reject</p>
+            <p className="text-sm text-red-600">{req.rejectReason}</p>
           </div>
         )}
       </div>
 
       {/* Section 4: File attachments — JD document and CV files (แยก section ชัดเจน) */}
       {(req.jdFilePath || req.cvFiles?.length > 0) && (
-        <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-800 grid grid-cols-2 gap-6">
+        <div className="mt-4 grid grid-cols-2 gap-6 border-t border-neutral-100 pt-4">
 
           {/* JD */}
           <div>
-            <p className="text-[9px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest mb-2">Job Description (JD)</p>
+            <p className="mb-2 text-[11px] font-bold text-neutral-400">Job Description (JD)</p>
             {req.jdFilePath ? (
               <button
                 onClick={() => openFile(req.jdFilePath, false)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-gray-400 transition-colors w-full text-left"
+                className="flex w-full items-center gap-1.5 rounded-lg border border-neutral-100 px-3 py-1.5 text-left text-[11px] font-bold text-neutral-600 transition-colors hover:border-neutral-300"
               >
-                <FileText size={12} strokeWidth={2} className="shrink-0" />
+                <FileText size={12} strokeWidth={1} absoluteStrokeWidth className="shrink-0" />
                 <span className="truncate">{req.jdFileName || 'JD File'}</span>
               </button>
             ) : (
-              <p className="text-[11px] text-gray-400 dark:text-slate-600 italic">ยังไม่มีไฟล์ JD</p>
+              <p className="text-[11px] italic text-neutral-400">ยังไม่มีไฟล์ JD</p>
             )}
           </div>
 
           {/* CV */}
           <div>
-            <p className="text-[9px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest mb-2">CV ผู้สมัคร</p>
+            <p className="mb-2 text-[11px] font-bold text-neutral-400">CV ผู้สมัคร</p>
             {req.cvFiles?.length > 0 ? (
               <div className="flex flex-col gap-1.5">
                 {req.cvFiles.map((cv, i) => (
                   <button key={i} onClick={() => openFile(cv.path, true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-gray-400 transition-colors text-left"
+                    className="flex items-center gap-1.5 rounded-lg border border-neutral-100 px-3 py-1.5 text-left text-[11px] font-bold text-neutral-600 transition-colors hover:border-neutral-300"
                   >
-                    <File size={12} strokeWidth={2} className="shrink-0" />
+                    <File size={12} strokeWidth={1} absoluteStrokeWidth className="shrink-0" />
                     <span className="truncate">{cv.name}</span>
                   </button>
                 ))}
               </div>
             ) : (
-              <p className="text-[11px] text-gray-400 dark:text-slate-600 italic">ยังไม่มีไฟล์ CV</p>
+              <p className="text-[11px] italic text-neutral-400">ยังไม่มีไฟล์ CV</p>
             )}
           </div>
 
@@ -311,23 +310,23 @@ function ExpandedDetail({ req }) {
       {/* Section 5: Status history timeline — sorted ascending so the oldest event is at the top */}
       {req.statusHistory?.length > 0 && (
         <div className="mt-4">
-          <p className="text-[9px] font-black text-gray-300 dark:text-slate-700 uppercase tracking-widest mb-2.5">ประวัติสถานะ</p>
+          <p className="mb-2.5 text-[11px] font-bold text-neutral-300">ประวัติสถานะ</p>
           <div className="flex flex-col gap-0">
             {[...req.statusHistory]
               .sort((a, b) => new Date(a.changedAt) - new Date(b.changedAt))
               .map((h, i) => {
                 const st = STATUS[h.status]
                 return (
-                  <div key={i} className="flex items-center gap-3 py-1.5 border-b border-gray-50 dark:border-slate-800/60 last:border-0">
+                  <div key={i} className="flex items-center gap-3 border-b border-neutral-100 py-1.5 last:border-0">
                     {/* Colour dot matches the status colour from the STATUS map */}
-                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${st?.bar ?? 'bg-gray-300'}`} />
-                    <span className="text-xs font-bold text-gray-700 dark:text-slate-300 w-24 shrink-0">{h.status}</span>
-                    <span className="text-[10px] text-gray-400 dark:text-slate-600">
+                    <div className={`h-1.5 w-1.5 shrink-0 rounded-full ${st?.bar ?? 'bg-neutral-300'}`} />
+                    <span className="w-24 shrink-0 text-xs font-bold text-neutral-700">{h.status}</span>
+                    <span className="text-[11px] text-neutral-400">
                       {new Date(h.changedAt).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}
                     </span>
                     {/* changedByName is optional — only shown when an actor is recorded */}
                     {h.changedByName && (
-                      <span className="text-[10px] text-gray-300 dark:text-slate-700 ml-auto">· {h.changedByName}</span>
+                      <span className="ml-auto text-[11px] text-neutral-300">· {h.changedByName}</span>
                     )}
                   </div>
                 )
@@ -354,7 +353,7 @@ function ExpandedDetail({ req }) {
  *  - Chevron toggle icon
  *
  * SLA colour thresholds (applied to the day counter):
- *  - Green  (#008065): 0–14 days — within a comfortable SLA window
+ *  - Green  (dark-green-700): 0–14 days — within a comfortable SLA window
  *  - Orange (text-orange-500): 15–30 days — approaching the limit, needs attention
  *  - Red    (text-red-500): > 30 days — SLA breached, urgent escalation needed
  *
@@ -369,19 +368,19 @@ function ExpandedDetail({ req }) {
  *   - index – Row position (currently unused, reserved for future striping)
  */
 // ─── Single Request Row ────────────────────────────────────
-function RequestRow({ req, index }) {
+function RequestRow({ req }) {
   const [open, setOpen] = useState(false)
   const sla      = computeSLA(req)
   // Only active requests show the live SLA counter; terminal ones are dimmed instead.
   const isActive = !['Closed','Cancelled','Rejected'].includes(req.status)
   const statusCfg = STATUS[req.status] ?? STATUS.Open
   // SLA colour thresholds: green ≤ 14 days, orange 15–30, red > 30
-  const slaColor  = sla == null ? '' : sla > 30 ? 'text-red-500' : sla > 14 ? 'text-orange-500' : 'text-[#008065] dark:text-emerald-400'
+  const slaColor  = sla == null ? '' : sla > 30 ? 'text-red-600' : sla > 14 ? 'text-orange-600' : 'text-dark-green-700'
 
   return (
     <div
-      className={`border-b border-gray-50 dark:border-slate-800 last:border-0 transition-colors ${
-        open ? 'bg-gray-50/50 dark:bg-slate-800/20' : 'hover:bg-gray-50/30 dark:hover:bg-slate-800/10'
+      className={`border-b border-neutral-100 last:border-0 transition-colors ${
+        open ? 'bg-neutral-50' : 'hover:bg-neutral-50/60'
       } ${!isActive ? 'opacity-55' : ''}`}
     >
       {/* ── Main row ── */}
@@ -390,81 +389,81 @@ function RequestRow({ req, index }) {
         onClick={() => setOpen(o => !o)}
       >
         {/* Status bar */}
-        <div className={`w-0.5 self-stretch ${statusCfg.bar} shrink-0 mx-4 my-2.5 rounded-full`} />
+        <div className={`mx-4 my-2.5 w-0.5 shrink-0 self-stretch rounded-full ${statusCfg.bar}`} />
 
         {/* Left: position + dept */}
-        <div className="py-4 pr-4 w-48 lg:w-56 shrink-0">
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border ${statusCfg.pill}`}>
+        <div className="w-48 shrink-0 py-4 pr-4 lg:w-56">
+          <div className="mb-0.5 flex items-center gap-1.5">
+            <span className={`rounded border px-1.5 py-0.5 text-[10px] font-bold ${statusCfg.pill}`}>
               {req.status}
             </span>
-            <span className="text-[8px] font-bold text-gray-300 dark:text-slate-700 uppercase">
+            <span className="text-[10px] font-bold text-neutral-300">
               {req.requestType === 'New HC' ? 'New' : 'Replace'}
             </span>
           </div>
-          <p className="text-sm font-bold text-gray-900 dark:text-gray-100 leading-tight truncate" title={req.position}>
+          <p className="truncate text-sm font-bold leading-tight text-neutral-900" title={req.position}>
             {req.position}
           </p>
-          <p className="text-[10px] text-gray-400 dark:text-slate-600 truncate mt-0.5">{req.department}</p>
+          <p className="mt-0.5 truncate text-[11px] text-neutral-400">{req.department}</p>
         </div>
 
         {/* Center: pipeline */}
-        <div className="flex-1 min-w-0 px-4 py-4 hidden sm:block">
+        <div className="hidden min-w-0 flex-1 px-4 py-4 sm:block">
           <PipelineTrack status={req.status} />
         </div>
 
         {/* Right: TA + SLA + candidate + date */}
-        <div className="flex items-center gap-4 px-4 py-4 shrink-0">
+        <div className="flex shrink-0 items-center gap-4 px-4 py-4">
           {/* TA */}
-          <div className="hidden md:block w-28 text-right">
+          <div className="hidden w-28 text-right md:block">
             {req.assignedToName ? (
               <div className="flex items-center justify-end gap-1.5">
-                <span className="text-xs font-semibold text-[#008065] dark:text-emerald-400 truncate max-w-[90px]">
+                <span className="max-w-[90px] truncate text-xs font-bold text-dark-green-700">
                   {req.assignedToName}
                 </span>
-                <div className="w-5 h-5 rounded-full bg-[#008065]/10 dark:bg-emerald-900/30 flex items-center justify-center text-[9px] font-black text-[#008065] dark:text-emerald-400 shrink-0">
+                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-dark-green-50 text-[10px] font-bold text-dark-green-700">
                   {req.assignedToName[0]?.toUpperCase()}
                 </div>
               </div>
             ) : (
-              <span className="text-[10px] text-gray-200 dark:text-slate-800 italic">ไม่มี TA</span>
+              <span className="text-[11px] italic text-neutral-200">ไม่มี TA</span>
             )}
           </div>
 
           {/* Candidate */}
           {req.candidateName && (
-            <div className="hidden lg:flex items-center gap-1 text-xs font-semibold text-indigo-500 dark:text-indigo-400 shrink-0">
-              <UserCheck size={11} strokeWidth={2.5} />
+            <div className="hidden shrink-0 items-center gap-1 text-xs font-bold text-purple-600 lg:flex">
+              <UserCheck size={11} strokeWidth={1} absoluteStrokeWidth />
               <span className="max-w-[80px] truncate">{req.candidateName}</span>
             </div>
           )}
 
           {/* Start date */}
           {req.startDate && (
-            <div className="hidden lg:flex items-center gap-1 text-[10px] font-semibold text-teal-500 dark:text-teal-400 shrink-0">
-              <Calendar size={10} strokeWidth={2.5} />
+            <div className="hidden shrink-0 items-center gap-1 text-[11px] font-bold text-teal-700 lg:flex">
+              <Calendar size={10} strokeWidth={1} absoluteStrokeWidth />
               {req.startDate}
             </div>
           )}
 
           {/* SLA */}
           {sla !== null && isActive && (
-            <div className="text-right w-12 shrink-0">
-              <p className={`text-base font-black tabular-nums leading-none ${slaColor}`}>{sla}</p>
-              <p className="text-[8px] font-bold text-gray-300 dark:text-slate-700 uppercase tracking-widest">วัน</p>
+            <div className="w-12 shrink-0 text-right">
+              <p className={`text-base font-bold leading-none tabular-nums ${slaColor}`}>{sla}</p>
+              <p className="text-[10px] font-bold text-neutral-300">วัน</p>
             </div>
           )}
 
           {/* Date */}
-          <p className="text-[10px] text-gray-300 dark:text-slate-700 w-16 text-right shrink-0 hidden md:block">
+          <p className="hidden w-16 shrink-0 text-right text-[11px] text-neutral-300 md:block">
             {req.createdAt?.toDate?.().toLocaleDateString('th-TH', { day:'2-digit', month:'short' }) ?? ''}
           </p>
 
           {/* Toggle */}
-          <div className="text-gray-200 dark:text-slate-800 shrink-0">
+          <div className="shrink-0 text-neutral-200">
             {open
-              ? <ChevronUp size={13} strokeWidth={3} />
-              : <ChevronDown size={13} strokeWidth={3} />
+              ? <ChevronUp size={13} strokeWidth={1} absoluteStrokeWidth />
+              : <ChevronDown size={13} strokeWidth={1} absoluteStrokeWidth />
             }
           </div>
         </div>
@@ -491,8 +490,8 @@ function RequestRow({ req, index }) {
  *  5. ปิดแล้ว (Closed)                      – successfully filled requests
  *
  * Cards with a zero count are faded to 45 % opacity to reduce visual noise
- * while preserving the layout. Accent colours are applied via inline styles
- * (not Tailwind) because they must exactly match the STATUS dot colours.
+ * while preserving the layout. Accent colours use literal DS token classes
+ * per card (not dynamically computed) so the Tailwind scanner picks them up.
  *
  * @param {{ stats: object }} props
  *   - stats.open       – count of Open requests
@@ -504,11 +503,11 @@ function RequestRow({ req, index }) {
 // ─── Scorecard ─────────────────────────────────────────────
 function Scorecard({ stats }) {
   const cards = [
-    { label: 'รอดำเนินการ',   value: stats.open,       accent: '#d97706', label_color: '#92400e' },
-    { label: 'กำลัง Recruit', value: stats.active,     accent: '#008065', label_color: '#065f46' },
-    { label: 'Offering',      value: stats.offering,   accent: '#4f46e5', label_color: '#3730a3' },
-    { label: 'W.Onboarding',  value: stats.onboarding, accent: '#0d9488', label_color: '#115e59' },
-    { label: 'ปิดแล้ว',       value: stats.closed,     accent: '#64748b', label_color: '#334155' },
+    { label: 'รอดำเนินการ',   value: stats.open,       bar: 'bg-yellow-600',     text: 'text-yellow-900',     labelText: 'text-yellow-700' },
+    { label: 'กำลัง Recruit', value: stats.active,     bar: 'bg-dark-green-600', text: 'text-dark-green-700', labelText: 'text-dark-green-600' },
+    { label: 'Offering',      value: stats.offering,   bar: 'bg-purple-600',     text: 'text-purple-700',     labelText: 'text-purple-600' },
+    { label: 'W.Onboarding',  value: stats.onboarding, bar: 'bg-teal-700',       text: 'text-teal-800',       labelText: 'text-teal-700' },
+    { label: 'ปิดแล้ว',       value: stats.closed,     bar: 'bg-neutral-400',    text: 'text-neutral-600',    labelText: 'text-neutral-400' },
   ]
 
   return (
@@ -519,23 +518,16 @@ function Scorecard({ stats }) {
         return (
           <div
             key={card.label}
-            className="relative flex items-stretch rounded-xl border border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden transition-opacity duration-200"
-            style={{ opacity: empty ? 0.45 : 1 }}
+            className={`relative flex items-stretch overflow-hidden rounded-xl border border-neutral-100 bg-white transition-opacity duration-200 ${empty ? 'opacity-45' : ''}`}
           >
-            {/* Left accent bar — 4 px wide coloured stripe matching the status palette */}
-            <div className="w-1 shrink-0" style={{ backgroundColor: card.accent }} />
+            {/* Left accent bar — coloured stripe matching the status palette */}
+            <div className={`w-1 shrink-0 ${card.bar}`} />
             {/* Content: large count number + small category label */}
             <div className="flex-1 px-4 py-3.5">
-              <p
-                className="text-2xl font-black tabular-nums leading-none tracking-tight"
-                style={{ color: card.accent }}
-              >
+              <p className={`text-2xl font-bold leading-none tabular-nums ${card.text}`}>
                 {card.value}
               </p>
-              <p
-                className="text-[9px] font-bold uppercase tracking-widest mt-2 leading-tight dark:opacity-60"
-                style={{ color: card.label_color }}
-              >
+              <p className={`mt-2 text-[11px] font-bold leading-tight ${card.labelText}`}>
                 {card.label}
               </p>
             </div>
@@ -546,11 +538,15 @@ function Scorecard({ stats }) {
   )
 }
 
+// สถานะที่ถือว่า "จบแล้ว" — ใช้ในแท็บประวัติ (ดูย้อนหลังของแผนก)
+const HISTORY_STATUSES = ['Closed', 'Cancelled', 'Rejected']
+
 // ─── Main ──────────────────────────────────────────────────
 export default function ManagerRequestsView({ user }) {
   const [requests, setRequests] = useState([])
   const [loading,  setLoading]  = useState(true)
   const [tab, setTab] = useState('active')
+  const [historyYear, setHistoryYear] = useState(null) // ตัวกรองปีของแท็บประวัติ — null = ทุกปี
   const navigate = useNavigate()
 
   /**
@@ -565,51 +561,122 @@ export default function ManagerRequestsView({ user }) {
    */
   useEffect(() => {
     if (!user?.email) return
-    let unsub = null
+    let unsubOwn   = null   // listener สำหรับ request ที่ตัวเองยื่น
+    let unsubDepts = []     // listeners สำหรับ request ของแผนกที่ดูแล (1 ตัวต่อ chunk ≤30 แผนก)
+    let ownDocs    = []     // snapshot cache ฝั่ง requesterEmail
+    let deptChunkDocs = []  // snapshot cache ฝั่ง department — array ต่อ chunk
     let cancelled = false
     let handleVisibility = null
 
+    // merge + dedup หลาย snapshot array โดยใช้ doc id เป็น key
+    function mergeRequests(...lists) {
+      const map = new Map()
+      for (const r of lists.flat()) map.set(r.id, r)
+      return [...map.values()].sort((x, y) => {
+        const tx = x.createdAt?.toMillis?.() ?? 0
+        const ty = y.createdAt?.toMillis?.() ?? 0
+        return ty - tx   // newest first
+      })
+    }
+
     async function init() {
-      // 1. โหลด dept mapping จาก settings/deptManagers
-      const settingsSnap = await getDoc(doc(db, 'settings', 'deptManagers'))
+      // 1. โหลด dept mapping จาก settings/deptManagers + division mapping จาก settings/divisionManagers
+      const [settingsSnap, divisionSnap] = await Promise.all([
+        getDoc(doc(db, 'settings', 'deptManagers')),
+        getDoc(doc(db, 'settings', 'divisionManagers')),
+      ])
       if (cancelled) return
 
-      const mapping = settingsSnap.exists() ? settingsSnap.data() : {}
-      const myDepts = Object.entries(mapping)
-        .filter(([, email]) => email === user.email.toLowerCase())
-        .map(([dept]) => dept)
+      // grantedKeys รองรับทั้งค่าเก่า (อีเมลเดี่ยว) และใหม่ (array — 1 แผนกหลาย Manager)
+      const mapping  = settingsSnap.exists() ? settingsSnap.data() : {}
+      const myDeptsDirect = grantedKeys(mapping, user.email)
 
-      // ถ้าไม่มีแผนก assign → แสดงว่าง
-      if (!myDepts.length) {
-        setRequests([])
-        setLoading(false)
-        return
+      // Head of Division — grant ทั้งสาย → เห็นทุกแผนกในสายนั้นด้วย ไม่ใช่แค่แผนกที่ระบุตรงๆ
+      const divisionMapping = divisionSnap.exists() ? divisionSnap.data() : {}
+      const myDivisions = grantedKeys(divisionMapping, user.email)
+      const myDeptsFromDivisions = myDivisions.flatMap((division) => getDepartments(division))
+
+      const myDepts = [...new Set([...myDeptsDirect, ...myDeptsFromDivisions])]
+
+      // ขยายชื่อแผนกให้ครอบคลุมชื่อแบบ Sheets/Maindata ด้วย (resolveDeptNames จาก deptMapping.js)
+      // ข้อมูลเก่าที่ import/sync จาก Sheets ใช้ชื่ออีกชุด เช่น grant "Logistic" → แถวเก่าเป็น "Logistics"
+      // ถ้าไม่ขยาย ประวัติย้อนหลังของแผนกจะล่องหนจาก query ด้านล่าง
+      const expandedDepts = [...new Set(myDepts.flatMap(d => [d, ...resolveDeptNames(d)]))]
+
+      // Firestore 'in' รับสูงสุด 30 ค่า → แตกเป็น chunk แล้ว subscribe แยกกัน
+      const IN_LIMIT = 30
+      const deptChunks = []
+      for (let i = 0; i < expandedDepts.length; i += IN_LIMIT) {
+        deptChunks.push(expandedDepts.slice(i, i + IN_LIMIT))
       }
+      deptChunkDocs = deptChunks.map(() => [])
 
-      // 2. subscribe ตาม department IN myDepts
-      const q = query(
+      const userEmail = user.email.toLowerCase()
+
+      // 2a. Query หลัก — request ที่ตัวเองยื่น (requesterEmail)
+      //     ทำงานเสมอ ไม่ต้องรอ deptManagers
+      const qOwn = query(
         collection(db, 'hc_requests'),
-        where('department', 'in', myDepts),
+        where('requesterEmail', '==', userEmail),
         orderBy('createdAt', 'desc'),
-        limit(500)
+        limit(1000)
       )
 
-      const subscribe = () => {
-        if (unsub) return
-        unsub = onSnapshot(
-          q,
-          snap => { setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false) },
+      const subscribeOwn = () => {
+        if (unsubOwn) return
+        unsubOwn = onSnapshot(
+          qOwn,
+          snap => {
+            ownDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+            setRequests(mergeRequests(ownDocs, ...deptChunkDocs))
+            setLoading(false)
+          },
           err => {
-            console.error('[ManagerRequestsView] Firestore error:', err.message)
-            console.error('👉 ถ้าเป็น "requires an index" ให้กดลิงก์ด้านบนเพื่อสร้าง index ใน Firebase Console')
+            console.error('[ManagerRequestsView] own-query error:', err.message)
             setLoading(false)
           }
         )
       }
 
+      // 2b. Query เสริม — request ของแผนกที่ดูแล (department) 1 listener ต่อ chunk
+      //     limit 1000/chunk เพื่อให้เห็นประวัติย้อนหลังหลายปี ไม่ใช่แค่ 500 ล่าสุด
+      const subscribeDepts = () => {
+        if (unsubDepts.length || !deptChunks.length) return
+        unsubDepts = deptChunks.map((chunk, ci) => {
+          const qDept = query(
+            collection(db, 'hc_requests'),
+            where('department', 'in', chunk),
+            orderBy('createdAt', 'desc'),
+            limit(1000)
+          )
+          return onSnapshot(
+            qDept,
+            snap => {
+              deptChunkDocs[ci] = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+              setRequests(mergeRequests(ownDocs, ...deptChunkDocs))
+              setLoading(false)
+            },
+            err => {
+              console.error('[ManagerRequestsView] dept-query error:', err.message)
+              console.error('👉 ถ้าเป็น "requires an index" ให้กดลิงก์ด้านบนเพื่อสร้าง index ใน Firebase Console')
+            }
+          )
+        })
+      }
+
       if (cancelled) return
-      subscribe()
-      handleVisibility = () => { if (document.hidden) { unsub?.(); unsub = null } else subscribe() }
+      subscribeOwn()
+      subscribeDepts()
+
+      handleVisibility = () => {
+        if (document.hidden) {
+          unsubOwn?.(); unsubOwn = null
+          unsubDepts.forEach(u => u?.()); unsubDepts = []
+        } else {
+          subscribeOwn()
+          subscribeDepts()
+        }
+      }
       document.addEventListener('visibilitychange', handleVisibility)
     }
 
@@ -617,7 +684,8 @@ export default function ManagerRequestsView({ user }) {
 
     return () => {
       cancelled = true
-      unsub?.()
+      unsubOwn?.()
+      unsubDepts.forEach(u => u?.())
       if (handleVisibility) document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [user?.email])
@@ -651,10 +719,30 @@ export default function ManagerRequestsView({ user }) {
    *
    * Re-computed whenever the requests array updates or the user switches tabs.
    */
+  // เคสประวัติทั้งหมด (ยังไม่กรองปี) — ใช้ทั้งนับ badge บนแท็บ และ derive รายการปี
+  const historyAll = useMemo(
+    () => requests.filter(r => HISTORY_STATUSES.includes(r.status)),
+    [requests]
+  )
+
+  // รายการปีที่มีข้อมูลจริง (จาก createdAt) เรียงใหม่ → เก่า สำหรับ chips กรองปี
+  const historyYears = useMemo(() => {
+    const ys = new Set()
+    historyAll.forEach(r => {
+      const y = r.createdAt?.toDate?.()?.getFullYear()
+      if (y) ys.add(y)
+    })
+    return [...ys].sort((a, b) => b - a)
+  }, [historyAll])
+
   const displayed = useMemo(() => {
     if (tab === 'active') return requests.filter(r => !['Closed','Cancelled'].includes(r.status))
+    if (tab === 'history') {
+      if (!historyYear) return historyAll
+      return historyAll.filter(r => r.createdAt?.toDate?.()?.getFullYear() === historyYear)
+    }
     return requests
-  }, [requests, tab])
+  }, [requests, tab, historyAll, historyYear])
 
   if (loading) {
     return (
@@ -662,23 +750,23 @@ export default function ManagerRequestsView({ user }) {
         {/* Scorecard skeleton — 5 cards */}
         <div className="grid grid-cols-5 gap-3">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="flex items-stretch rounded-xl border border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden h-[68px]">
-              <div className="w-1 shrink-0 bg-gray-100 dark:bg-slate-800" />
-              <div className="flex-1 px-4 py-3.5 flex flex-col gap-2">
-                <div className="h-5 w-8 rounded bg-gray-100 dark:bg-slate-800" />
-                <div className="h-2 w-14 rounded bg-gray-100 dark:bg-slate-800" />
+            <div key={i} className="flex h-[68px] items-stretch overflow-hidden rounded-xl border border-neutral-100 bg-white">
+              <div className="w-1 shrink-0 bg-neutral-100" />
+              <div className="flex flex-1 flex-col gap-2 px-4 py-3.5">
+                <div className="h-5 w-8 rounded bg-neutral-100" />
+                <div className="h-2 w-14 rounded bg-neutral-100" />
               </div>
             </div>
           ))}
         </div>
         {/* Tab skeleton */}
         <div className="flex gap-2">
-          <div className="h-7 w-20 rounded-lg bg-gray-100 dark:bg-slate-800" />
-          <div className="h-7 w-16 rounded-lg bg-gray-100 dark:bg-slate-800" />
+          <div className="h-7 w-20 rounded-lg bg-neutral-100" />
+          <div className="h-7 w-16 rounded-lg bg-neutral-100" />
         </div>
         {/* Row skeletons */}
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-16 rounded-xl bg-gray-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-800" />
+          <div key={i} className="h-16 rounded-xl border border-neutral-100 bg-neutral-50" />
         ))}
       </div>
     )
@@ -686,17 +774,17 @@ export default function ManagerRequestsView({ user }) {
 
   if (requests.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 gap-4">
-        <div className="w-12 h-12 rounded-2xl bg-[#008065]/5 dark:bg-emerald-950/20 flex items-center justify-center">
-          <FilePlus size={22} className="text-[#008065]/40 dark:text-emerald-700" />
+      <div className="flex flex-col items-center justify-center gap-4 py-24">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-dark-green-50">
+          <FilePlus size={22} strokeWidth={1} absoluteStrokeWidth className="text-dark-green-300" />
         </div>
         <div className="text-center">
-          <p className="text-sm font-bold text-gray-500 dark:text-slate-500">ยังไม่มีคำขอ</p>
-          <p className="text-xs text-gray-300 dark:text-slate-700 mt-1">กดยื่นคำขอเพื่อเริ่มต้น</p>
+          <p className="text-sm font-bold text-neutral-500">ยังไม่มีคำขอ</p>
+          <p className="mt-1 text-xs text-neutral-300">กดยื่นคำขอเพื่อเริ่มต้น</p>
         </div>
         <button
           onClick={() => navigate('/request')}
-          className="mt-2 px-5 py-2.5 bg-[#008065] hover:bg-[#006b54] text-white text-xs font-black uppercase tracking-wider rounded-xl transition-colors"
+          className="mt-2 rounded-lg bg-dark-green-600 px-5 py-2.5 text-xs font-bold text-neutral-50 transition-colors hover:bg-dark-green-700"
         >
           ยื่นคำขอใหม่
         </button>
@@ -713,24 +801,25 @@ export default function ManagerRequestsView({ user }) {
 
       {/* Tab + new button */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1 p-1 bg-gray-50 dark:bg-slate-800/50 rounded-xl border border-gray-100 dark:border-slate-800">
+        <div className="flex items-center gap-0.5 rounded-full border border-neutral-100 p-0.5">
           {[
-            { v: 'active', l: `กำลังดำเนินการ`, n: activeCount },
-            { v: 'all',    l: 'ทั้งหมด',         n: requests.length },
+            { v: 'active',  l: `กำลังดำเนินการ`, n: activeCount },
+            { v: 'history', l: 'ประวัติ',          n: historyAll.length },
+            { v: 'all',     l: 'ทั้งหมด',          n: requests.length },
           ].map(t => (
             <button
               key={t.v}
               onClick={() => setTab(t.v)}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-normal transition-colors ${
                 tab === t.v
-                  ? 'bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200 shadow-sm border border-gray-100 dark:border-slate-700'
-                  : 'text-gray-400 dark:text-slate-600 hover:text-gray-600'
+                  ? 'bg-green-fresh-50 text-green-fresh-900'
+                  : 'text-neutral-900 hover:bg-neutral-50'
               }`}
             >
               {t.l}
               {t.n > 0 && (
-                <span className={`text-[9px] font-black px-1.5 rounded-full ${
-                  tab === t.v ? 'bg-[#008065] text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-600'
+                <span className={`rounded-full px-1.5 text-[10px] font-bold ${
+                  tab === t.v ? 'bg-dark-green-600 text-neutral-50' : 'bg-neutral-100 text-neutral-400'
                 }`}>
                   {t.n}
                 </span>
@@ -741,24 +830,43 @@ export default function ManagerRequestsView({ user }) {
 
         <button
           onClick={() => navigate('/request')}
-          className="flex items-center gap-1.5 px-4 py-2 text-[11px] font-black uppercase tracking-wider text-white bg-[#008065] hover:bg-[#006b54] rounded-xl transition-colors shadow-sm shadow-[#008065]/20"
+          className="flex items-center gap-1.5 rounded-lg bg-dark-green-600 px-4 py-2 text-xs font-bold text-neutral-50 transition-colors hover:bg-dark-green-700"
         >
-          <FilePlus size={13} strokeWidth={3} />
+          <FilePlus size={13} strokeWidth={1} absoluteStrokeWidth />
           ยื่นคำขอใหม่
         </button>
       </div>
 
+      {/* Year filter — เฉพาะแท็บประวัติ: กรองตามปีที่ยื่น (derive จากข้อมูลจริง) */}
+      {tab === 'history' && historyYears.length > 0 && (
+        <div className="flex items-center gap-0.5 self-start rounded-full border border-neutral-100 p-0.5">
+          {[null, ...historyYears].map(y => (
+            <button
+              key={y ?? 'all'}
+              onClick={() => setHistoryYear(y)}
+              className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
+                historyYear === y
+                  ? 'bg-green-fresh-50 font-bold text-green-fresh-900'
+                  : 'font-normal text-neutral-900 hover:bg-neutral-50'
+              }`}
+            >
+              {y ?? 'ทุกปี'}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Column headers */}
       {displayed.length > 0 && (
-        <div className="flex items-center gap-0 px-0 text-[9px] font-black text-gray-300 dark:text-slate-700 uppercase tracking-widest border-b border-gray-50 dark:border-slate-800 pb-2">
-          <div className="w-0.5 mx-4 shrink-0" />
-          <div className="w-48 lg:w-56 shrink-0">ตำแหน่ง</div>
-          <div className="flex-1 hidden sm:block px-4">ความคืบหน้า</div>
-          <div className="hidden md:block w-28 text-right px-4">TA</div>
-          <div className="hidden lg:block w-24 px-4">Candidate</div>
-          <div className="hidden lg:block w-24 px-4">เริ่มงาน</div>
-          <div className="w-12 text-right px-4">SLA</div>
-          <div className="hidden md:block w-16 text-right px-4">วันที่ยื่น</div>
+        <div className="flex items-center gap-0 border-b border-neutral-100 px-0 pb-2 text-[11px] font-bold text-neutral-300">
+          <div className="mx-4 w-0.5 shrink-0" />
+          <div className="w-48 shrink-0 lg:w-56">ตำแหน่ง</div>
+          <div className="hidden flex-1 px-4 sm:block">ความคืบหน้า</div>
+          <div className="hidden w-28 px-4 text-right md:block">TA</div>
+          <div className="hidden w-24 px-4 lg:block">Candidate</div>
+          <div className="hidden w-24 px-4 lg:block">เริ่มงาน</div>
+          <div className="w-12 px-4 text-right">SLA</div>
+          <div className="hidden w-16 px-4 text-right md:block">วันที่ยื่น</div>
           <div className="w-5 px-4" />
         </div>
       )}
@@ -766,18 +874,22 @@ export default function ManagerRequestsView({ user }) {
       {/* Request list */}
       {displayed.length === 0 ? (
         <div className="py-12 text-center">
-          <p className="text-sm text-gray-300 dark:text-slate-700">ไม่มีคำขอที่กำลังดำเนินการ</p>
+          <p className="text-sm text-neutral-300">
+            {tab === 'history'
+              ? historyYear ? `ไม่มีประวัติในปี ${historyYear}` : 'ยังไม่มีประวัติคำขอที่จบแล้ว'
+              : 'ไม่มีคำขอที่กำลังดำเนินการ'}
+          </p>
           <button
-            onClick={() => setTab('all')}
-            className="mt-2 text-xs text-[#008065] hover:underline font-medium"
+            onClick={() => { setTab('all'); setHistoryYear(null) }}
+            className="mt-2 text-xs font-bold text-dark-green-700 hover:underline"
           >
             ดูทั้งหมด →
           </button>
         </div>
       ) : (
-        <div className="border border-gray-100 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-900">
-          {displayed.map((req, i) => (
-            <RequestRow key={req.id} req={req} index={i} />
+        <div className="overflow-hidden rounded-2xl border border-neutral-100 bg-white">
+          {displayed.map((req) => (
+            <RequestRow key={req.id} req={req} />
           ))}
         </div>
       )}

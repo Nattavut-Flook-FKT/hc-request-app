@@ -24,14 +24,14 @@ export default function FormPage({ user, role, isDarkMode, toggleDarkMode, maint
     <Layout user={user} role={role} isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode}>
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100 italic tracking-tight">ยื่นคำขออัตรากำลัง</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">กรอกข้อมูลให้ครบถ้วน แล้วกด "ยื่นคำขอ"</p>
+          <h1 className="text-xl font-bold text-neutral-900">ยื่นคำขออัตรากำลัง</h1>
+          <p className="mt-0.5 text-sm text-neutral-500">กรอกข้อมูลให้ครบถ้วน แล้วกด "ยื่นคำขอ"</p>
           {/* แสดง banner เตือนเมื่อระบบอยู่ใน maintenance mode */}
           {maintenanceMode && (
-            <p className="text-xs text-orange-500 font-bold mt-1">⚠️ ระบบปิดปรับปรุง — คำขอจะถูกบันทึกแต่ไม่แจ้ง Slack</p>
+            <p className="mt-1 text-xs font-bold text-orange-600">ระบบปิดปรับปรุง — คำขอจะถูกบันทึกแต่ไม่แจ้ง Slack</p>
           )}
         </div>
-        <Suspense fallback={<div className="flex items-center justify-center py-20 text-gray-400 text-sm">กำลังโหลดฟอร์ม...</div>}>
+        <Suspense fallback={<div className="flex items-center justify-center py-20 text-sm text-neutral-400">กำลังโหลดฟอร์ม...</div>}>
           <HCRequestForm user={user} role={role} maintenanceMode={maintenanceMode} />
         </Suspense>
       </div>

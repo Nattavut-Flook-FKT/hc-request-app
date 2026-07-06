@@ -20,20 +20,7 @@
 
 import { useMemo, useState } from 'react'
 import { Search, Download } from 'lucide-react'
-
-// ชื่อเดือนภาษาไทย index 0 = ม.ค.
-const MONTH_TH = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
-
-/**
- * แปลง createdAt เป็น Date object
- * รองรับทั้ง Firestore Timestamp (imported) และ ISO string (web app)
- */
-function toDate(v) {
-  if (!v) return null
-  if (typeof v?.toDate === 'function') return v.toDate()
-  const d = new Date(v)
-  return isNaN(d.getTime()) ? null : d
-}
+import { MONTH_TH, toDate } from '../../utils/reportUtils'
 
 /** สร้าง array 12 เดือนของปีที่ระบุ ["YYYY-01", ..., "YYYY-12"] */
 function getYearMonths(year) {
@@ -42,16 +29,22 @@ function getYearMonths(year) {
   )
 }
 
-/**
- * คืน Tailwind class สำหรับ heat-map coloring
- * intensity = val / maxCell (0–1)
- */
-function cellClass(intensity) {
-  if (intensity <= 0)   return null
-  if (intensity < 0.25) return 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400'
-  if (intensity < 0.5)  return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300'
-  if (intensity < 0.75) return 'bg-emerald-200 dark:bg-emerald-900/50 text-emerald-900 dark:text-emerald-200'
-  return 'bg-[#008065] text-white'
+/** Badge คู่ N (New HC, เขียว) / R (Replace, ส้ม) — แสดงแยกชนิดแทนตัวเลขรวมตัวเดียว */
+function NRChips({ n, r }) {
+  return (
+    <div className="flex items-center justify-center gap-1">
+      {n > 0 && (
+        <span className="inline-flex h-6 min-w-[24px] items-center justify-center rounded px-1.5 text-[11px] font-bold tabular-nums bg-dark-green-100 text-dark-green-800">
+          {n}N
+        </span>
+      )}
+      {r > 0 && (
+        <span className="inline-flex h-6 min-w-[24px] items-center justify-center rounded px-1.5 text-[11px] font-bold tabular-nums bg-orange-100 text-orange-900">
+          {r}R
+        </span>
+      )}
+    </div>
+  )
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -79,7 +72,7 @@ export default function ManpowerPivot({ requests }) {
    * แต่ละ row = { key: string, [YYYY-MM]: count, total: number }
    * เรียงตาม total มากสุดก่อน
    */
-  const { rows, maxCell, totalsRow, grandTotal } = useMemo(() => {
+  const { rows, totalsRow, grandTotal, grandTotalN, grandTotalR } = useMemo(() => {
     const map = {}
 
     requests
@@ -94,25 +87,31 @@ export default function ManpowerPivot({ requests }) {
         const key = groupBy === 'department'
           ? (r.department || 'ไม่ระบุ')
           : (r.position   || 'ไม่ระบุ')
+        const isNew = r.requestType === 'New HC'
 
-        if (!map[key]) map[key] = { key, total: 0 }
-        map[key][moKey] = (map[key][moKey] || 0) + 1
+        if (!map[key]) map[key] = { key, total: 0, totalN: 0, totalR: 0 }
+        if (!map[key][moKey]) map[key][moKey] = { total: 0, n: 0, r: 0 }
+        map[key][moKey].total++
+        if (isNew) { map[key][moKey].n++; map[key].totalN++ } else { map[key][moKey].r++; map[key].totalR++ }
         map[key].total++
       })
 
     const rows = Object.values(map).sort((a, b) => b.total - a.total)
 
-    let maxCell = 1
-    rows.forEach(r => months.forEach(m => { if ((r[m] || 0) > maxCell) maxCell = r[m] }))
-
     const totalsRow = {}
     months.forEach(m => {
-      totalsRow[m] = rows.reduce((s, r) => s + (r[m] || 0), 0)
+      totalsRow[m] = rows.reduce((acc, r) => {
+        const cell = r[m]
+        if (cell) { acc.total += cell.total; acc.n += cell.n; acc.r += cell.r }
+        return acc
+      }, { total: 0, n: 0, r: 0 })
     })
 
-    const grandTotal = rows.reduce((s, r) => s + r.total, 0)
+    const grandTotal  = rows.reduce((s, r) => s + r.total, 0)
+    const grandTotalN = rows.reduce((s, r) => s + r.totalN, 0)
+    const grandTotalR = rows.reduce((s, r) => s + r.totalR, 0)
 
-    return { rows, maxCell, totalsRow, grandTotal }
+    return { rows, totalsRow, grandTotal, grandTotalN, grandTotalR }
   }, [requests, groupBy, months])
 
   // กรองแถวตาม search input
@@ -137,14 +136,14 @@ export default function ManpowerPivot({ requests }) {
     // Data rows
     const dataRows = filtered.map(row => [
       row.key,
-      ...months.map(m => row[m] || 0),
+      ...months.map(m => row[m]?.total || 0),
       row.total,
     ])
 
     // Totals row
     const totalsData = [
       'รวมทั้งหมด',
-      ...months.map(m => totalsRow[m] || 0),
+      ...months.map(m => totalsRow[m]?.total || 0),
       grandTotal,
     ]
 
@@ -165,22 +164,22 @@ export default function ManpowerPivot({ requests }) {
   if (rows.length === 0 && availableYears.length === 0) return null
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden">
+    <div className="overflow-hidden rounded-2xl border border-neutral-100 bg-white">
 
       {/* ── Header ──────────────────────────────────────────── */}
-      <div className="px-6 pt-5 pb-4 border-b border-gray-50 dark:border-slate-800">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div className="border-b border-neutral-100 px-6 pb-4 pt-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
 
           {/* ชื่อ + คำอธิบาย + Year selector */}
           <div className="flex flex-col gap-2">
             <div>
-              <h3 className="text-sm font-black text-gray-800 dark:text-gray-100 tracking-tight">
+              <h3 className="text-sm font-bold text-neutral-900">
                 Headcount Breakdown
               </h3>
-              <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+              <p className="mt-0.5 text-xs leading-relaxed text-neutral-500">
                 จำนวน HC Request ที่<span className="font-bold">เปิดใหม่</span>แต่ละเดือน แยกตาม{groupBy === 'department' ? 'แผนก' : 'ตำแหน่ง'} ·{' '}
-                <span className="font-bold text-[#008065]">{grandTotal} requests</span>
-                {' '}ในปี {selectedYear}
+                <span className="font-bold text-dark-green-700">{grandTotal} คำขอ</span>
+                {' '}({grandTotalN} ตำแหน่งใหม่ / {grandTotalR} ตำแหน่งแทน) ในปี {selectedYear}
               </p>
             </div>
 
@@ -190,10 +189,10 @@ export default function ManpowerPivot({ requests }) {
                 <button
                   key={yr}
                   onClick={() => setSelectedYear(yr)}
-                  className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wider transition-all border ${
+                  className={`rounded-full border px-3 py-1 text-[11px] font-bold transition-colors ${
                     selectedYear === yr
-                      ? 'bg-[#008065] text-white border-[#008065] shadow-sm'
-                      : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700 hover:border-[#008065] hover:text-[#008065]'
+                      ? 'border-dark-green-600 bg-dark-green-600 text-neutral-50'
+                      : 'border-neutral-100 bg-white text-neutral-500 hover:border-dark-green-100 hover:text-dark-green-700'
                   }`}
                 >
                   {yr}
@@ -208,21 +207,21 @@ export default function ManpowerPivot({ requests }) {
             <button
               onClick={handleExportCSV}
               title={`Export CSV ปี ${selectedYear}`}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-500 dark:text-slate-400 hover:border-[#008065] hover:text-[#008065] dark:hover:text-emerald-400 text-[10px] font-black uppercase tracking-wider transition-all"
+              className="flex items-center gap-1.5 rounded-lg border border-neutral-100 bg-white px-3 py-1.5 text-[11px] font-bold text-neutral-500 transition-colors hover:border-dark-green-100 hover:text-dark-green-700"
             >
-              <Download size={12} />
+              <Download size={12} strokeWidth={1} absoluteStrokeWidth />
               CSV
             </button>
 
-            <div className="flex items-center gap-0.5 p-0.5 bg-gray-100 dark:bg-slate-800 rounded-lg">
+            <div className="flex items-center gap-0.5 rounded-lg bg-neutral-100 p-0.5">
               {[{ v: 'department', l: 'แผนก' }, { v: 'position', l: 'ตำแหน่ง' }].map(t => (
                 <button
                   key={t.v}
                   onClick={() => setGroupBy(t.v)}
-                  className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${
+                  className={`rounded-md px-3 py-1 text-[11px] font-bold transition-colors ${
                     groupBy === t.v
-                      ? 'bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200 shadow-sm'
-                      : 'text-gray-400 dark:text-slate-600 hover:text-gray-600 dark:hover:text-slate-400'
+                      ? 'bg-white text-neutral-900'
+                      : 'text-neutral-400 hover:text-neutral-600'
                   }`}
                 >
                   {t.l}
@@ -231,13 +230,13 @@ export default function ManpowerPivot({ requests }) {
             </div>
 
             <div className="relative">
-              <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-600" />
+              <Search size={11} strokeWidth={1} absoluteStrokeWidth className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400" />
               <input
                 type="text"
                 placeholder="ค้นหา..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="pl-7 pr-3 py-1.5 text-[11px] rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#008065] w-28"
+                className="w-28 rounded-lg border border-neutral-100 bg-white py-1.5 pl-7 pr-3 text-[11px] text-neutral-700 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
               />
             </div>
           </div>
@@ -248,9 +247,9 @@ export default function ManpowerPivot({ requests }) {
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-gray-100 dark:border-slate-800">
+            <tr className="border-b border-neutral-100">
               {/* Column หัวแถว — sticky */}
-              <th className="px-5 py-3 text-left text-[10px] font-black text-gray-400 dark:text-slate-600 uppercase tracking-widest sticky left-0 bg-white dark:bg-slate-900 min-w-[160px] z-10">
+              <th className="sticky left-0 z-10 min-w-[160px] bg-white px-5 py-3 text-left text-[11px] font-bold text-neutral-500">
                 {groupBy === 'department' ? 'แผนก' : 'ตำแหน่ง'}
               </th>
 
@@ -261,15 +260,15 @@ export default function ManpowerPivot({ requests }) {
                 return (
                   <th
                     key={m}
-                    className={`px-3 py-3 text-center text-[10px] font-black uppercase tracking-widest min-w-[52px] ${
+                    className={`min-w-[52px] px-3 py-3 text-center text-[11px] font-bold ${
                       isFuture
-                        ? 'text-gray-300 dark:text-slate-700'
-                        : 'text-gray-400 dark:text-slate-600'
+                        ? 'text-neutral-300'
+                        : 'text-neutral-500'
                     }`}
                   >
                     {MONTH_TH[Number(mo) - 1]}
                     {isFuture && (
-                      <span className="block text-[7px] font-semibold text-gray-300 dark:text-slate-700 normal-case tracking-normal">
+                      <span className="block text-[10px] font-normal text-neutral-300">
                         ล่วงหน้า
                       </span>
                     )}
@@ -278,7 +277,7 @@ export default function ManpowerPivot({ requests }) {
               })}
 
               {/* Column รวม */}
-              <th className="px-4 py-3 text-center text-[10px] font-black text-[#008065] dark:text-emerald-400 uppercase tracking-widest min-w-[52px]">
+              <th className="min-w-[52px] px-4 py-3 text-center text-[11px] font-bold text-dark-green-700">
                 รวม
               </th>
             </tr>
@@ -287,43 +286,37 @@ export default function ManpowerPivot({ requests }) {
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={months.length + 2} className="px-5 py-10 text-center text-xs text-gray-400 dark:text-slate-600">
+                <td colSpan={months.length + 2} className="px-5 py-10 text-center text-xs text-neutral-400">
                   ไม่มีข้อมูลในปี {selectedYear}
                 </td>
               </tr>
             ) : (
-              filtered.map((row, i) => (
+              filtered.map((row) => (
                 <tr
                   key={row.key}
-                  className={`border-b border-gray-50 dark:border-slate-800/50 hover:bg-gray-50/80 dark:hover:bg-slate-800/30 transition-colors ${
-                    i % 2 !== 0 ? 'bg-gray-50/30 dark:bg-slate-800/10' : ''
-                  }`}
+                  className="border-b border-neutral-100 transition-colors last:border-0 hover:bg-neutral-50"
                 >
-                  <td className="px-5 py-2.5 text-xs font-semibold text-gray-700 dark:text-gray-300 sticky left-0 bg-inherit z-10 whitespace-nowrap">
+                  <td className="sticky left-0 z-10 whitespace-nowrap bg-inherit px-5 py-2.5 text-xs font-bold text-neutral-700">
                     {row.key}
                   </td>
 
                   {months.map(m => {
-                    const val = row[m] || 0
-                    const cls = cellClass(val / maxCell)
+                    const cell = row[m]
+                    const val = cell?.total || 0
                     const isFuture = m > nowKey
                     return (
                       <td key={m} className={`px-3 py-2.5 text-center ${isFuture ? 'opacity-50' : ''}`}>
                         {val > 0 ? (
-                          <span className={`inline-flex items-center justify-center min-w-[22px] h-6 px-1.5 rounded text-[11px] font-black tabular-nums ${cls}`}>
-                            {val}
-                          </span>
+                          <NRChips n={cell.n} r={cell.r} />
                         ) : (
-                          <span className="text-gray-200 dark:text-slate-800 text-[10px] select-none">—</span>
+                          <span className="select-none text-[11px] text-neutral-200">—</span>
                         )}
                       </td>
                     )
                   })}
 
                   <td className="px-4 py-2.5 text-center">
-                    <span className="text-[12px] font-black tabular-nums text-[#008065] dark:text-emerald-400">
-                      {row.total}
-                    </span>
+                    <NRChips n={row.totalN} r={row.totalR} />
                   </td>
                 </tr>
               ))
@@ -333,24 +326,25 @@ export default function ManpowerPivot({ requests }) {
           {/* ── Total row ──────────────────────────────────────── */}
           {filtered.length > 0 && (
             <tfoot>
-              <tr className="border-t-2 border-gray-200 dark:border-slate-700">
-                <td className="px-5 py-3 text-[10px] font-black text-gray-500 dark:text-slate-400 uppercase tracking-wider sticky left-0 bg-gray-50 dark:bg-slate-800/60 z-10">
+              <tr className="border-t-2 border-neutral-100">
+                <td className="sticky left-0 z-10 bg-neutral-50 px-5 py-3 text-[11px] font-bold text-neutral-600">
                   รวมทั้งหมด
                 </td>
                 {months.map(m => {
                   const isFuture = m > nowKey
+                  const cell = totalsRow[m] || { total: 0, n: 0, r: 0 }
                   return (
-                    <td key={m} className={`px-3 py-3 text-center bg-gray-50 dark:bg-slate-800/60 ${isFuture ? 'opacity-50' : ''}`}>
-                      <span className="text-[12px] font-black tabular-nums text-gray-600 dark:text-slate-300">
-                        {totalsRow[m] || 0}
-                      </span>
+                    <td key={m} className={`bg-neutral-50 px-3 py-3 text-center ${isFuture ? 'opacity-50' : ''}`}>
+                      {cell.total > 0 ? (
+                        <NRChips n={cell.n} r={cell.r} />
+                      ) : (
+                        <span className="select-none text-[11px] text-neutral-300">—</span>
+                      )}
                     </td>
                   )
                 })}
-                <td className="px-4 py-3 text-center bg-gray-50 dark:bg-slate-800/60">
-                  <span className="text-[13px] font-black tabular-nums text-[#008065] dark:text-emerald-400">
-                    {grandTotal}
-                  </span>
+                <td className="bg-neutral-50 px-4 py-3 text-center">
+                  <NRChips n={grandTotalN} r={grandTotalR} />
                 </td>
               </tr>
             </tfoot>
@@ -358,25 +352,22 @@ export default function ManpowerPivot({ requests }) {
         </table>
       </div>
 
-      {/* ── Footer: Heat-map legend ───────────────────────────── */}
-      <div className="px-5 py-3 border-t border-gray-50 dark:border-slate-800 flex items-center gap-4 flex-wrap">
-        <span className="text-[10px] font-semibold text-gray-400 dark:text-slate-600">
-          สีเซลล์ = ความหนาแน่นของ Request ในเดือนนั้น:
+      {/* ── Footer: N/R legend ───────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-4 border-t border-neutral-100 px-5 py-3">
+        <span className="text-[11px] font-bold text-neutral-400">
+          ประเภทคำขอ:
         </span>
-        <div className="flex items-center gap-1.5">
-          {[
-            { cls: 'bg-emerald-50 dark:bg-emerald-900/20', label: '1 (น้อย)' },
-            { cls: 'bg-emerald-100 dark:bg-emerald-900/30', label: '' },
-            { cls: 'bg-emerald-200 dark:bg-emerald-900/50', label: '' },
-            { cls: 'bg-[#008065]', label: `${maxCell}+ (มาก)` },
-          ].map((s, idx) => (
-            <span key={idx} className="flex items-center gap-1">
-              <span className={`w-5 h-4 rounded-sm ${s.cls}`} />
-              {s.label && <span className="text-[9px] font-semibold text-gray-400 dark:text-slate-600">{s.label}</span>}
-            </span>
-          ))}
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-flex h-5 min-w-[24px] items-center justify-center rounded bg-dark-green-100 text-[11px] font-bold text-dark-green-800">N</span>
+            <span className="text-[11px] font-bold text-neutral-400">New HC</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-flex h-5 min-w-[24px] items-center justify-center rounded bg-orange-100 text-[11px] font-bold text-orange-900">R</span>
+            <span className="text-[11px] font-bold text-neutral-400">Replace</span>
+          </span>
         </div>
-        <span className="ml-auto text-[10px] text-gray-300 dark:text-slate-700">
+        <span className="ml-auto text-[11px] text-neutral-300">
           — = ไม่มี Request · เดือนล่วงหน้า = opacity ลด
         </span>
       </div>

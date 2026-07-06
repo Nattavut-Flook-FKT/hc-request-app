@@ -48,18 +48,17 @@ import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 
 /**
  * Mapping of every possible request status to its chart colours.
- * `bar` is a Tailwind utility class used for the stacked bar segments and
- * legend swatches; `hex` is the equivalent raw colour value used anywhere
- * a CSS hex string is needed directly (e.g. canvas or SVG contexts).
- * The insertion order determines the visual stacking order in the bar chart.
+ * `bar` is a DS token Tailwind utility class used for the stacked bar
+ * segments and legend swatches. The insertion order determines the visual
+ * stacking order in the bar chart.
  */
 const STATUS_COLOR = {
-  Open:         { bar: 'bg-yellow-400',  hex: '#facc15' },
-  Recruiting:   { bar: 'bg-blue-400',    hex: '#60a5fa' },
-  Interviewing: { bar: 'bg-purple-400',  hex: '#c084fc' },
-  Offering:     { bar: 'bg-orange-400',  hex: '#fb923c' },
-  Onboarding:   { bar: 'bg-teal-400',    hex: '#2dd4bf' },
-  Closed:       { bar: 'bg-[#008065]',   hex: '#008065' },
+  Open:         { bar: 'bg-yellow-400' },
+  Recruiting:   { bar: 'bg-blue-400' },
+  Interviewing: { bar: 'bg-purple-400' },
+  Offering:     { bar: 'bg-orange-400' },
+  Onboarding:   { bar: 'bg-teal-400' },
+  Closed:       { bar: 'bg-dark-green-600' },
 }
 
 /** Thai abbreviated month names indexed 0–11 (January = index 0). */
@@ -191,25 +190,25 @@ export default function MonthlyPipeline({ requests, onMonthClick }) {
   if (months.length === 0) return null
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm transition-colors overflow-hidden">
+    <div className="overflow-hidden rounded-2xl border border-neutral-100 bg-white">
 
       {/* ── Header + KPI strip ─────────────────────────────────── */}
-      <div className="px-6 pt-5 pb-4 border-b border-gray-50 dark:border-slate-800">
-        <div className="flex items-start justify-between gap-4 mb-4">
+      <div className="border-b border-neutral-100 px-6 pb-4 pt-5">
+        <div className="mb-4 flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-sm font-black text-gray-800 dark:text-gray-100 italic tracking-tight">Monthly Pipeline</h3>
-            <p className="text-[10px] text-gray-400 dark:text-slate-600 font-bold uppercase tracking-widest mt-0.5">
+            <h3 className="text-sm font-bold text-neutral-900">Monthly Pipeline</h3>
+            <p className="mt-0.5 text-[11px] font-bold text-neutral-400">
               {months.length} เดือนล่าสุด
             </p>
           </div>
           {/* View toggle */}
-          <div className="flex items-center gap-1 p-0.5 bg-gray-100 dark:bg-slate-800 rounded-lg shrink-0">
+          <div className="flex shrink-0 items-center gap-1 rounded-lg bg-neutral-100 p-0.5">
             {[{ v:'status', l:'สถานะ' }, { v:'flow', l:'เปิด vs ปิด' }].map(t => (
               <button key={t.v} onClick={() => setView(t.v)}
-                className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${
+                className={`rounded-md px-3 py-1 text-[11px] font-bold transition-colors ${
                   view === t.v
-                    ? 'bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200 shadow-sm'
-                    : 'text-gray-400 dark:text-slate-600 hover:text-gray-600'
+                    ? 'bg-white text-neutral-900'
+                    : 'text-neutral-400 hover:text-neutral-600'
                 }`}>
                 {t.l}
               </button>
@@ -220,22 +219,22 @@ export default function MonthlyPipeline({ requests, onMonthClick }) {
         {/* KPI strip */}
         <div className="grid grid-cols-4 gap-3">
           {[
-            { label: 'เปิดใหม่',   value: kpi.opened,                          color: 'text-blue-600 dark:text-blue-400'    },
-            { label: 'ปิดแล้ว',    value: kpi.closed,                          color: 'text-[#008065] dark:text-emerald-400' },
-            { label: 'Fill Rate',  value: kpi.fillRate + '%',                  color: kpi.fillRate >= 50 ? 'text-[#008065] dark:text-emerald-400' : 'text-orange-500' },
-            { label: 'SLA เฉลี่ย', value: kpi.avgSLA != null ? kpi.avgSLA + 'd' : '—', color: kpi.avgSLA > 30 ? 'text-red-500' : 'text-gray-700 dark:text-gray-300' },
+            { label: 'เปิดใหม่',   value: kpi.opened,                          color: 'text-blue-700'    },
+            { label: 'ปิดแล้ว',    value: kpi.closed,                          color: 'text-dark-green-700' },
+            { label: 'Fill Rate',  value: kpi.fillRate + '%',                  color: kpi.fillRate >= 50 ? 'text-dark-green-700' : 'text-orange-600' },
+            { label: 'SLA เฉลี่ย', value: kpi.avgSLA != null ? kpi.avgSLA + 'd' : '—', color: kpi.avgSLA > 30 ? 'text-red-600' : 'text-neutral-700' },
           ].map(k => (
-            <div key={k.label} className="bg-gray-50 dark:bg-slate-800/50 rounded-xl px-3 py-2.5">
-              <p className={`text-lg font-black tabular-nums leading-none ${k.color}`}>{k.value}</p>
-              <p className="text-[9px] font-bold text-gray-400 dark:text-slate-600 uppercase tracking-widest mt-1">{k.label}</p>
+            <div key={k.label} className="rounded-xl bg-neutral-50 px-3 py-2.5">
+              <p className={`text-lg font-bold leading-none tabular-nums ${k.color}`}>{k.value}</p>
+              <p className="mt-1 text-[10px] font-bold text-neutral-400">{k.label}</p>
             </div>
           ))}
         </div>
       </div>
 
       {/* ── Chart ──────────────────────────────────────────────── */}
-      <div className="px-6 pt-5 pb-4">
-        <div className="flex items-end gap-2 h-28">
+      <div className="px-6 pb-4 pt-5">
+        <div className="flex h-28 items-end gap-2">
           {months.map((key) => {
             const d    = data[key]
             const [yr, mo] = key.split('-')
@@ -246,34 +245,34 @@ export default function MonthlyPipeline({ requests, onMonthClick }) {
             const diff = delta(key, 'total')
 
             return (
-              <div key={key} className="flex flex-col items-center gap-1 flex-1 group cursor-pointer"
+              <div key={key} className="group flex flex-1 cursor-pointer flex-col items-center gap-1"
                 onClick={() => handleMonthClick(key)}>
 
                 {/* Delta badge */}
-                <div className="h-4 flex items-center justify-center">
+                <div className="flex h-4 items-center justify-center">
                   {diff !== null && diff !== 0 && (
-                    <span className={`text-[9px] font-black flex items-center gap-0.5 ${diff > 0 ? 'text-red-400' : 'text-[#008065] dark:text-emerald-400'}`}>
-                      {diff > 0 ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
+                    <span className={`flex items-center gap-0.5 text-[10px] font-bold ${diff > 0 ? 'text-red-500' : 'text-dark-green-700'}`}>
+                      {diff > 0 ? <TrendingUp size={9} strokeWidth={1} absoluteStrokeWidth /> : <TrendingDown size={9} strokeWidth={1} absoluteStrokeWidth />}
                       {Math.abs(diff)}
                     </span>
                   )}
-                  {diff === 0 && <Minus size={8} className="text-gray-200 dark:text-slate-700" />}
+                  {diff === 0 && <Minus size={8} strokeWidth={1} absoluteStrokeWidth className="text-neutral-200" />}
                 </div>
 
                 {/* Total count */}
-                <span className="text-[10px] font-black text-gray-600 dark:text-slate-400 tabular-nums">{d.total}</span>
+                <span className="text-[11px] font-bold text-neutral-600 tabular-nums">{d.total}</span>
 
                 {/* Bar */}
                 <div
-                  className={`w-full rounded-lg overflow-hidden transition-all duration-200 ${
+                  className={`w-full overflow-hidden rounded-lg transition-all duration-200 ${
                     isSelected
-                      ? 'ring-2 ring-[#008065] ring-offset-1 ring-offset-white dark:ring-offset-slate-900'
+                      ? 'ring-2 ring-dark-green-600 ring-offset-1 ring-offset-white'
                       : 'group-hover:opacity-80'
                   }`}
                   style={{ height: `${Math.max(pct, 10)}%`, minHeight: '8px' }}
                 >
                   {view === 'status' ? (
-                    <div className="w-full h-full flex flex-col-reverse">
+                    <div className="flex h-full w-full flex-col-reverse">
                       {Object.entries(STATUS_COLOR).map(([status, cfg]) =>
                         d[status] > 0 ? (
                           <div key={status} title={`${status}: ${d[status]}`}
@@ -282,21 +281,21 @@ export default function MonthlyPipeline({ requests, onMonthClick }) {
                       )}
                     </div>
                   ) : (
-                    <div className="w-full h-full flex flex-col">
+                    <div className="flex h-full w-full flex-col">
                       {/* Opened (blue top) */}
-                      <div className="bg-blue-200 dark:bg-blue-900/40 w-full" style={{ flex: d.opened - d.closed || 0 }} />
+                      <div className="w-full bg-blue-200" style={{ flex: d.opened - d.closed || 0 }} />
                       {/* Closed (green bottom) */}
-                      <div className="bg-[#008065] w-full" style={{ flex: d.closed }} />
+                      <div className="w-full bg-dark-green-600" style={{ flex: d.closed }} />
                     </div>
                   )}
                 </div>
 
                 {/* Month label */}
-                <div className="flex flex-col items-center leading-none mt-1">
-                  <span className={`text-[10px] font-bold transition-colors ${isSelected ? 'text-[#008065] dark:text-emerald-400' : 'text-gray-500 dark:text-slate-500'}`}>
+                <div className="mt-1 flex flex-col items-center leading-none">
+                  <span className={`text-[11px] font-bold transition-colors ${isSelected ? 'text-dark-green-700' : 'text-neutral-500'}`}>
                     {MONTH_TH[Number(mo) - 1]}
                   </span>
-                  <span className="text-[9px] font-bold text-gray-300 dark:text-slate-700">{yr}</span>
+                  <span className="text-[10px] font-bold text-neutral-300">{yr}</span>
                 </div>
               </div>
             )
@@ -305,31 +304,31 @@ export default function MonthlyPipeline({ requests, onMonthClick }) {
       </div>
 
       {/* ── Legend ─────────────────────────────────────────────── */}
-      <div className="px-6 pb-4 pt-1 border-t border-gray-50 dark:border-slate-800">
+      <div className="border-t border-neutral-100 px-6 pb-4 pt-1">
         {view === 'status' ? (
           <div className="flex flex-wrap gap-4">
             {Object.entries(STATUS_COLOR).map(([status, cfg]) => (
               <div key={status} className="flex items-center gap-1.5">
-                <div className={`w-2 h-2 rounded ${cfg.bar}`} />
-                <span className="text-[9px] font-bold text-gray-400 dark:text-slate-600 uppercase tracking-tight">{status}</span>
+                <div className={`h-2 w-2 rounded ${cfg.bar}`} />
+                <span className="text-[10px] font-bold text-neutral-400">{status}</span>
               </div>
             ))}
           </div>
         ) : (
           <div className="flex gap-4">
             <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded bg-blue-200 dark:bg-blue-900/40" />
-              <span className="text-[9px] font-bold text-gray-400 dark:text-slate-600 uppercase tracking-tight">เปิดใหม่ (ยังไม่ปิด)</span>
+              <div className="h-2 w-2 rounded bg-blue-200" />
+              <span className="text-[10px] font-bold text-neutral-400">เปิดใหม่ (ยังไม่ปิด)</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded bg-[#008065]" />
-              <span className="text-[9px] font-bold text-gray-400 dark:text-slate-600 uppercase tracking-tight">ปิดแล้ว</span>
+              <div className="h-2 w-2 rounded bg-dark-green-600" />
+              <span className="text-[10px] font-bold text-neutral-400">ปิดแล้ว</span>
             </div>
           </div>
         )}
         {selectedMonth && (
           <button onClick={() => { setSelected(null); onMonthClick?.(null) }}
-            className="mt-2 text-[10px] text-[#008065] dark:text-emerald-400 font-bold hover:underline">
+            className="mt-2 text-[11px] font-bold text-dark-green-700 hover:underline">
             ✕ ล้าง filter เดือน
           </button>
         )}

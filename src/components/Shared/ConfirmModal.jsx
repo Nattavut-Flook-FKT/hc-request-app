@@ -1,24 +1,13 @@
 /**
  * ConfirmModal.jsx — Reusable confirmation dialog
  * ─────────────────────────────────────────────────────────────────────────────
- * Modal สำหรับขอยืนยันการทำรายการ (เช่น ลบข้อมูล, ยกเลิกคำขอ)
- * รองรับ 3 รูปแบบ (variant) คือ danger, warning, และ info
- * แต่ละ variant มีสีของ icon และปุ่มยืนยันที่แตกต่างกัน
- * คลิก backdrop ด้านหลังจะปิด modal เช่นเดียวกับปุ่ม X
+ * Modal ขอยืนยันการทำรายการ (ลบข้อมูล, ยกเลิกคำขอ ฯลฯ) · 3 variant: danger/warning/info
+ * คลิก backdrop ปิด modal เช่นเดียวกับปุ่ม X
  *
- * Props:
- *   isOpen      {boolean}  เปิด/ปิด modal
- *   onClose     {function} callback เมื่อผู้ใช้ยกเลิกหรือคลิก backdrop
- *   onConfirm   {function} callback เมื่อผู้ใช้กดปุ่มยืนยัน
- *   title       {string}   หัวข้อของ modal (default: 'ยืนยันการทำรายการ')
- *   message     {string}   ข้อความคำถามหรือคำอธิบายรายละเอียด
- *   confirmText {string}   ข้อความบนปุ่มยืนยัน (default: 'ยืนยัน')
- *   cancelText  {string}   ข้อความบนปุ่มยกเลิก (default: 'ยกเลิก')
- *   variant     {string}   รูปแบบสี: 'danger' | 'warning' | 'info' (default: 'danger')
+ * UI: FKT Design System (14-modal · 05-button) — r-2xl · no dark · button no shadow ·
+ *     danger=red-600 · info=dark-green-600 · icon tint-50 · token-only
  *
- * Notes:
- *   - render null เมื่อ isOpen=false เพื่อไม่ให้ DOM มี element ที่ไม่จำเป็น
- *   - variantStyles รวม class ของ icon, ปุ่ม, และ border ตาม variant ไว้ในที่เดียว
+ * Props: isOpen · onClose · onConfirm · title · message · confirmText · cancelText · variant
  * ─────────────────────────────────────────────────────────────────────────────
  */
 import { AlertTriangle, X } from 'lucide-react'
@@ -35,25 +24,22 @@ export default function ConfirmModal({
 }) {
   if (!isOpen) return null
 
-  // map variant → Tailwind classes สำหรับ icon, ปุ่ม, และ border
+  // map variant → DS tokens (icon tint-50 chip + confirm button family)
   const variantStyles = {
     danger: {
-      iconBg: 'bg-red-100 dark:bg-red-900/30',
-      iconColor: 'text-red-600 dark:text-red-400',
-      buttonBg: 'bg-red-600 hover:bg-red-700',
-      borderColor: 'border-red-200 dark:border-red-900/30',
+      iconBg: 'bg-red-50',
+      iconColor: 'text-red-600',
+      button: 'bg-red-600 text-neutral-50 hover:bg-red-700',
     },
     warning: {
-      iconBg: 'bg-amber-100 dark:bg-amber-900/30',
-      iconColor: 'text-amber-600 dark:text-amber-400',
-      buttonBg: 'bg-amber-600 hover:bg-amber-700',
-      borderColor: 'border-amber-200 dark:border-amber-900/30',
+      iconBg: 'bg-yellow-50',
+      iconColor: 'text-yellow-700',
+      button: 'bg-yellow-600 text-dark-green-950 hover:bg-yellow-700',
     },
     info: {
-      iconBg: 'bg-emerald-100 dark:bg-emerald-900/30',
-      iconColor: 'text-emerald-600 dark:text-emerald-400',
-      buttonBg: 'bg-[#008065] hover:bg-emerald-700',
-      borderColor: 'border-emerald-200 dark:border-emerald-900/30',
+      iconBg: 'bg-dark-green-50',
+      iconColor: 'text-dark-green-600',
+      button: 'bg-dark-green-600 text-neutral-50 hover:bg-dark-green-700',
     },
   }
 
@@ -63,45 +49,41 @@ export default function ConfirmModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop — คลิกเพื่อปิด modal */}
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
+        className="absolute inset-0 bg-neutral-950/45 transition-opacity"
         onClick={onClose}
       />
 
-      {/* Modal */}
-      <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-200">
+      {/* Modal — r-2xl 24px · shadow-xl · border neutral-100 */}
+      <div className="relative w-full max-w-md animate-in fade-in zoom-in-95 rounded-3xl border border-neutral-100 bg-white shadow-2xl duration-200">
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+          className="absolute right-4 top-4 rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-neutral-50 hover:text-neutral-700"
         >
-          <X size={18} />
+          <X size={18} strokeWidth={1} absoluteStrokeWidth />
         </button>
 
         <div className="p-6">
-          {/* Icon */}
-          <div className={`w-12 h-12 rounded-xl ${style.iconBg} flex items-center justify-center mb-4`}>
-            <AlertTriangle size={24} className={style.iconColor} />
+          {/* Icon chip */}
+          <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl ${style.iconBg}`}>
+            <AlertTriangle size={24} strokeWidth={1} absoluteStrokeWidth className={style.iconColor} />
           </div>
 
           {/* Content */}
-          <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">
-            {title}
-          </h3>
-          <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
-            {message}
-          </p>
+          <h3 className="mb-2 text-lg font-bold text-neutral-900">{title}</h3>
+          <p className="text-sm leading-relaxed text-neutral-500">{message}</p>
 
-          {/* Actions */}
-          <div className="flex items-center gap-3 mt-6">
+          {/* Actions — cancel (ghost neutral) + confirm (variant family · no shadow) */}
+          <div className="mt-6 flex items-center gap-3">
             <button
               onClick={onClose}
-              className="flex-1 px-4 py-2.5 text-sm font-bold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-xl transition-colors"
+              className="flex-1 rounded-lg bg-neutral-50 px-4 py-2.5 text-sm font-bold text-neutral-700 transition-colors hover:bg-neutral-100"
             >
               {cancelText}
             </button>
             <button
               onClick={onConfirm}
-              className={`flex-1 px-4 py-2.5 text-sm font-bold text-white ${style.buttonBg} rounded-xl transition-colors shadow-lg shadow-black/10`}
+              className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-bold transition-colors ${style.button}`}
             >
               {confirmText}
             </button>

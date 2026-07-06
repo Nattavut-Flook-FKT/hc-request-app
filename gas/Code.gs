@@ -32,28 +32,82 @@ function resolveJobOpeningSheet_(_hcId) {
 }
 
 /**
- * setStatusSafe_ — เขียนค่า status ลงใน cell โดยรองรับ Sheets ที่มี strict validation
- * ถ้า setValue() throw (validation reject) → ล้าง validation แล้ว retry
- * จากนั้น reapply STATUS_DROPDOWN_LIST เพื่อรักษา chip display style
+ * setStatusSafe_ — เขียนค่า status ลงใน cell โดยรองรับ Sheets ที่มี strict validation เดิม
+ * หมายเหตุสำคัญ #1: Sheets validate แบบ deferred (commit ตอนสคริปต์จบ) ดังนั้นถ้าใช้ try/catch รอบ
+ * setValue() เฉยๆ exception จะ "หลุด" ไปโผล่ตอนจบสคริปต์แบบจับไม่ได้ (native error page ของ Apps Script)
+ * วิธีที่ปลอดภัยจริงคือ ล้าง validation เดิมออกก่อนเขียนค่า — แต่ "เฉพาะกรณีที่จำเป็นจริงๆ" เท่านั้น
+ *
+ * หมายเหตุสำคัญ #2: Apps Script ไม่มี API ตั้งค่า "Chip" display style (ตั้งได้แค่ผ่าน Sheets UI)
+ * ทุกครั้งที่ clearDataValidations()+setDataValidation() ถูกเรียก จะรีเซ็ตเป็น dropdown ธรรมดา (arrow)
+ * เสมอ — ทำให้ chip หาย ดังนั้นต้อง "เช็คก่อน" ว่า value ปัจจุบันอยู่ใน validation list เดิมอยู่แล้วหรือไม่
+ * ถ้าอยู่แล้ว → setValue() ตรงๆ พอ ไม่ต้องแตะ validation เลย (รักษา chip style เดิมไว้)
+ * ถ้าไม่อยู่ (รูปแบบเก่าจริงๆ) → ค่อย clear+reapply (จะเสีย chip เฉพาะรอบนี้ ต้องไปตั้ง Chip ใหม่ทาง UI)
  */
 var STATUS_DROPDOWN_LIST = [
   'To be confirmed', 'Active Sourcing', 'Pending Offer', 'Offer Accepted',
   'Onboard', 'Job Cancelled', 'Turndown', 'On hold', 'Internal Transfer', 'Confidential'
 ]
 function setStatusSafe_(cell, value) {
+  var needsReset = true
   try {
+    var existing = cell.getDataValidation()
+    if (!existing) {
+      needsReset = false
+    } else {
+      var criteria = existing.getCriteriaValues()
+      var list = criteria && criteria[0]
+      if (list && list.indexOf && list.indexOf(value) !== -1) needsReset = false
+    }
+  } catch (_) { /* ตรวจสอบไม่ได้ — ถือว่าต้อง reset เพื่อความปลอดภัย */ }
+
+  if (!needsReset) {
     cell.setValue(value)
-  } catch (e) {
-    // validation ปัจจุบันของ cell ไม่รองรับค่านี้ — ล้าง validation แล้ว retry
-    try { cell.clearDataValidations() } catch(_) {}
-    try {
-      var rule = SpreadsheetApp.newDataValidation()
-        .requireValueInList(STATUS_DROPDOWN_LIST, true)
-        .setAllowInvalid(true).build()
-      cell.setDataValidation(rule)
-    } catch(_) {}
-    cell.setValue(value)
+    return
   }
+
+  try { cell.clearDataValidations() } catch(_) {}
+  cell.setValue(value)
+  try {
+    var rule = SpreadsheetApp.newDataValidation()
+      .requireValueInList(STATUS_DROPDOWN_LIST, true)
+      .setAllowInvalid(true).build()
+    cell.setDataValidation(rule)
+  } catch(_) {}
+}
+
+// ── MIGRATE: normalize validation + label ของทุกแถวให้เป็น format ใหม่ (one-time, รันผ่าน ?action=migrateStatusDropdowns) ──
+// ทำแบบ bulk (ล้าง validation ทั้งคอลัมน์ → flush → setValues ทั้งคอลัมน์ → reapply validation ทั้งคอลัมน์)
+// เร็วกว่าและปลอดภัยกว่าการวน setStatusSafe_ ทีละเซลล์ (เลี่ยงปัญหา deferred validation โดยสมบูรณ์)
+function migrateOldStatusDropdowns_(sheet) {
+  var lastRow = sheet.getLastRow()
+  if (lastRow < 2) return { fixed: 0, scanned: 0 }
+  var numRows = lastRow - 1
+  var range   = sheet.getRange(2, COL_STATUS, numRows, 1)
+
+  // 1) ล้าง validation เดิมทั้งคอลัมน์ก่อน แล้ว flush ให้มีผลจริง ก่อนเขียนค่าใดๆ
+  range.clearDataValidations()
+  SpreadsheetApp.flush()
+
+  // 2) normalize label เดิม → label ใหม่ แล้วเขียนทับทั้งคอลัมน์ในครั้งเดียว (ไม่มี validation ขวางแล้ว)
+  var values  = range.getValues()
+  var fixed   = 0
+  var updated = values.map(function(row) {
+    var current = (row[0] || '').toString().trim()
+    if (!current) return ['']
+    fixed++
+    return [toSheetsStatus_(current)]
+  })
+  range.setValues(updated)
+  SpreadsheetApp.flush()
+
+  // 3) ใส่ validation rule ใหม่ (lenient) คลุมทั้งคอลัมน์ ให้ใช้งานเป็น dropdown ต่อไปได้
+  var rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(STATUS_DROPDOWN_LIST, true)
+    .setAllowInvalid(true).build()
+  range.setDataValidation(rule)
+  SpreadsheetApp.flush()
+
+  return { fixed: fixed, scanned: values.length }
 }
 
 // Columns ใน sheet "Job Openings YYYY" (1-based index)
@@ -285,6 +339,9 @@ var FIREBASE_PROJECT_ID = _props.getProperty('FIREBASE_PROJECT_ID') || 'hcreques
 var SLACK_NEW_REQUEST   = _props.getProperty('SLACK_NEW_REQUEST')   || ''
 var SLACK_UPDATES       = _props.getProperty('SLACK_UPDATES')       || ''
 var SLACK_SUBTEAM       = _props.getProperty('SLACK_SUBTEAM')       || ''
+// SLACK_ALERT — webhook ของห้อง #hc-alert สำหรับแจ้งผล sync (ลบ/อัปเดตไม่เจอแถว ฯลฯ)
+// ถ้ายังไม่ตั้งค่า property จะ fallback ไปห้อง SLACK_UPDATES เพื่อไม่ให้ alert หาย
+var SLACK_ALERT         = _props.getProperty('SLACK_ALERT')         || SLACK_UPDATES
 var APP_URL             = _props.getProperty('APP_URL')             || 'https://hcrequest.web.app'
 // HR Spreadsheet (MainData + Manager_Access) — ต้องตั้งค่าใน Script Properties
 // key: HR_SPREADSHEET_ID  (ไม่มี fallback เพื่อป้องกัน spreadsheet ID หลุดในโค้ด)
@@ -341,6 +398,12 @@ function slackStatusUpdate(position, department, oldStatus, newStatus, assignedT
     '*ตำแหน่ง:* ' + position + ' (' + department + ')\n' +
     '*สถานะ:* ' + oldStatus + ' → *' + newStatus + '*' + taLine + candidateLine
   sendSlack_(SLACK_UPDATES, text)
+}
+
+// alertSlack_ — แจ้งผล sync เข้าห้อง #hc-alert (หรือ SLACK_UPDATES ถ้ายังไม่ตั้ง SLACK_ALERT)
+// ใช้กับทุกเหตุการณ์ที่ Admin ต้องรู้: ลบแถวสำเร็จ/ไม่เจอ, อัปเดตสถานะไม่เจอแถว ฯลฯ
+function alertSlack_(text) {
+  sendSlack_(SLACK_ALERT, text)
 }
 
 function sendSlack_(webhookUrl, text) {
@@ -428,24 +491,52 @@ function doGet(e) {
     return responseJson_({ success: false, error: 'hcId not found: ' + testHcId })
   }
 
-  // ── DELETE ROW: ลบ row ออกจาก JOB_OPENINGS_SHEET โดยใช้ HCID ───────────────
+  // ── MIGRATE STATUS DROPDOWNS: normalize validation + label ของทุกแถวให้เป็น format ใหม่ (one-time) ──
+  // เรียกด้วย ?action=migrateStatusDropdowns&secret=XXX
+  if (e.parameter.action === 'migrateStatusDropdowns') {
+    if (!isValidSecret_(e)) return responseJson_({ error: 'Unauthorized' })
+    try {
+      var migSheet = ss.getSheetByName(JOB_OPENINGS_SHEET)
+      if (!migSheet) return responseJson_({ error: 'sheet not found: ' + JOB_OPENINGS_SHEET })
+      var migResult = migrateOldStatusDropdowns_(migSheet)
+      return responseJson_({ success: true, fixed: migResult.fixed, scanned: migResult.scanned })
+    } catch (migErr) {
+      return responseJson_({ success: false, error: migErr.message })
+    }
+  }
+
+  // ── DELETE ROW: ลบ "ทุกแถว" ที่ HCID ตรง ออกจาก JOB_OPENINGS_SHEET ─────────
   // เรียกด้วย ?action=deleteRow&hcId=REQ-2026-NNN&secret=XXX
+  // ไล่ลบจากล่างขึ้นบนเพื่อไม่ให้ index เลื่อน — เก็บกวาดแถวซ้ำ (duplicate HCID) ในรอบเดียว
+  // ทุกผลลัพธ์ (สำเร็จ/ไม่เจอ) แจ้งเข้า #hc-alert เสมอ
   if (e.parameter.action === 'deleteRow') {
     if (!isValidSecret_(e)) return responseJson_({ error: 'Unauthorized' })
     var delHcId = e.parameter.hcId
     if (!delHcId) return responseJson_({ error: 'missing hcId param' })
     var delSheetName = resolveJobOpeningSheet_(delHcId)
     var delSheet = ss.getSheetByName(delSheetName)
-    if (!delSheet) return responseJson_({ error: 'sheet not found: ' + delSheetName })
+    if (!delSheet) {
+      alertSlack_('❌ *ลบแถวใน Sheets ไม่สำเร็จ*\nHCID: `' + delHcId + '` — ไม่พบชีท ' + delSheetName)
+      return responseJson_({ error: 'sheet not found: ' + delSheetName })
+    }
     var delLastRow = delSheet.getLastRow()
-    if (delLastRow < 2) return responseJson_({ success: false, error: 'sheet is empty' })
+    if (delLastRow < 2) {
+      alertSlack_('❌ *ลบแถวใน Sheets ไม่สำเร็จ*\nHCID: `' + delHcId + '` — ชีท ' + delSheetName + ' ว่างเปล่า')
+      return responseJson_({ success: false, error: 'sheet is empty' })
+    }
     var delHcids = delSheet.getRange(2, COL_HCID, delLastRow - 1, 1).getValues()
-    for (var di = 0; di < delHcids.length; di++) {
+    var delCount = 0
+    for (var di = delHcids.length - 1; di >= 0; di--) {
       if (delHcids[di][0].toString().trim() === delHcId.toString().trim()) {
         delSheet.deleteRow(di + 2)
-        return responseJson_({ success: true, deleted: delHcId, rowNum: di + 2 })
+        delCount++
       }
     }
+    if (delCount > 0) {
+      alertSlack_('🗑️ *ลบออกจาก Sheets แล้ว*\nHCID: `' + delHcId + '` — ลบ ' + delCount + ' แถว' + (delCount > 1 ? ' (มีแถวซ้ำ)' : ''))
+      return responseJson_({ success: true, deleted: delHcId, count: delCount })
+    }
+    alertSlack_('⚠️ *ลบแถวใน Sheets ไม่สำเร็จ*\nHCID: `' + delHcId + '` — หา HCID ไม่เจอในชีท ' + delSheetName + ' (อาจถูกลบไปแล้ว หรือ HCID ไม่ตรง)')
     return responseJson_({ success: false, error: 'hcId not found: ' + delHcId })
   }
 
@@ -473,7 +564,8 @@ function doGet(e) {
       const clearInfo      = e.parameter.clearInfo === '1'        // ล้าง candidateName + startDate
       const cvUrl          = e.parameter.cvUrl          || null   // ลิ้ง CV (Google Drive, etc.)
 
-      const VALID = ['Open','Recruiting','Interviewing','Offering','Onboarding','Rejected','Closed','Cancelled']
+      const VALID = ['Open','Recruiting','Interviewing','Offering','Onboarding','Rejected','Closed','Cancelled',
+                     'OnHold','InternalTransfer','Confidential']
       if (!docId || !newStatus)       return responseJson_({ success: false, error: 'Missing params' })
       if (!VALID.includes(newStatus)) return responseJson_({ success: false, error: 'Invalid status: ' + newStatus })
 
@@ -481,6 +573,7 @@ function doGet(e) {
       const sheetsStatus = toSheetsStatus_(newStatus)
 
       var position = '', dept = '', oldStatus = ''
+      var jobRowFound = false   // เจอแถว HCID ใน JOB_OPENINGS จริงไหม — ถ้าไม่เจอต้อง alert
 
       // ── อัพเดต JOB_OPENINGS_SHEET โดยใช้ HCID (ถ้ามี) ──────────────────────
       if (hcId) {
@@ -489,6 +582,7 @@ function doGet(e) {
           const hcidValues = jobSheet.getRange(2, COL_HCID, jobSheet.getLastRow() - 1, 1).getValues()
           for (let i = 0; i < hcidValues.length; i++) {
             if (hcidValues[i][0].toString().trim() === hcId.toString().trim()) {
+              jobRowFound = true
               const rowNum = i + 2
               oldStatus = jobSheet.getRange(rowNum, COL_STATUS).getValue()
               position  = jobSheet.getRange(rowNum, COL_POSITION).getValue()
@@ -579,9 +673,18 @@ function doGet(e) {
         }
       }
 
+      // ── ถ้าส่ง hcId มาแต่หาแถวไม่เจอ → แจ้ง #hc-alert + ตอบ fail ให้แอปโชว์เตือน ──
+      // (เดิมตอบ success ทั้งที่ไม่ได้อัปเดตอะไรเลย — ทำให้ Sheets เพี้ยนแบบเงียบๆ)
+      if (hcId && !jobRowFound) {
+        alertSlack_('⚠️ *อัปเดตสถานะใน Sheets ไม่สำเร็จ*\nHCID: `' + hcId + '` → ' + newStatus + '\nหา HCID ไม่เจอในชีท — แถวอาจถูกลบหรือ HCID ไม่ตรง')
+        return responseJson_({ success: false, error: 'hcId not found in sheet: ' + hcId })
+      }
+
       slackStatusUpdate(position, dept, oldStatus, newStatus, assignedToName, candidateName)
       return responseJson_({ success: true })
     } catch (err) {
+      var errHcId = e.parameter.hcId || ''
+      alertSlack_('❌ *updateStatus error*\n' + (errHcId ? 'HCID: `' + errHcId + '` — ' : '') + err.message)
       return responseJson_({ success: false, error: err.message })
     }
   }
@@ -978,6 +1081,9 @@ function toSheetsStatus_(appStatus) {
     'Closed':         'Onboard',
     'Rejected':       'Job Cancelled',     // Turndown ไม่มีใน dropdown
     'Cancelled':      'Job Cancelled',
+    'OnHold':         'On hold',
+    'InternalTransfer':'Internal Transfer',
+    'Confidential':   'Confidential',
     // pass-through (ค่าที่เขียนใน Sheets อยู่แล้ว)
     'Active Sourcing':  'Active Sourcing',
     'Pending Offer':    'Pending Offer',

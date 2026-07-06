@@ -27,7 +27,7 @@ import Sidebar from './Sidebar'
 
 export default function Layout({ user, role, isDarkMode, toggleDarkMode, children }) {
   return (
-    <div className="flex h-screen overflow-hidden transition-colors duration-300 bg-[#f5f7f6] dark:bg-slate-950">
+    <div className="flex h-screen overflow-hidden bg-neutral-50">
       {/* Sidebar — แถบ navigation ซ้ายมือ, sticky ไม่เลื่อนตาม content */}
       <Sidebar user={user} role={role} isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
 
