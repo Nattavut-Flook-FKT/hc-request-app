@@ -39,7 +39,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { collection, onSnapshot, orderBy, query, where, limit, getDoc, doc } from 'firebase/firestore'
 import { db } from '../../services/firebase'
 import { getJDSignedUrl, getCVSignedUrl } from '../../services/supabase'
-import { Loader2, FileText, File, UserCheck, Calendar, ChevronDown, ChevronUp, FilePlus } from 'lucide-react'
+import { Loader2, FileText, File, UserCheck, Calendar, ChevronDown, ChevronUp, ChevronsUpDown, FilePlus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { getDepartments } from '../../data/orgStructure'
 import { resolveDeptNames } from '../../data/deptMapping'
@@ -393,6 +393,7 @@ function RequestRow({ req }) {
 
         {/* Left: position + dept */}
         <div className="w-48 shrink-0 py-4 pr-4 lg:w-56">
+          <p className="mb-0.5 font-mono text-[10px] font-bold text-neutral-300">{req.hcId || req.id.slice(0, 7)}</p>
           <div className="mb-0.5 flex items-center gap-1.5">
             <span className={`rounded border px-1.5 py-0.5 text-[10px] font-bold ${statusCfg.pill}`}>
               {req.status}
@@ -541,13 +542,23 @@ function Scorecard({ stats }) {
 // สถานะที่ถือว่า "จบแล้ว" — ใช้ในแท็บประวัติ (ดูย้อนหลังของแผนก)
 const HISTORY_STATUSES = ['Closed', 'Cancelled', 'Rejected']
 
+// สถานะที่ Manager ไม่ต้องเห็นในหน้า "คำขอของฉัน" เลย (ทุกแท็บ)
+const HIDDEN_STATUSES = new Set(['OnHold', 'Cancelled', 'Rejected'])
+
 // ─── Main ──────────────────────────────────────────────────
 export default function ManagerRequestsView({ user }) {
   const [requests, setRequests] = useState([])
   const [loading,  setLoading]  = useState(true)
   const [tab, setTab] = useState('active')
   const [historyYear, setHistoryYear] = useState(null) // ตัวกรองปีของแท็บประวัติ — null = ทุกปี
+  const [sortField, setSortField] = useState('createdAt') // 'createdAt' (ค่าเริ่มต้น) | 'hcId'
+  const [sortDir, setSortDir] = useState('desc')
   const navigate = useNavigate()
+
+  function toggleSort(field) {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortField(field); setSortDir('desc') }
+  }
 
   /**
    * Firestore realtime listener — subscribes to requests ตามแผนกที่ Manager ดูแล
@@ -571,7 +582,7 @@ export default function ManagerRequestsView({ user }) {
     // merge + dedup หลาย snapshot array โดยใช้ doc id เป็น key
     function mergeRequests(...lists) {
       const map = new Map()
-      for (const r of lists.flat()) map.set(r.id, r)
+      for (const r of lists.flat()) if (!HIDDEN_STATUSES.has(r.status)) map.set(r.id, r)
       return [...map.values()].sort((x, y) => {
         const tx = x.createdAt?.toMillis?.() ?? 0
         const ty = y.createdAt?.toMillis?.() ?? 0
@@ -736,13 +747,18 @@ export default function ManagerRequestsView({ user }) {
   }, [historyAll])
 
   const displayed = useMemo(() => {
-    if (tab === 'active') return requests.filter(r => !['Closed','Cancelled'].includes(r.status))
-    if (tab === 'history') {
-      if (!historyYear) return historyAll
-      return historyAll.filter(r => r.createdAt?.toDate?.()?.getFullYear() === historyYear)
+    let list
+    if (tab === 'active') list = requests.filter(r => !['Closed','Cancelled'].includes(r.status))
+    else if (tab === 'history') list = !historyYear ? historyAll : historyAll.filter(r => r.createdAt?.toDate?.()?.getFullYear() === historyYear)
+    else list = requests
+
+    if (sortField === 'hcId') {
+      // เรียงตามเลขรัน HC (เช่น "HC-2026-0012") แทนการเทียบ string ตรงๆ
+      const parseSeq = (id) => { const m = (id || '').match(/(\d+)-(\d+)$/); return m ? parseInt(m[1]) * 100000 + parseInt(m[2]) : 0 }
+      list = [...list].sort((a, b) => sortDir === 'asc' ? parseSeq(a.hcId) - parseSeq(b.hcId) : parseSeq(b.hcId) - parseSeq(a.hcId))
     }
-    return requests
-  }, [requests, tab, historyAll, historyYear])
+    return list
+  }, [requests, tab, historyAll, historyYear, sortField, sortDir])
 
   if (loading) {
     return (
@@ -860,7 +876,15 @@ export default function ManagerRequestsView({ user }) {
       {displayed.length > 0 && (
         <div className="flex items-center gap-0 border-b border-neutral-100 px-0 pb-2 text-[11px] font-bold text-neutral-300">
           <div className="mx-4 w-0.5 shrink-0" />
-          <div className="w-48 shrink-0 lg:w-56">ตำแหน่ง</div>
+          <button
+            onClick={() => toggleSort('hcId')}
+            className={`flex w-48 shrink-0 items-center gap-1 text-left transition-colors lg:w-56 ${sortField === 'hcId' ? 'text-dark-green-700' : 'hover:text-neutral-500'}`}
+          >
+            REQ ID / ตำแหน่ง
+            {sortField === 'hcId'
+              ? (sortDir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />)
+              : <ChevronsUpDown size={11} className="text-neutral-200" />}
+          </button>
           <div className="hidden flex-1 px-4 sm:block">ความคืบหน้า</div>
           <div className="hidden w-28 px-4 text-right md:block">TA</div>
           <div className="hidden w-24 px-4 lg:block">Candidate</div>
