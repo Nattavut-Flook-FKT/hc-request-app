@@ -355,6 +355,9 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
         requestType:     TYPE_MAP[rawType] || 'New HC',                                    // ประเภท request (จาก TYPE_MAP)
         employmentType:  (r['Emp. Type'] || '').toString().trim(),                        // ประเภทการจ้าง (Monthly/Daily)
         hcId:            (r['HCID'] || r['HcID'] || '').toString().trim(),                // รหัส HC (ถ้ามี)
+        // email เจ้าของคำขอจริง (optional column) — ถ้าไม่มีจะเก็บ '' ห้าม fallback เป็น email แอดมิน
+        // ไม่งั้นคำขอจะไปโผล่ใน "คำขอของฉัน" ของแอดมินแทนเจ้าของจริง
+        requesterEmail:  (r['Requester Email'] || r['Requester'] || '').toString().trim().toLowerCase(),
         createdAt,                                                                         // Date object สำหรับบันทึกใน Firestore
         closedAt:        mappedStatus === 'Closed' ? (startDateObj || createdAt) : null,  // วันปิด request
         _statusHistory:  history,                                                          // history array ที่สร้างขึ้น
@@ -526,7 +529,7 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
    *     assignedTo (email lookup), status, candidateName, startDate, contractEndDate,
    *     requestType, employmentType, hcId, createdAt, closedAt, statusHistory
    *   - Metadata: headcount=1, reason='นำเข้าข้อมูลย้อนหลัง', requesterName='Imported',
-   *     requesterEmail=user.email, importedAt=now, importedBy=user.email
+   *     requesterEmail=จาก column 'Requester Email' หรือ '' (ห้ามใช้ email แอดมิน), importedAt=now, importedBy=user.email
    */
   async function handleImport() {
     if (!rows.length) return
@@ -565,7 +568,7 @@ export default function ImportPage({ user, role, isDarkMode, toggleDarkMode }) {
           reason:          'นำเข้าข้อมูลย้อนหลัง', // reason standard สำหรับ imported records
           requirements:    '',                  // ไม่มีข้อมูล requirements ใน CSV เก่า
           requesterName:   'Imported',
-          requesterEmail:  user.email,          // email ของ admin ที่ทำการ import
+          requesterEmail:  r.requesterEmail || '', // email เจ้าของจริงจาก column (ถ้ามี) — ไม่ใช่ของแอดมิน
           createdAt:       r.createdAt,         // Date object จาก CSV (ไม่ใช่ serverTimestamp)
           closedAt:        r.closedAt || null,
           statusHistory:   r._statusHistory,    // history ที่สร้างขึ้นจาก processRawRows()

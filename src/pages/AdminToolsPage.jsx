@@ -96,6 +96,14 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
   const [fixDeptNamesState,  setFixDeptNamesState]  = useState('idle')
   const [fixDeptNamesResult, setFixDeptNamesResult] = useState(null)
 
+  // ── Reassign Imported Requests state ──────────────────────────────────────
+  const [reassignState,  setReassignState]  = useState('idle') // 'idle'|'loading'|'ready'|'saving'|'error'
+  const [reassignGroups, setReassignGroups] = useState([])     // [{dept, count}] เฉพาะ record ที่มาจาก import
+  const [reassignDept,   setReassignDept]   = useState('')
+  const [reassignEmail,  setReassignEmail]  = useState('')
+  const [reassignName,   setReassignName]   = useState('')
+  const [reassignResult, setReassignResult] = useState(null)
+
   // ── Department Manager Assignment state ──────────────────────────────────
   const [deptState,     setDeptState]     = useState('idle') // 'idle'|'loading'|'ready'|'saving'|'saved'|'error'
   const [departments,   setDepartments]   = useState([])     // [{name, total}]
@@ -291,6 +299,71 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
       setFixDeptNamesState('error')
     }
     setTimeout(() => { setFixDeptNamesState('idle'); setFixDeptNamesResult(null) }, 8000)
+  }
+
+  /**
+   * loadReassignGroups — หา record ที่มาจาก import (มี importedBy) แล้ว group ตามแผนก
+   * ใช้เลือกแผนกที่จะ reassign requesterEmail ให้เจ้าของจริง
+   */
+  async function loadReassignGroups() {
+    setReassignState('loading')
+    setReassignResult(null)
+    try {
+      const snap = await getDocs(collection(db, 'hc_requests'))
+      const counts = {}
+      snap.docs.forEach(d => {
+        const data = d.data()
+        // record จาก import: มี importedBy (marker ถาวร แม้ requesterName ถูกแก้ไปแล้ว)
+        if (data.importedBy) counts[data.department || '(ไม่มีแผนก)'] = (counts[data.department || '(ไม่มีแผนก)'] || 0) + 1
+      })
+      const groups = Object.entries(counts).map(([dept, count]) => ({ dept, count })).sort((a, b) => a.dept.localeCompare(b.dept))
+      setReassignGroups(groups)
+      setReassignDept(groups[0]?.dept || '')
+      setReassignState('ready')
+    } catch (err) {
+      console.error('[loadReassignGroups]', err)
+      setReassignResult({ error: err.message })
+      setReassignState('error')
+    }
+  }
+
+  /**
+   * reassignImported — bulk update requesterEmail (+ requesterName ถ้ากรอก) ของ record
+   * ที่มาจาก import ในแผนกที่เลือก ให้เป็นเจ้าของจริง — แก้ปัญหา import เก่าที่แปะ email แอดมิน
+   * ทำให้เจ้าของเห็นใน "คำขอของฉัน" — รันซ้ำได้ (ทับค่าเดิม)
+   */
+  async function reassignImported() {
+    const email = reassignEmail.trim().toLowerCase()
+    if (!reassignDept || !email || reassignState === 'saving') return
+    setReassignState('saving')
+    setReassignResult(null)
+    try {
+      const snap = await getDocs(collection(db, 'hc_requests'))
+      const targets = snap.docs.filter(d => {
+        const data = d.data()
+        return data.importedBy && (data.department || '(ไม่มีแผนก)') === reassignDept
+      })
+      const name = reassignName.trim()
+      const CHUNK = 400
+      for (let i = 0; i < targets.length; i += CHUNK) {
+        const batch = writeBatch(db)
+        targets.slice(i, i + CHUNK).forEach(d => {
+          const updates = { requesterEmail: email }
+          if (name) updates.requesterName = name
+          batch.update(d.ref, updates)
+        })
+        await batch.commit()
+      }
+      setReassignResult({ updated: targets.length, dept: reassignDept, email })
+      setReassignState('ready')
+      setReassignEmail('')
+      setReassignName('')
+      // refresh count (แผนกไม่หาย เพราะ marker คือ importedBy ไม่ใช่ requesterEmail)
+    } catch (err) {
+      console.error('[reassignImported]', err)
+      setReassignResult({ error: err.message })
+      setReassignState('error')
+    }
   }
 
   /** loadDepartments — ดึงแผนกทั้งหมด + mapping ที่บันทึกไว้แล้วจาก settings/deptManagers */
@@ -870,6 +943,96 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
               )}
             </button>
           </div>
+        </div>
+
+        {/* ── Reassign Imported Requests card ────────────────────────────────── */}
+        <div className="mb-2 rounded-2xl border border-blue-100 bg-blue-50 p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-blue-700"><UserCog size={20} strokeWidth={1} absoluteStrokeWidth /></span>
+              <div>
+                <p className="text-sm font-bold text-blue-800">Reassign คำขอที่ import (คืนเจ้าของจริง)</p>
+                <p className="mt-0.5 text-xs text-neutral-500">
+                  คำขอที่ import ย้อนหลังถูกแปะ email แอดมิน — เลือกแผนกแล้วใส่ email เจ้าของจริง เพื่อให้โผล่ใน "คำขอของฉัน" ของเขา
+                </p>
+              </div>
+            </div>
+            {reassignState === 'idle' || reassignState === 'error' ? (
+              <button
+                onClick={loadReassignGroups}
+                className="flex shrink-0 items-center gap-2 rounded-lg border border-blue-100 bg-white px-4 py-2 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100"
+              >
+                <UserCog size={13} strokeWidth={1} absoluteStrokeWidth/> จัดการ
+              </button>
+            ) : reassignState === 'loading' ? (
+              <span className="flex shrink-0 items-center gap-1.5 text-xs font-bold text-neutral-400">
+                <Settings2 size={13} strokeWidth={1} absoluteStrokeWidth className="animate-spin"/> กำลังโหลด...
+              </span>
+            ) : null}
+          </div>
+
+          {reassignState === 'error' && (
+            <p className="mt-3 text-xs font-bold text-red-600">{reassignResult?.error || 'Error'}</p>
+          )}
+
+          {(reassignState === 'ready' || reassignState === 'saving') && (
+            <div className="mt-4 space-y-3">
+              {reassignGroups.length === 0 ? (
+                <p className="text-xs text-neutral-500">ไม่พบ record ที่มาจาก import</p>
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div>
+                      <label className="mb-1 block text-[11px] font-bold text-neutral-500">แผนก</label>
+                      <select
+                        value={reassignDept}
+                        onChange={e => setReassignDept(e.target.value)}
+                        className="rounded-lg border border-neutral-100 bg-white px-3 py-2 text-xs text-neutral-900 focus:border-dark-green-600 focus:outline-none"
+                      >
+                        {reassignGroups.map(g => (
+                          <option key={g.dept} value={g.dept}>{g.dept} ({g.count} คำขอ)</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11px] font-bold text-neutral-500">Email เจ้าของจริง *</label>
+                      <input
+                        type="email"
+                        value={reassignEmail}
+                        onChange={e => setReassignEmail(e.target.value)}
+                        placeholder="somchai.j@freshket.co"
+                        className="w-56 rounded-lg border border-neutral-100 bg-white px-3 py-2 text-xs text-neutral-900 focus:border-dark-green-600 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11px] font-bold text-neutral-500">ชื่อผู้ยื่น (optional)</label>
+                      <input
+                        type="text"
+                        value={reassignName}
+                        onChange={e => setReassignName(e.target.value)}
+                        placeholder="ปล่อยว่าง = คงเดิม"
+                        className="w-44 rounded-lg border border-neutral-100 bg-white px-3 py-2 text-xs text-neutral-900 focus:border-dark-green-600 focus:outline-none"
+                      />
+                    </div>
+                    <button
+                      onClick={reassignImported}
+                      disabled={reassignState === 'saving' || !reassignEmail.trim() || !reassignDept}
+                      className="flex items-center gap-2 rounded-lg bg-dark-green-600 px-4 py-2 text-xs font-bold text-neutral-50 transition-colors hover:bg-dark-green-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {reassignState === 'saving'
+                        ? <><Settings2 size={13} strokeWidth={1} absoluteStrokeWidth className="animate-spin"/> กำลังบันทึก...</>
+                        : <><CheckCircle2 size={13} strokeWidth={1} absoluteStrokeWidth/> Reassign</>}
+                    </button>
+                  </div>
+                  {reassignResult?.updated != null && (
+                    <p className="text-xs font-bold text-dark-green-700">
+                      อัพเดตแล้ว {reassignResult.updated} คำขอ ในแผนก {reassignResult.dept} → {reassignResult.email}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Backfill Department Manager card ──────────────────────────────── */}

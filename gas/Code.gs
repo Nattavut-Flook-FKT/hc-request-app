@@ -945,7 +945,8 @@ function doGet(e) {
     const mgData    = mgSheet.getDataRange().getValues()
     const managers  = {}
     for (let i = 1; i < mgData.length; i++) {
-      if (mgData[i][0]) managers[mgData[i][0].trim()] = mgData[i][1] ? mgData[i][1].trim() : ''
+      // key เป็น lowercase เสมอ ให้ตรงกับ Firebase Auth email (กันพิมพ์ case ปนใน Sheets)
+      if (mgData[i][0]) managers[String(mgData[i][0]).trim().toLowerCase()] = mgData[i][1] ? String(mgData[i][1]).trim() : ''
     }
 
     const mainSheet = hrSs.getSheetByName('MainData')

@@ -129,9 +129,13 @@ export async function fetchSheetsData() {
  */
 export function getDepartmentByEmail(managers, email) {
   if (!email || !managers) return ''
-  // trim() ป้องกัน whitespace ที่อาจมาจาก input หรือ Sheets
-  // trim() guards against leading/trailing whitespace from user input or Sheets data
-  return managers[email.trim()] ?? ''
+  // normalize เป็น lowercase เสมอ — Firebase Auth email เป็น lowercase แต่ key จาก Sheets
+  // อาจพิมพ์ case ปนกัน ทำให้ lookup พลาดทั้งที่มีข้อมูล
+  const key = email.trim().toLowerCase()
+  if (managers[key] != null) return managers[key]
+  // key ใน managers อาจยังไม่ lowercase (ข้อมูลจาก GAS เวอร์ชันเก่า/cache) → เทียบ case-insensitive
+  const hit = Object.keys(managers).find(k => k.trim().toLowerCase() === key)
+  return hit ? managers[hit] : ''
 }
 
 /**
