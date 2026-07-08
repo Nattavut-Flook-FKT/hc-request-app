@@ -35,6 +35,13 @@ function parseEmails(input) {
   return String(input || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
 }
 
+// ── DEPT_RENAME_MAP: ชื่อแผนกที่พิมพ์/import มาไม่ตรงกับชื่อมาตรฐาน → ชื่อที่ถูกต้อง ──
+// เกิดจากข้อมูลดิบใน Google Sheets สะกดไม่ตรงกัน (เช่น เว้นวรรค/ไม่เว้นวรรค) ทำให้แผนกเดียวกัน
+// แตกเป็น 2 ชื่อในระบบ — เพิ่ม key/value ใหม่ที่นี่ได้เรื่อยๆ ถ้าเจอเคสอื่นอีก
+const DEPT_RENAME_MAP = {
+  'Finance&Accounting': 'Finance & Accounting',
+}
+
 /** ตัดนามสกุลออก เหลือแค่ "ชื่อ (nickname)" — เหมือน RequestTable.shortName */
 function shortName(fullName) {
   if (!fullName) return fullName
@@ -85,6 +92,10 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
   const [fixEmailNameState,  setFixEmailNameState]  = useState('idle')
   const [fixEmailNameResult, setFixEmailNameResult] = useState(null)
 
+  // ── Fix Department Names state ────────────────────────────────────────────
+  const [fixDeptNamesState,  setFixDeptNamesState]  = useState('idle')
+  const [fixDeptNamesResult, setFixDeptNamesResult] = useState(null)
+
   // ── Department Manager Assignment state ──────────────────────────────────
   const [deptState,     setDeptState]     = useState('idle') // 'idle'|'loading'|'ready'|'saving'|'saved'|'error'
   const [departments,   setDepartments]   = useState([])     // [{name, total}]
@@ -120,8 +131,8 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
   }, [])
 
   /**
-   * fixTANames — แปลง assignedToName + changedByName ที่มีชื่อเต็ม (เช่น "Jitlada (Mo) Mooltha")
-   * ให้เหลือแค่ชื่อสั้น "Jitlada (Mo)" เพื่อให้ตรงกับข้อมูลที่ Import จาก Sheets
+   * fixTANames — แปลง assignedToName + changedByName + requesterName ที่มีชื่อเต็ม
+   * (เช่น "Jitlada (Mo) Mooltha") ให้เหลือแค่ชื่อสั้น "Jitlada (Mo)" ให้ตรงกันทุก field ที่โชว์ชื่อคน
    */
   async function fixTANames() {
     if (fixNamesState === 'running') return
@@ -141,6 +152,12 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
         if (data.assignedToName) {
           const fixed = shortName(data.assignedToName)
           if (fixed !== data.assignedToName) updates.assignedToName = fixed
+        }
+
+        // แก้ requesterName (ผู้ยื่น) — ใช้ shortName เดียวกับ TA เพื่อความสม่ำเสมอ
+        if (data.requesterName) {
+          const fixed = shortName(data.requesterName)
+          if (fixed !== data.requesterName) updates.requesterName = fixed
         }
 
         // แก้ changedByName ใน statusHistory array
@@ -229,6 +246,51 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
       setFixEmailNameState('error')
     }
     setTimeout(() => { setFixEmailNameState('idle'); setFixEmailNameResult(null) }, 8000)
+  }
+
+  /**
+   * fixDeptNames — รวม record ที่ department หรือ businessUnit สะกดไม่ตรงมาตรฐาน (ดู DEPT_RENAME_MAP)
+   * เข้ากับชื่อที่ถูกต้อง เช่น "Finance&Accounting" → "Finance & Accounting"
+   * เช็คทั้ง 2 field เพราะข้อมูลเดิมจาก Sheets ใช้ชื่อเดียวกันปนกันทั้งสองที่
+   */
+  async function fixDeptNames() {
+    if (fixDeptNamesState === 'running') return
+    setFixDeptNamesState('running')
+    setFixDeptNamesResult(null)
+    try {
+      const snap = await getDocs(collection(db, 'hc_requests'))
+      const toUpdate = snap.docs
+        .map(d => {
+          const data = d.data()
+          const updates = {}
+          if (DEPT_RENAME_MAP[data.department])   updates.department   = DEPT_RENAME_MAP[data.department]
+          if (DEPT_RENAME_MAP[data.businessUnit]) updates.businessUnit = DEPT_RENAME_MAP[data.businessUnit]
+          return { ref: d.ref, updates }
+        })
+        .filter(({ updates }) => Object.keys(updates).length > 0)
+
+      if (!toUpdate.length) {
+        setFixDeptNamesResult({ updated: 0, total: snap.size })
+        setFixDeptNamesState('done')
+        setTimeout(() => { setFixDeptNamesState('idle'); setFixDeptNamesResult(null) }, 6000)
+        return
+      }
+
+      const CHUNK = 400
+      for (let i = 0; i < toUpdate.length; i += CHUNK) {
+        const batch = writeBatch(db)
+        toUpdate.slice(i, i + CHUNK).forEach(({ ref, updates }) => batch.update(ref, updates))
+        await batch.commit()
+      }
+
+      setFixDeptNamesResult({ updated: toUpdate.length, total: snap.size })
+      setFixDeptNamesState('done')
+    } catch (err) {
+      console.error('[fixDeptNames]', err)
+      setFixDeptNamesResult({ error: err.message })
+      setFixDeptNamesState('error')
+    }
+    setTimeout(() => { setFixDeptNamesState('idle'); setFixDeptNamesResult(null) }, 8000)
   }
 
   /** loadDepartments — ดึงแผนกทั้งหมด + mapping ที่บันทึกไว้แล้วจาก settings/deptManagers */
@@ -698,9 +760,9 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
             <div className="flex items-center gap-3">
               <span className="text-blue-700"><UserCog size={20} strokeWidth={1} absoluteStrokeWidth /></span>
               <div>
-                <p className="text-sm font-bold text-blue-800">Fix TA Names (ชื่อสั้น)</p>
+                <p className="text-sm font-bold text-blue-800">Fix ชื่อสั้น (TA + ผู้ยื่น)</p>
                 <p className="mt-0.5 text-xs text-neutral-500">
-                  แปลง "Jitlada (Mo) Mooltha" → "Jitlada (Mo)" ใน assignedToName + statusHistory ทุก request
+                  แปลง "Jitlada (Mo) Mooltha" → "Jitlada (Mo)" ใน TA (assignedToName), ผู้ยื่น (requesterName) และ statusHistory ทุก request
                 </p>
               </div>
             </div>
@@ -765,6 +827,46 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
                 <><AlertCircle size={13} strokeWidth={1} absoluteStrokeWidth/> {fixEmailNameResult?.error || 'Error'}</>
               ) : (
                 <><UserCog size={13} strokeWidth={1} absoluteStrokeWidth/> Fix Now</>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* ── Fix Department Names card ──────────────────────────────────────── */}
+        <div className="mb-2 rounded-2xl border border-teal-100 bg-teal-50 p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-teal-700"><Tag size={20} strokeWidth={1} absoluteStrokeWidth /></span>
+              <div>
+                <p className="text-sm font-bold text-teal-900">Fix ชื่อแผนก / Business Unit (สะกดไม่ตรง)</p>
+                <p className="mt-0.5 text-xs text-neutral-500">
+                  รวมแผนกและ Business Unit ที่สะกดไม่ตรงมาตรฐานเข้าด้วยกัน เช่น "Finance&Accounting" → "Finance & Accounting"
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={fixDeptNames}
+              disabled={fixDeptNamesState === 'running'}
+              className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border px-4 py-2 text-xs font-bold transition-colors
+                ${fixDeptNamesState === 'running'
+                  ? 'cursor-wait border-neutral-100 bg-neutral-50 text-neutral-400'
+                  : fixDeptNamesState === 'done'
+                    ? 'border-teal-100 bg-teal-100 text-teal-900'
+                    : fixDeptNamesState === 'error'
+                      ? 'border-red-100 bg-red-50 text-red-600'
+                      : 'border-teal-100 bg-white text-teal-700 hover:bg-teal-100'
+                }`}
+            >
+              {fixDeptNamesState === 'running' ? (
+                <><Settings2 size={13} strokeWidth={1} absoluteStrokeWidth className="animate-spin"/> กำลังแก้ไข...</>
+              ) : fixDeptNamesState === 'done' ? (
+                fixDeptNamesResult?.updated === 0
+                  ? <><CheckCircle2 size={13} strokeWidth={1} absoluteStrokeWidth/> ไม่มี record ที่ต้องแก้</>
+                  : <><CheckCircle2 size={13} strokeWidth={1} absoluteStrokeWidth/> แก้แล้ว {fixDeptNamesResult?.updated} docs</>
+              ) : fixDeptNamesState === 'error' ? (
+                <><AlertCircle size={13} strokeWidth={1} absoluteStrokeWidth/> {fixDeptNamesResult?.error || 'Error'}</>
+              ) : (
+                <><Tag size={13} strokeWidth={1} absoluteStrokeWidth/> Fix Now</>
               )}
             </button>
           </div>

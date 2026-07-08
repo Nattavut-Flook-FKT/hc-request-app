@@ -551,6 +551,20 @@ function doGet(e) {
     return responseJson_({ success: true })
   }
 
+  // ── PENDING APPROVAL: แจ้ง #hc-alert เมื่อมี user ใหม่ login ครั้งแรกแล้วรออนุมัติ ──
+  // เรียกด้วย ?action=pendingApproval&email=...&name=...&secret=XXX (จาก App.jsx ทันทีที่สร้าง users doc role='pending')
+  if (e.parameter.action === 'pendingApproval') {
+    if (!isValidSecret_(e)) return responseJson_({ error: 'Unauthorized' })
+    var pendingEmail = e.parameter.email || ''
+    var pendingName  = e.parameter.name || ''
+    if (!pendingEmail) return responseJson_({ success: false, error: 'missing email param' })
+    alertSlack_('👤 *มีผู้ใช้ใหม่รออนุมัติสิทธิ์*\n' +
+      'ชื่อ: ' + (pendingName || '(ไม่ระบุ)') + '\n' +
+      'Email: ' + pendingEmail + '\n' +
+      'ไปที่หน้า Users (' + APP_URL + '/users) เพื่อกำหนด Role ให้')
+    return responseJson_({ success: true })
+  }
+
   if (e.parameter.action === 'updateStatus') {
     if (!isValidSecret_(e)) return responseJson_({ error: 'Unauthorized' })
     try {

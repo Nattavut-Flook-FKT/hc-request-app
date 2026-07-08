@@ -48,6 +48,22 @@ export async function sendMaintenanceAlert(active) {
   }
 }
 
+/**
+ * sendPendingApprovalAlert — แจ้ง #hc-alert เมื่อ user ใหม่ login ครั้งแรกแล้วรออนุมัติสิทธิ์
+ * เรียกจาก App.jsx ทันทีหลังสร้าง users doc ด้วย role: 'pending'
+ */
+export async function sendPendingApprovalAlert(email, name) {
+  if (!DATA_URL || !email) return
+  try {
+    const params = new URLSearchParams({ action: 'pendingApproval', email })
+    if (name) params.set('name', name)
+    if (GAS_SECRET) params.set('secret', GAS_SECRET)
+    await fetch(`${DATA_URL}?${params.toString()}`)
+  } catch (err) {
+    console.error('[sendPendingApprovalAlert] error:', err)
+  }
+}
+
 // แปลง internal app status → Sheets display status (ใช้ร่วมกันทั้ง sendStatusUpdate และ syncBatchToSheets)
 const STATUS_MAP = {
   Open: 'Open', Recruiting: 'Active Sourcing', Interviewing: 'Interviewing',

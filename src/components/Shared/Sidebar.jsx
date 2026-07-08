@@ -63,9 +63,10 @@ const ADMIN_GROUPS = [
     { path: '/my-cases',     label: 'My Cases',     icon: Briefcase },
   ]},
   { label: 'Recruit', items: [
-    { path: '/request',   label: 'ยื่นคำขอ',  icon: FilePlus },
-    { path: '/jd-files',  label: 'JD Files',  icon: FolderOpen },
-    { path: '/audit-log', label: 'Audit Log', icon: ScrollText },
+    { path: '/request',      label: 'ยื่นคำขอ',    icon: FilePlus },
+    { path: '/my-requests',  label: 'คำขอของฉัน', icon: ClipboardList },
+    { path: '/jd-files',     label: 'JD Files',    icon: FolderOpen },
+    { path: '/audit-log',    label: 'Audit Log',   icon: ScrollText },
   ]},
   { label: 'Admin', items: [
     { path: '/custom-positions', label: 'Positions',    icon: Tag },

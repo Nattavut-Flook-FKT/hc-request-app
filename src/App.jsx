@@ -54,7 +54,7 @@ import { auth, db } from './services/firebase'
 import { fetchSheetsData, getDepartmentByEmail } from './services/sheetsData'
 import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore'
 import { PowerOff, Power } from 'lucide-react'
-import { sendMaintenanceAlert } from './services/webhook'
+import { sendMaintenanceAlert, sendPendingApprovalAlert } from './services/webhook'
 
 import Login from './components/Auth/Login'
 import PendingApprovalPage from './components/Auth/PendingApprovalPage'
@@ -240,6 +240,8 @@ export default function App() {
               createdAt: serverTimestamp(),
             })
             setRole('pending')
+            // แจ้ง Admin ทาง Slack #hc-alert ว่ามีคนรออนุมัติ — ไม่ await เพราะไม่ควร block การเข้าแอปของ user
+            sendPendingApprovalAlert(userEmail, firebaseUser.displayName || '')
           }
         } catch (error) {
           console.error('[App] Error fetching role:', error)

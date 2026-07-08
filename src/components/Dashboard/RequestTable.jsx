@@ -108,6 +108,10 @@ const STATUS_TABS = ['ทั้งหมด', 'Open', 'Recruiting', 'Interviewin
 const TA_STATUSES = ['Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Closed', 'OnHold', 'Confidential', 'InternalTransfer']
 const ALL_STATUSES = ['Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Rejected', 'Closed', 'Cancelled', 'OnHold', 'Confidential', 'InternalTransfer']
 
+// สถานะที่ถือว่า "จบแล้ว" — รวมกันเป็น tab เดียวชื่อ "ประวัติ" เฉพาะตอน filterMine (หน้า "คำขอของฉัน")
+// pattern เดียวกับ ManagerRequestsView.jsx HISTORY_STATUSES
+const HISTORY_TAB_STATUSES = ['Closed', 'Cancelled', 'Rejected']
+
 // ค้นหา Email จากชื่อแบบ Dynamic (ตัดชื่อจริงมาเทียบกับ allTAs)
 function getAssignedEmail(req, allTAs = []) {
   if (req.assignedTo) return req.assignedTo.toLowerCase()
@@ -798,7 +802,7 @@ export default function RequestTable({
     }
     if (filterYear) base = base.filter(r => r.createdAt?.toDate?.()?.getFullYear() === Number(filterYear))
 
-    const counts = { ทั้งหมด: base.length }
+    const counts = { ทั้งหมด: base.length, ประวัติ: base.filter(r => HISTORY_TAB_STATUSES.includes(r.status)).length }
     ALL_STATUSES.forEach(s => { counts[s] = base.filter(r => r.status === s).length })
     return counts
   }, [requests, filterYear, filterMine, filterMyCases, user.email, user.displayName, role, department, allTAs])
@@ -821,7 +825,8 @@ export default function RequestTable({
         ? list.filter((r) => Boolean(r.assignedTo) || Boolean(r.assignedToName))
         : list.filter((r) => getAssignedEmail(r, allTAs) === user.email?.toLowerCase() || (r.assignedToName && (r.assignedToName === user.displayName || r.assignedToName === shortName(user.displayName))))
     }
-    if (activeTab !== 'ทั้งหมด') list = list.filter((r) => r.status === activeTab)
+    if (activeTab === 'ประวัติ') list = list.filter((r) => HISTORY_TAB_STATUSES.includes(r.status))
+    else if (activeTab !== 'ทั้งหมด') list = list.filter((r) => r.status === activeTab)
     if (filterYear)     list = list.filter((r) => r.createdAt?.toDate?.()?.getFullYear() === Number(filterYear))
     if (filterEmpType)  list = list.filter((r) => r.employmentType === filterEmpType)
     if (filterJobType)  list = list.filter((r) => r.requestType === filterJobType)
@@ -951,7 +956,8 @@ export default function RequestTable({
 
       {/* Status Tabs */}
       <div className="flex flex-wrap items-center gap-1 border-b border-neutral-100 pb-0">
-        {STATUS_TABS.map((tab) => {
+        {/* "ประวัติ" — tab รวม Closed/Cancelled/Rejected ไว้ที่เดียว แสดงเฉพาะหน้า "คำขอของฉัน" (filterMine) */}
+        {(filterMine ? [STATUS_TABS[0], 'ประวัติ', ...STATUS_TABS.slice(1)] : STATUS_TABS).map((tab) => {
           const active = activeTab === tab
           const count = tabCounts[tab] ?? 0
           const tabLabel = STATUS_CONFIG[tab]?.label ?? tab
@@ -1763,7 +1769,7 @@ export default function RequestTable({
               <button
                 onClick={handleOfferingConfirm}
                 disabled={offeringModal.mode === 'onboarding' && (!offeringStartDate || !offeringCandidateName.trim())}
-                className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-bold text-neutral-50 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${offeringModal.mode === 'offering' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-teal-600 hover:bg-teal-700'}`}
+                className="flex-1 rounded-lg bg-dark-green-600 px-4 py-2.5 text-sm font-bold text-neutral-50 transition-colors hover:bg-dark-green-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {offeringModal.mode === 'offering' ? 'ยืนยัน Offering' : 'ยืนยัน Onboarding'}
               </button>

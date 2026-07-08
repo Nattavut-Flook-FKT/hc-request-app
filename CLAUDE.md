@@ -62,9 +62,6 @@ Copy this template as `CLAUDE.md` in your project and fill in `[...]` values.
 
 ## DS Rules
 
-[Paste full content of AI-Design-Rules.md here]
-```
-
 **Result:** AI auto-updates its rules whenever the Design team releases a new version — no manual work needed on your side.
 
 ### Ad-hoc Usage (no CLAUDE.md)
