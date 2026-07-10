@@ -75,6 +75,32 @@ function setStatusSafe_(cell, value) {
   } catch(_) {}
 }
 
+/**
+ * setPicSafe_ — เขียนชื่อ PIC/TA โดยไม่ให้ dropdown validation ปฏิเสธชื่อใหม่
+ * ปัญหาเดิม: คอลัมน์ PIC (I) ตั้ง validation แบบ reject → TA ใหม่/admin ที่รับเคส
+ * ชื่อไม่อยู่ในลิสต์ ทำให้ updateStatus ล้ม (เช่น cell I489, REQ-2026-502)
+ * ต่างจาก setStatusSafe_: ลิสต์รายชื่อ TA อยู่ที่ตัว Sheet ไม่ hardcode ที่นี่
+ * → คืน rule เดิมของเซลล์กลับไป แต่เปลี่ยนเป็น allowInvalid (โชว์ warning แทน reject)
+ */
+function setPicSafe_(cell, value) {
+  var existing = null
+  try { existing = cell.getDataValidation() } catch (_) {}
+  try {
+    var criteria = existing && existing.getCriteriaValues()
+    var list = criteria && criteria[0]
+    if (!existing || (list && list.indexOf && list.indexOf(value) !== -1)) {
+      cell.setValue(value)
+      return
+    }
+  } catch (_) { /* ตรวจไม่ได้ → เข้า path ปลอดภัยด้านล่าง */ }
+
+  try { cell.clearDataValidations() } catch (_) {}
+  cell.setValue(value)
+  try {
+    if (existing) cell.setDataValidation(existing.copy().setAllowInvalid(true).build())
+  } catch (_) {}
+}
+
 // ── MIGRATE: normalize validation + label ของทุกแถวให้เป็น format ใหม่ (one-time, รันผ่าน ?action=migrateStatusDropdowns) ──
 // ทำแบบ bulk (ล้าง validation ทั้งคอลัมน์ → flush → setValues ทั้งคอลัมน์ → reapply validation ทั้งคอลัมน์)
 // เร็วกว่าและปลอดภัยกว่าการวน setStatusSafe_ ทีละเซลล์ (เลี่ยงปัญหา deferred validation โดยสมบูรณ์)
@@ -604,7 +630,7 @@ function doGet(e) {
 
               setStatusSafe_(jobSheet.getRange(rowNum, COL_STATUS), sheetsStatus)
               if (assignedToName) {
-                jobSheet.getRange(rowNum, COL_PIC).setValue(assignedToName)
+                setPicSafe_(jobSheet.getRange(rowNum, COL_PIC), assignedToName)
               }
               if (clearInfo) {
                 jobSheet.getRange(rowNum, COL_CANDIDATE).setValue('')   // ล้างชื่อ Candidate (ล้าง formula ด้วย)
@@ -678,7 +704,7 @@ function doGet(e) {
               if (!oldStatus) oldStatus = statusColIdx !== -1 ? sheet.getRange(i, statusColIdx + 1).getValue() : ''
 
               if (statusColIdx    !== -1) sheet.getRange(i, statusColIdx    + 1).setValue(newStatus)
-              if (assignedToName && taColIdx        !== -1) sheet.getRange(i, taColIdx        + 1).setValue(assignedToName)
+              if (assignedToName && taColIdx        !== -1) setPicSafe_(sheet.getRange(i, taColIdx + 1), assignedToName)
               if (startDate      && startDateColIdx !== -1) sheet.getRange(i, startDateColIdx + 1).setValue(startDate)
               if (candidateName  && candidateColIdx !== -1) sheet.getRange(i, candidateColIdx + 1).setValue(candidateName)
               break
