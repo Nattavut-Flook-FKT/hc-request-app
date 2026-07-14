@@ -46,29 +46,29 @@ export default function TAPerformanceReport({ requests }) {
 
   function buildAOA() {
     return [
-      ['TA / PIC', 'เคสทั้งหมด', 'กำลังทำ', 'ปิดจบ (Onboard)', 'ปฏิเสธ', 'SLA เฉลี่ย (วัน)', 'Conversion %'],
+      ['ผู้ดูแล (TA)', 'เคสทั้งหมด', 'กำลังหาคน', 'ได้คนเริ่มงาน', 'ผู้สมัครสละสิทธิ์', 'เวลาเฉลี่ย (วัน)', 'อัตราปิดงาน %'],
       ...rows.map(r => [r.key, r.total, r.active, r.closed, r.rejected, r.avgSLA ?? '', r.conversion]),
     ]
   }
 
   return (
     <SectionCard
-      title="ผลงาน TA (TA Performance)"
-      sub={`${rows.length} คน · conversion = เคสที่ Onboard ÷ เคสทั้งหมด`}
+      title="ผลงานทีมสรรหา (TA)"
+      sub={`${rows.length} คน · อัตราปิดงาน = เคสที่ได้คนเริ่มงาน ÷ เคสทั้งหมดที่รับผิดชอบ`}
       action={<ExportButtons disabled={rows.length === 0}
         onExcel={() => exportWorkbook(`ta-performance_${dateStamp()}`, [{ name: 'TA Performance', aoa: buildAOA() }])}
         onCSV={() => exportCSV(`ta-performance_${dateStamp()}`, buildAOA())} />}>
       <DataTable
         columns={[
-          { key: 'key', label: 'TA / PIC' },
-          { key: 'total', label: 'ทั้งหมด', align: 'right', render: r => (
+          { key: 'key', label: 'ผู้ดูแล (TA)' },
+          { key: 'total', label: 'เคสทั้งหมด', align: 'right', render: r => (
             <div className="w-28 ml-auto"><Bar value={r.total} max={maxTotal} /></div>
           ) },
-          { key: 'active', label: 'กำลังทำ', align: 'right' },
-          { key: 'closed', label: 'Onboard', align: 'right', accent: true },
-          { key: 'rejected', label: 'ปฏิเสธ', align: 'right' },
-          { key: 'avgSLA', label: 'SLA เฉลี่ย', align: 'right', render: r => r.avgSLA ?? '—' },
-          { key: 'conversion', label: 'Conversion', align: 'right', render: r => `${r.conversion}%` },
+          { key: 'active', label: 'กำลังหาคน', align: 'right' },
+          { key: 'closed', label: 'ได้คนเริ่มงาน', align: 'right', accent: true },
+          { key: 'rejected', label: 'ผู้สมัครสละสิทธิ์', align: 'right' },
+          { key: 'avgSLA', label: 'เวลาเฉลี่ย (วัน)', align: 'right', render: r => r.avgSLA ?? '—' },
+          { key: 'conversion', label: 'อัตราปิดงาน', align: 'right', render: r => `${r.conversion}%` },
         ]}
         rows={rows.map(r => ({ ...r, _key: r.key }))}
       />

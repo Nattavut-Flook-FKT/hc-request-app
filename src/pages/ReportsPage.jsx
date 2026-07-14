@@ -21,11 +21,11 @@ import OnboardingReport from '../components/Reports/OnboardingReport'
 import PivotBuilder from '../components/Reports/PivotBuilder'
 
 const TABS = [
-  { v: 'summary',    label: 'สรุปเดือน',      icon: CalendarRange },
-  { v: 'sla',        label: 'SLA',            icon: Timer },
-  { v: 'ta',         label: 'TA Performance', icon: Users },
-  { v: 'onboarding', label: 'Onboarding',     icon: UserCheck },
-  { v: 'pivot',      label: 'Pivot Builder',  icon: Table2 },
+  { v: 'summary',    label: 'สรุปรายเดือน',           icon: CalendarRange },
+  { v: 'sla',        label: 'ความเร็วการหาคน (SLA)',  icon: Timer },
+  { v: 'ta',         label: 'ผลงานทีมสรรหา',          icon: Users },
+  { v: 'onboarding', label: 'คนเตรียมเริ่มงาน',        icon: UserCheck },
+  { v: 'pivot',      label: 'ตารางวิเคราะห์เอง',       icon: Table2 },
 ]
 
 const YEARS = [null, 2024, 2025, 2026, 2027]
@@ -60,9 +60,9 @@ export default function ReportsPage({ user, role, isDarkMode, toggleDarkMode }) 
         {/* ── Header ── */}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-neutral-900">Reports & Pivot</h1>
+            <h1 className="text-xl font-bold text-neutral-900">รายงานสรุปการสรรหา</h1>
             <p className="mt-0.5 text-sm text-neutral-500">
-              รายงานและตาราง pivot ของคำขออัตรากำลัง · {filtered.length} รายการ
+              ภาพรวมคำขออัตรากำลังและผลการหาคน · {filtered.length} รายการตามตัวกรอง
             </p>
           </div>
 

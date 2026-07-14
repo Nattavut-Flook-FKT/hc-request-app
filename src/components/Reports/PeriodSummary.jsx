@@ -8,7 +8,7 @@
  * Props: requests {Array} (ผ่าน global filter จาก ReportsPage แล้ว)
  */
 import { useMemo, useState } from 'react'
-import { toDate, getOfferingDate, isReplacement, MONTH_TH } from '../../utils/reportUtils'
+import { toDate, getOfferingDate, isReplacement, MONTH_TH, statusLabelTH } from '../../utils/reportUtils'
 import { exportWorkbook, exportCSV, dateStamp } from '../../utils/exportExcel'
 import { KpiCard, SectionCard, ExportButtons, DataTable, Bar } from './ReportUI'
 
@@ -81,20 +81,20 @@ export default function PeriodSummary({ requests }) {
       { name: 'Summary', aoa: [
         [`สรุปประจำเดือน ${monthLabel(month)}`],
         [],
-        ['เปิดใหม่', data.opened],
-        ['ปิด (Onboard)', data.closed],
-        ['กำลังทำ (ทั้งระบบ)', data.inProgress],
-        ['New HC', data.newCount],
-        ['Replace', data.repCount],
-        ['SLA เฉลี่ย (วัน)', data.avgSLA],
+        ['คำขอใหม่เดือนนี้', data.opened],
+        ['ได้คนเริ่มงานเดือนนี้', data.closed],
+        ['กำลังหาคนอยู่ (ทั้งระบบ)', data.inProgress],
+        ['ขอเพิ่มอัตราใหม่ (New HC)', data.newCount],
+        ['ขอแทนคนเดิม (Replace)', data.repCount],
+        ['เวลาหาคนเฉลี่ย (วัน)', data.avgSLA],
         [],
         ['แยกตามแผนก', 'จำนวน'],
         ...data.byDept.map(([k, v]) => [k, v]),
         [],
         ['แยกตามสถานะ', 'จำนวน'],
-        ...data.byStatus.map(([k, v]) => [k, v]),
+        ...data.byStatus.map(([k, v]) => [statusLabelTH(k), v]),
         [],
-        ['Top ตำแหน่ง', 'จำนวน'],
+        ['ตำแหน่งที่ขอมากที่สุด', 'จำนวน'],
         ...data.topPos.map(([k, v]) => [k, v]),
       ]},
     ]
@@ -118,17 +118,17 @@ export default function PeriodSummary({ requests }) {
 
       {/* KPI */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-        <KpiCard label="เปิดใหม่" value={data.opened} accent />
-        <KpiCard label="ปิด (Onboard)" value={data.closed} />
-        <KpiCard label="กำลังทำ" value={data.inProgress} sub="ทั้งระบบ" />
-        <KpiCard label="New HC" value={data.newCount} />
-        <KpiCard label="Replace" value={data.repCount} />
-        <KpiCard label="SLA เฉลี่ย" value={data.avgSLA} sub="วัน" />
+        <KpiCard label="คำขอใหม่" value={data.opened} sub="ยื่นเข้ามาเดือนนี้" accent />
+        <KpiCard label="ได้คนเริ่มงาน" value={data.closed} sub="ปิดจบเดือนนี้" />
+        <KpiCard label="กำลังหาคนอยู่" value={data.inProgress} sub="ทั้งระบบ ณ ตอนนี้" />
+        <KpiCard label="ขอเพิ่มอัตราใหม่" value={data.newCount} sub="New HC" />
+        <KpiCard label="ขอแทนคนเดิม" value={data.repCount} sub="Replace" />
+        <KpiCard label="เวลาหาคนเฉลี่ย" value={data.avgSLA} sub="วัน จนถึงยื่นข้อเสนอ" />
       </div>
 
       {/* Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SectionCard title="เปิดใหม่ — แยกตามแผนก">
+        <SectionCard title="แผนกไหนขอคนมากที่สุด" sub="นับจากคำขอใหม่ของเดือนที่เลือก">
           <div className="p-6 flex flex-col gap-2.5">
             {data.byDept.length === 0
               ? <p className="py-4 text-center text-sm text-neutral-400">ไม่มีข้อมูล</p>
@@ -141,7 +141,7 @@ export default function PeriodSummary({ requests }) {
           </div>
         </SectionCard>
 
-        <SectionCard title="Top ตำแหน่งที่เปิด">
+        <SectionCard title="ตำแหน่งที่ขอมากที่สุด" sub="10 อันดับแรกของเดือนที่เลือก">
           <div className="p-6 flex flex-col gap-2.5">
             {data.topPos.length === 0
               ? <p className="py-4 text-center text-sm text-neutral-400">ไม่มีข้อมูล</p>
@@ -156,10 +156,10 @@ export default function PeriodSummary({ requests }) {
       </div>
 
       {/* By status table */}
-      <SectionCard title="เปิดใหม่ — แยกตามสถานะ">
+      <SectionCard title="คำขอใหม่เดือนนี้ ตอนนี้ถึงขั้นไหนแล้ว" sub="สถานะล่าสุดของแต่ละคำขอที่ยื่นเข้ามาในเดือนที่เลือก">
         <DataTable
           columns={[
-            { key: 'status', label: 'สถานะ' },
+            { key: 'status', label: 'สถานะ', render: r => statusLabelTH(r.status) },
             { key: 'count', label: 'จำนวน', align: 'right', accent: true },
           ]}
           rows={data.byStatus.map(([k, v]) => ({ _key: k, status: k, count: v }))}

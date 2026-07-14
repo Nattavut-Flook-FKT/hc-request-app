@@ -101,14 +101,14 @@ export default function SLAReport({ requests }) {
   function buildSheets() {
     return [
       { name: 'Summary', aoa: [
-        ['SLA Offer Report', `(${data.total} เคสที่ถึง Offering)`],
+        ['รายงานเวลาหาคน (SLA)', `(${data.total} เคสที่ยื่นข้อเสนอแล้ว)`],
         [],
-        ['SLA เฉลี่ย (วัน)', data.avg],
-        ['SLA มัธยฐาน (วัน)', data.median],
-        ['SLA ต่ำสุด (วัน)', data.min],
-        ['SLA สูงสุด (วัน)', data.max],
+        ['ใช้เวลาเฉลี่ย (วัน)', data.avg],
+        ['ค่ากลาง (วัน)', data.median],
+        ['เร็วที่สุด (วัน)', data.min],
+        ['ช้าที่สุด (วัน)', data.max],
         [],
-        ['การกระจาย', 'จำนวน'],
+        ['ช่วงเวลาที่ใช้', 'จำนวนเคส'],
         ...data.dist.map(d => [d.label, d.count]),
       ]},
       { name: 'By Department', aoa: [
@@ -133,17 +133,23 @@ export default function SLAReport({ requests }) {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* คำอธิบายวิธีนับ — ให้คนไม่รู้จักคำว่า SLA อ่านรู้เรื่อง */}
+      <p className="text-sm text-neutral-500">
+        รายงานนี้วัดว่า <span className="font-bold text-neutral-700">ใช้เวลากี่วันในการหาคน</span> — นับตั้งแต่วันยื่นคำขอ
+        จนถึงวันยื่นข้อเสนอให้ผู้สมัคร (ยิ่งน้อยยิ่งดี) · นับเฉพาะเคสที่หาคนได้ถึงขั้นยื่นข้อเสนอแล้ว
+      </p>
+
       {/* KPI */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <KpiCard label="เคสที่ถึง Offering" value={data.total} accent />
-        <KpiCard label="SLA เฉลี่ย" value={`${data.avg}`} sub="วัน" />
-        <KpiCard label="มัธยฐาน" value={`${data.median}`} sub="วัน" />
-        <KpiCard label="เร็วสุด" value={`${data.min}`} sub="วัน" />
-        <KpiCard label="ช้าสุด" value={`${data.max}`} sub="วัน" />
+        <KpiCard label="เคสที่วัดได้" value={data.total} sub="ถึงขั้นยื่นข้อเสนอแล้ว" accent />
+        <KpiCard label="ใช้เวลาเฉลี่ย" value={`${data.avg}`} sub="วัน" />
+        <KpiCard label="ค่ากลาง" value={`${data.median}`} sub="วัน (ครึ่งหนึ่งเร็วกว่านี้)" />
+        <KpiCard label="เร็วที่สุด" value={`${data.min}`} sub="วัน" />
+        <KpiCard label="ช้าที่สุด" value={`${data.max}`} sub="วัน" />
       </div>
 
       {/* Distribution */}
-      <SectionCard title="การกระจายของ SLA"
+      <SectionCard title="ส่วนใหญ่ใช้เวลานานแค่ไหน" sub="จำนวนเคสในแต่ละช่วงเวลา"
         action={<ExportButtons disabled={data.total === 0}
           onExcel={() => exportWorkbook(`sla-report_${dateStamp()}`, buildSheets())}
           onCSV={() => exportCSV(`sla-distribution_${dateStamp()}`, [['ช่วง SLA', 'จำนวน'], ...data.dist.map(d => [d.label, d.count])])} />}>
@@ -159,24 +165,24 @@ export default function SLAReport({ requests }) {
 
       {/* By Department + By TA */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SectionCard title="SLA แยกตามแผนก">
+        <SectionCard title="เวลาหาคนแยกตามแผนก" sub="หน่วยเป็นวัน">
           <DataTable
             columns={[
               { key: 'key', label: 'แผนก' },
-              { key: 'count', label: 'เคส', align: 'right' },
-              { key: 'avg', label: 'เฉลี่ย', align: 'right', accent: true },
-              { key: 'min', label: 'ต่ำสุด', align: 'right' },
-              { key: 'max', label: 'สูงสุด', align: 'right' },
+              { key: 'count', label: 'จำนวนเคส', align: 'right' },
+              { key: 'avg', label: 'เฉลี่ย (วัน)', align: 'right', accent: true },
+              { key: 'min', label: 'เร็วสุด', align: 'right' },
+              { key: 'max', label: 'ช้าสุด', align: 'right' },
             ]}
             rows={data.byDept.map(d => ({ ...d, _key: d.key }))}
           />
         </SectionCard>
-        <SectionCard title="SLA แยกตาม TA">
+        <SectionCard title="เวลาหาคนแยกตามผู้ดูแล (TA)" sub="หน่วยเป็นวัน">
           <DataTable
             columns={[
-              { key: 'key', label: 'TA / PIC' },
-              { key: 'count', label: 'เคส', align: 'right' },
-              { key: 'avg', label: 'SLA เฉลี่ย', align: 'right', accent: true },
+              { key: 'key', label: 'ผู้ดูแล (TA)' },
+              { key: 'count', label: 'จำนวนเคส', align: 'right' },
+              { key: 'avg', label: 'เฉลี่ย (วัน)', align: 'right', accent: true },
             ]}
             rows={data.byTA.map(d => ({ ...d, _key: d.key }))}
           />
@@ -184,12 +190,12 @@ export default function SLAReport({ requests }) {
       </div>
 
       {/* By Month */}
-      <SectionCard title="SLA แยกตามเดือน (ตามวันที่ Offering)">
+      <SectionCard title="แนวโน้มรายเดือน — เร็วขึ้นหรือช้าลง" sub="จัดกลุ่มตามเดือนที่ยื่นข้อเสนอ">
         <DataTable
           columns={[
             { key: 'key', label: 'เดือน', render: r => monthLabel(r.key) },
             { key: 'count', label: 'จำนวนเคส', align: 'right' },
-            { key: 'avg', label: 'SLA เฉลี่ย (วัน)', align: 'right', accent: true },
+            { key: 'avg', label: 'เฉลี่ย (วัน)', align: 'right', accent: true },
           ]}
           rows={data.byMonth.map(d => ({ ...d, _key: d.key }))}
         />

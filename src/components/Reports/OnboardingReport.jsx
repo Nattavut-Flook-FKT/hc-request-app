@@ -9,7 +9,7 @@
  * Props: requests {Array} (ผ่าน global filter จาก ReportsPage แล้ว)
  */
 import { useMemo, useState } from 'react'
-import { toDate, getOfferingDate, fmtDate, MONTH_TH } from '../../utils/reportUtils'
+import { toDate, getOfferingDate, fmtDate, MONTH_TH, statusTH } from '../../utils/reportUtils'
 import { exportWorkbook, exportCSV, dateStamp } from '../../utils/exportExcel'
 import { SectionCard, ExportButtons, DataTable } from './ReportUI'
 
@@ -54,25 +54,25 @@ export default function OnboardingReport({ requests }) {
   }, [list, groupBy])
 
   const columns = [
-    { key: 'hcId', label: 'HCID' },
+    { key: 'hcId', label: 'เลขที่คำขอ' },
     { key: 'position', label: 'ตำแหน่ง' },
     { key: 'department', label: 'แผนก' },
-    { key: 'candidate', label: 'Candidate', accent: true },
-    { key: 'ta', label: 'TA' },
-    { key: 'offeringDate', label: 'Offering Date' },
-    { key: 'startDate', label: 'Onboard Date' },
-    { key: 'contractEnd', label: 'Contract End' },
-    { key: 'status', label: 'สถานะ', align: 'center' },
+    { key: 'candidate', label: 'ผู้สมัคร', accent: true },
+    { key: 'ta', label: 'ผู้ดูแล (TA)' },
+    { key: 'offeringDate', label: 'วันยื่นข้อเสนอ' },
+    { key: 'startDate', label: 'วันเริ่มงาน' },
+    { key: 'contractEnd', label: 'วันสิ้นสุดสัญญา' },
+    { key: 'status', label: 'สถานะ', align: 'center', render: r => statusTH(r.status) },
   ]
 
   function buildAOA() {
     const header = columns.map(c => c.label)
-    return [header, ...list.map(r => columns.map(c => r[c.key] ?? ''))]
+    return [header, ...list.map(r => columns.map(c => c.key === 'status' ? statusTH(r.status) : (r[c.key] ?? '')))]
   }
 
   return (
     <SectionCard
-      title="Onboarding Report"
+      title="คนที่ได้แล้ว — เตรียมเริ่มงาน / เริ่มงานแล้ว"
       sub={`${list.length} เคส · จัดกลุ่มตาม${groupBy === 'month' ? 'เดือนที่เริ่มงาน' : 'แผนก'}`}
       action={
         <div className="flex items-center gap-2">

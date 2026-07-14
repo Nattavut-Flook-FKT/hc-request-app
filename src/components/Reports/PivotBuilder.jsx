@@ -15,14 +15,14 @@ import { useMemo, useState } from 'react'
 import { Download, FileSpreadsheet } from 'lucide-react'
 import {
   ROW_DIMENSIONS, COLUMN_DIMENSIONS, getDimensionValue, dimensionOrder,
-  computeSLADays, isReplacement,
+  computeSLADays, isReplacement, statusTH,
 } from '../../utils/reportUtils'
 import { exportWorkbook, exportCSV, dateStamp } from '../../utils/exportExcel'
 
 const MEASURES = [
-  { value: 'count',  label: 'จำนวน (Count)' },
-  { value: 'avgSLA', label: 'SLA เฉลี่ย (วัน)' },
-  { value: 'nr',     label: 'New / Replace' },
+  { value: 'count',  label: 'จำนวนคำขอ' },
+  { value: 'avgSLA', label: 'เวลาหาคนเฉลี่ย (วัน)' },
+  { value: 'nr',     label: 'ขอใหม่ / ขอแทนคนเดิม' },
 ]
 
 // heat-map ตามความเข้มของ count — dark-green family (DS heat-map recipe)
@@ -116,12 +116,16 @@ export default function PivotBuilder({ requests }) {
   const colLabel = COLUMN_DIMENSIONS.find(d => d.value === colDim)?.label || colDim
   const measLabel = MEASURES.find(m => m.value === measure)?.label || measure
 
+  // แสดงค่า dimension เป็นไทยเมื่อเป็นสถานะ (key ข้างในยังเป็นอังกฤษเพื่อคงลำดับ pipeline)
+  const rowDisplay = v => (rowDim === 'status' ? statusTH(v) : v)
+  const colDisplay = v => (colDim === 'status' ? statusTH(v) : v)
+
   // ── สร้าง array-of-arrays สำหรับ export ──
   function buildAOA() {
     const { cells, rowTotals, colTotals, grand, rowVals, colVals } = pivot
-    const header = [`${rowLabel} \\ ${colDim === 'none' ? measLabel : colLabel}`, ...colVals, 'รวม']
+    const header = [`${rowLabel} \\ ${colDim === 'none' ? measLabel : colLabel}`, ...colVals.map(colDisplay), 'รวม']
     const body = rowVals.map(rv => [
-      rv,
+      rowDisplay(rv),
       ...colVals.map(cv => measureExport(cells[rv]?.[cv], measure)),
       measureExport(rowTotals[rv], measure),
     ])
@@ -172,7 +176,7 @@ export default function PivotBuilder({ requests }) {
                 </th>
                 {colVals.map(cv => (
                   <th key={cv} className="min-w-[64px] px-3 py-3 text-center text-[11px] font-bold text-neutral-500">
-                    {cv}
+                    {colDisplay(cv)}
                   </th>
                 ))}
                 <th className="min-w-[64px] px-4 py-3 text-center text-[11px] font-bold text-dark-green-700">รวม</th>
@@ -181,7 +185,7 @@ export default function PivotBuilder({ requests }) {
             <tbody>
               {rowVals.map((rv) => (
                 <tr key={rv} className="border-b border-neutral-100 transition-colors last:border-0 hover:bg-neutral-50">
-                  <td className="sticky left-0 z-10 whitespace-nowrap bg-inherit px-5 py-2.5 text-xs font-bold text-neutral-700">{rv}</td>
+                  <td className="sticky left-0 z-10 whitespace-nowrap bg-inherit px-5 py-2.5 text-xs font-bold text-neutral-700">{rowDisplay(rv)}</td>
                   {colVals.map(cv => (
                     <td key={cv} className="px-3 py-2.5 text-center">
                       <Cell cell={cells[rv]?.[cv]} measure={measure} maxCell={maxCell} />

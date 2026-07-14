@@ -10,6 +10,27 @@
 // ชื่อเดือนภาษาไทย index 0 = ม.ค.
 export const MONTH_TH = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
 
+// สถานะ → ภาษาไทยอ่านง่าย (ใช้ในหน้า Reports ให้ผู้บริหารอ่านรู้เรื่อง)
+export const STATUS_TH = {
+  Open:             'รอรับเรื่อง',
+  Recruiting:       'กำลังหาผู้สมัคร',
+  Interviewing:     'กำลังสัมภาษณ์',
+  Offering:         'ยื่นข้อเสนอแล้ว',
+  Onboarding:       'รอเริ่มงาน',
+  Closed:           'ได้คนเริ่มงานแล้ว',
+  Rejected:         'ผู้สมัครสละสิทธิ์',
+  Cancelled:        'ยกเลิกคำขอ',
+  OnHold:           'พักไว้ชั่วคราว',
+  InternalTransfer: 'โอนย้ายภายใน',
+  Confidential:     'ตำแหน่งลับ',
+}
+
+/** สถานะแบบไทยล้วน เช่น 'กำลังหาผู้สมัคร' (ถ้าไม่รู้จักคืนค่าเดิม) */
+export function statusTH(s) { return STATUS_TH[s] || s }
+
+/** สถานะแบบ 'ไทย (English)' เช่น 'กำลังหาผู้สมัคร (Recruiting)' — คงคำอังกฤษไว้ให้เทียบกับหน้าอื่น/Sheets ได้ */
+export function statusLabelTH(s) { return STATUS_TH[s] ? `${STATUS_TH[s]} (${s})` : s }
+
 const MONTH_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 /**
