@@ -44,6 +44,7 @@ import { useNavigate } from 'react-router-dom'
 import { getDepartments } from '../../data/orgStructure'
 import { resolveDeptNames } from '../../data/deptMapping'
 import { grantedKeys } from '../../utils/grants'
+import { slaLimit } from '../../utils/sla'
 
 /**
  * STATUS — colour token map for every possible request status (DS tokens).
@@ -374,8 +375,9 @@ function RequestRow({ req }) {
   // Only active requests show the live SLA counter; terminal ones are dimmed instead.
   const isActive = !['Closed','Cancelled','Rejected'].includes(req.status)
   const statusCfg = STATUS[req.status] ?? STATUS.Open
-  // SLA colour thresholds: green ≤ 14 days, orange 15–30, red > 30
-  const slaColor  = sla == null ? '' : sla > 30 ? 'text-red-600' : sla > 14 ? 'text-orange-600' : 'text-dark-green-700'
+  // SLA colour thresholds ตาม limit ของ request (Tech/JG9+ = 45 วัน, ต่ำกว่า = 30): เขียว ≤ ครึ่ง limit, ส้ม ≤ limit, แดง > limit
+  const limit     = slaLimit(req)
+  const slaColor  = sla == null ? '' : sla > limit ? 'text-red-600' : sla > limit / 2 ? 'text-orange-600' : 'text-dark-green-700'
 
   return (
     <div

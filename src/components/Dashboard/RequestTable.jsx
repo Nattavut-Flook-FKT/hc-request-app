@@ -83,6 +83,7 @@ import { collection, onSnapshot, orderBy, query, doc, updateDoc, getDocs, where,
 import { db } from '../../services/firebase'
 import { sendStatusUpdate, sendDeleteToSheets, updateOpenDateInSheets } from '../../services/webhook'
 import { getJGLabel } from '../../data/jobGrades'
+import { slaLimit } from '../../utils/sla'
 import { logAudit } from '../../services/auditLog'
 import { Loader2, UserCheck, XCircle, ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, X, FileText, Search, ChevronRight, Users, Calendar, AlignLeft, ClipboardList, Pencil, Trash2, Upload, File } from 'lucide-react'
 import { getJDSignedUrl, deleteJDFile, uploadCVFile, getCVSignedUrl, deleteCVFile } from '../../services/supabase'
@@ -217,7 +218,8 @@ function getDaysOpen(req) {
   return Math.floor(accumulated / (1000 * 60 * 60 * 24))
 }
 
-// แสดงป้าย SLA: dot สีตามสถานะ — pause / >30วัน / 15-30วัน / <15วัน
+// แสดงป้าย SLA: dot สีตามสถานะ — pause / เกิน limit / เกินครึ่ง limit / ปกติ
+// limit ต่อ request มาจาก slaLimit(): Tech หรือ JG9+ = 45 วัน, ต่ำกว่า = 30 วัน
 function SLABadge({ req }) {
   const days = getDaysOpen(req)
   if (days === null) return null
@@ -229,14 +231,15 @@ function SLABadge({ req }) {
       <span className="h-1.5 w-1.5 rounded-full bg-neutral-300" /> {days}d
     </span>
   )
-  const style = days > 30
+  const limit = slaLimit(req)
+  const style = days > limit
     ? 'text-red-700 bg-red-50 border-red-100'
-    : days > 15
+    : days > limit / 2
       ? 'text-yellow-900 bg-yellow-50 border-yellow-100'
       : 'text-green-fresh-900 bg-green-fresh-50 border-green-fresh-100'
-  const dotColor = days > 30 ? 'bg-red-500' : days > 15 ? 'bg-yellow-500' : 'bg-green-fresh-500'
+  const dotColor = days > limit ? 'bg-red-500' : days > limit / 2 ? 'bg-yellow-500' : 'bg-green-fresh-500'
   return (
-    <span className={`inline-flex items-center gap-1 rounded-lg border px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${style}`}>
+    <span title={`SLA ${limit} วัน`} className={`inline-flex items-center gap-1 rounded-lg border px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${style}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} /> {days}d
     </span>
   )
