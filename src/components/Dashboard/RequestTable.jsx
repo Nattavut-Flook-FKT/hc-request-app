@@ -662,40 +662,33 @@ export default function RequestTable({
 
   async function handleDelete(id) {
     setUpdating(id)
+    const req = requests.find((r) => r.id === id)
     try {
-      const req = requests.find((r) => r.id === id)
-
-      // 1. ลบไฟล์ JD ใน Supabase Storage (ถ้ามี)
-      if (req?.jdFilePath) {
-        await deleteJDFile(req.jdFilePath)
-      }
-
-      // 2. ลบไฟล์ CV ทั้งหมดใน Supabase cv-files bucket (ป้องกัน orphaned files)
-      if (req?.cvFiles?.length > 0) {
-        await Promise.all(req.cvFiles.map((cv) => deleteCVFile(cv.path).catch(() => {})))
-      }
-
-      // 3. ลบ Document ใน Firestore
+      // 1. ลบ Document ใน Firestore ก่อน (source of truth) — แถวหายจาก UI ทันที
+      //    และ modal ปิดได้เลย ไม่ต้องรอ Storage/GAS ที่ช้ากว่ามาก
       await deleteDoc(doc(db, 'hc_requests', id))
-
-      // 4. แจ้ง GAS ให้ลบ row ใน Google Sheets (ถ้ามี hcId)
-      // await เพื่อรอผลจริง — sendDeleteToSheets โชว์ toast สำเร็จ/ล้มเหลวเอง
-      // (เดิม fire-and-forget ไม่เช็คผล ทำให้เคยมีแถวค้างใน Sheets แบบเงียบๆ)
-      if (req?.hcId) await sendDeleteToSheets(req.hcId)
-
-      logAudit({
-        requestId: id,
-        action: 'Delete',
-        by: user.email,
-        byName: user.displayName,
-        position: req?.position,
-        department: req?.department,
-        note: 'Permanently deleted from database & storage by Admin'
-      })
     } catch (e) {
       console.error('Delete error:', e)
+      setUpdating(null)
+      return
     }
     setUpdating(null)
+
+    // 2-4. งานตามหลัง ทำเบื้องหลังไม่บล็อก modal:
+    // ลบไฟล์ JD/CV ใน Supabase Storage (พลาด = orphaned file ไม่กระทบระบบ แค่ log ไว้)
+    if (req?.jdFilePath) deleteJDFile(req.jdFilePath).catch((e) => console.error('[handleDelete] JD file:', e))
+    req?.cvFiles?.forEach((cv) => deleteCVFile(cv.path).catch((e) => console.error('[handleDelete] CV file:', e)))
+    // แจ้ง GAS ลบแถวใน Sheets — โชว์ toast สำเร็จ/ล้มเหลวเองข้างใน จึงไม่ต้อง await
+    if (req?.hcId) sendDeleteToSheets(req.hcId).catch(() => {})
+    logAudit({
+      requestId: id,
+      action: 'Delete',
+      by: user.email,
+      byName: user.displayName,
+      position: req?.position,
+      department: req?.department,
+      note: 'Permanently deleted from database & storage by Admin'
+    })
   }
 
   function openConfirm(action, payload) {
