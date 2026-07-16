@@ -27,7 +27,19 @@ function getJGLabel_(jg) { return jg ? (JG_LABELS[jg] || jg) : '' }
 // ชื่อ sheet หลักที่ใช้เก็บข้อมูลทั้งหมด (ใช้ sheet เดียวต่อเนื่องไม่แยกปี)
 var JOB_OPENINGS_SHEET = 'Job Openings 2025'
 
-function resolveJobOpeningSheet_(_hcId) {
+function resolveJobOpeningSheet_(hcId) {
+  // ทีม TA แยก tab รายปี (เช่น 'Job Openings 2026') — เลือก tab ตามปีใน HCID
+  // หมายเหตุ: ss เป็นตัวแปร local ของ doGet/doPost — ต้องหยิบ spreadsheet เองที่นี่
+  var sp = SpreadsheetApp.getActiveSpreadsheet()
+  if (sp) {
+    // REQ-2026-xxx → 'Job Openings 2026' (ถ้า tab นั้นมีจริง)
+    var m = String(hcId || '').match(/-(\d{4})-/)
+    if (m && sp.getSheetByName('Job Openings ' + m[1])) return 'Job Openings ' + m[1]
+    // ไม่รู้ปี (เช่น maxHCID) → ใช้ tab ปีปัจจุบันถ้ามี
+    var cur = 'Job Openings ' + new Date().getFullYear()
+    if (sp.getSheetByName(cur)) return cur
+  }
+  // fallback สุดท้าย → ค่าคงที่เดิม
   return JOB_OPENINGS_SHEET
 }
 
@@ -911,8 +923,9 @@ function doGet(e) {
   if (e.parameter.action === 'getSheetData') {
     if (!isValidSecret_(e)) return responseJson_({ error: 'Unauthorized' })
     try {
-      var gdSheet = ss.getSheetByName(JOB_OPENINGS_SHEET)
-      if (!gdSheet) return responseJson_({ error: 'Sheet not found: ' + JOB_OPENINGS_SHEET })
+      var gdSheetName = resolveJobOpeningSheet_(null)   // tab ปีปัจจุบัน (ทีม TA แยก tab รายปี)
+      var gdSheet = ss.getSheetByName(gdSheetName)
+      if (!gdSheet) return responseJson_({ error: 'Sheet not found: ' + gdSheetName })
 
       var gdLastRow = gdSheet.getLastRow()
       if (gdLastRow < 2) return responseJson_({ success: true, rows: [] })
