@@ -24,6 +24,32 @@ function currentUserName() {
   return auth.currentUser?.displayName || auth.currentUser?.email || ''
 }
 
+/**
+ * reportClientError — ส่งบั๊คฝั่งแอปเข้า #hc-alert ผ่าน GAS (fire-and-forget)
+ * ใส่ใน catch ของ handler สำคัญ — เดิม console.error แล้วตายเงียบ admin ไม่มีทางรู้
+ * @param {string} where จุดที่พัง เช่น 'handleDelete'
+ * @param {Error}  err
+ * @param {object} extra เช่น { hcId: 'REQ-2026-500' }
+ */
+export function reportClientError(where, err, extra = {}) {
+  try {
+    if (!DATA_URL) return
+    const params = new URLSearchParams({
+      action: 'clientError',
+      where,
+      message: String(err?.message || err).slice(0, 300),
+      page: window.location.pathname,
+    })
+    const stack = String(err?.stack || '').slice(0, 400)
+    if (stack)      params.set('stack', stack)
+    if (extra.hcId) params.set('hcId', extra.hcId)
+    const by = currentUserName()
+    if (by)         params.set('by', by)
+    if (GAS_SECRET) params.set('secret', GAS_SECRET)
+    fetch(`${DATA_URL}?${params.toString()}`).catch(() => {})
+  } catch { /* ตัว report ห้ามพังซ้ำ */ }
+}
+
 // ── Rate Limiting (Debounce) ─────────────────────────────────────────────────
 const _pending = new Map()
 

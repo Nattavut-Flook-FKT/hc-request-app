@@ -464,6 +464,38 @@ function slackStatusUpdate(position, department, oldStatus, newStatus, assignedT
   sendSlack_(SLACK_UPDATES, lines.join('\n'))
 }
 
+/**
+ * alertError_ — รายงานบั๊คแบบละเอียดเข้า #hc-alert
+ * @param where ชื่อจุดที่พัง เช่น 'updateStatus', 'doGet:deleteRow'
+ * @param err   Error object (เอา message + stack)
+ * @param e     request event (เอา parameters มาแสดง — ตัด secret ออก)
+ * @param ctx   object ข้อมูลแวดล้อมเพิ่มเติม เช่น { tab: 'Job Openings 2026' }
+ */
+function alertError_(where, err, e, ctx) {
+  try {
+    var lines = ['❌ *เกิดข้อผิดพลาด: ' + where + '*']
+    if (err) {
+      lines.push('*Error:* ' + (err.message || String(err)))
+      if (err.stack) lines.push('```' + String(err.stack).substring(0, 600) + '```')
+    }
+    if (e && e.parameter) {
+      var ps = []
+      for (var k in e.parameter) {
+        if (k === 'secret') continue
+        ps.push(k + '=' + String(e.parameter[k]).substring(0, 80))
+      }
+      if (ps.length) lines.push('*Request:* `' + ps.join(' · ') + '`')
+    }
+    if (ctx) {
+      for (var ck in ctx) {
+        if (ctx[ck] != null && ctx[ck] !== '') lines.push('*' + ck + ':* ' + ctx[ck])
+      }
+    }
+    lines.push('_' + Utilities.formatDate(new Date(), 'Asia/Bangkok', 'd MMM yyyy HH:mm:ss') + '_')
+    sendSlack_(SLACK_ALERT, lines.join('\n'))
+  } catch (_) { /* ห้ามให้ตัว report พังซ้ำ */ }
+}
+
 // alertSlack_ — แจ้งผล sync เข้าห้อง #hc-alert (หรือ SLACK_UPDATES ถ้ายังไม่ตั้ง SLACK_ALERT)
 // ใช้กับทุกเหตุการณ์ที่ Admin ต้องรู้: ลบแถวสำเร็จ/ไม่เจอ, อัปเดตสถานะไม่เจอแถว ฯลฯ
 function alertSlack_(text) {
@@ -488,10 +520,33 @@ function sendSlack_(webhookUrl, text) {
 // =====================================
 // DO GET
 // =====================================
+// ── Global error trap: บั๊คที่หลุดทุก try ภายใน → รายงานละเอียดเข้า #hc-alert แทนตายเงียบ ──
 function doGet(e) {
+  try { return doGet_(e) }
+  catch (err) {
+    alertError_('doGet:' + ((e && e.parameter && e.parameter.action) || '?'), err, e, null)
+    return responseJson_({ success: false, error: err.message })
+  }
+}
+function doGet_(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet()
 
   // ── DEBUG ──────────────────────────────────────────────────────────────────
+  // ── CLIENT ERROR: รับบั๊คจากฝั่งแอป (browser) เข้า #hc-alert ──
+  // เรียกด้วย ?action=clientError&where=handleDelete&message=...&stack=...&by=...&page=...&hcId=...
+  if (e.parameter.action === 'clientError') {
+    if (!isValidSecret_(e)) return responseJson_({ error: 'Unauthorized' })
+    var ceLines = ['🐞 *บั๊คฝั่งแอป: ' + (e.parameter.where || 'ไม่ระบุ') + '*']
+    if (e.parameter.message) ceLines.push('*Error:* ' + e.parameter.message)
+    if (e.parameter.hcId)    ceLines.push('*HCID:* `' + e.parameter.hcId + '`')
+    if (e.parameter.page)    ceLines.push('*หน้า:* ' + e.parameter.page)
+    if (e.parameter.by)      ceLines.push('*ผู้ใช้:* ' + e.parameter.by)
+    if (e.parameter.stack)   ceLines.push('```' + e.parameter.stack.substring(0, 400) + '```')
+    ceLines.push('_' + Utilities.formatDate(new Date(), 'Asia/Bangkok', 'd MMM yyyy HH:mm:ss') + '_')
+    alertSlack_(ceLines.join('\n'))
+    return responseJson_({ success: true })
+  }
+
   // ── FIND ROW (read-only diagnostic): จำลอง lookup ของ updateStatus เป๊ะๆ ──
   // เรียกด้วย ?action=findRow&hcId=REQ-2026-390&secret=XXX
   if (e.parameter.action === 'findRow') {
@@ -799,8 +854,10 @@ function doGet(e) {
       })
       return responseJson_({ success: true })
     } catch (err) {
-      var errHcId = e.parameter.hcId || ''
-      alertSlack_('❌ *updateStatus error*\n' + (errHcId ? 'HCID: `' + errHcId + '` — ' : '') + err.message)
+      alertError_('updateStatus', err, e, {
+        tab: (typeof jobSheetName !== 'undefined' && jobSheetName) || '',
+        'เจอแถวแล้วหรือยัง': (typeof jobRowFound !== 'undefined' && jobRowFound) ? 'เจอแล้ว (พังตอนเขียน)' : 'ยังไม่เจอ (พังตอนค้นหา)',
+      })
       return responseJson_({ success: false, error: err.message })
     }
   }
@@ -832,6 +889,7 @@ function doGet(e) {
       }
       return responseJson_({ success: updated, row: updated ? 'updated' : 'not found', openDate: openDateFmt })
     } catch(err) {
+      alertError_('updateOpenDate', err, e, null)
       return responseJson_({ success: false, error: err.message })
     }
   }
@@ -1085,6 +1143,15 @@ function doGet(e) {
 // DO POST
 // =====================================
 function doPost(e) {
+  try { return doPost_(e) }
+  catch (err) {
+    var pAction = ''
+    try { pAction = JSON.parse(e.postData.contents).action || '' } catch (_) {}
+    alertError_('doPost:' + (pAction || '?'), err, null, { payloadSize: e && e.postData ? e.postData.contents.length : 0 })
+    return responseJson_({ success: false, error: err.message })
+  }
+}
+function doPost_(e) {
   try {
     var data = JSON.parse(e.postData.contents)
     var ss   = SpreadsheetApp.getActiveSpreadsheet()
@@ -1100,6 +1167,7 @@ function doPost(e) {
       } catch (sbErr) {
         syncLog.error = sbErr.message
         PropertiesService.getScriptProperties().setProperty('_lastSyncLog', JSON.stringify(syncLog))
+        alertError_('syncBatch', sbErr, null, { rows: (data.rows || []).length })
         return responseJson_({ success: false, error: sbErr.message, rows: (data.rows || []).length })
       }
     }

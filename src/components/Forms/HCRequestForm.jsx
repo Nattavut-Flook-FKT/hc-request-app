@@ -28,7 +28,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { collection, addDoc, updateDoc, doc, serverTimestamp, getDocs, query, where, orderBy, limit, getDoc, setDoc, runTransaction } from 'firebase/firestore'
 import { db } from '../../services/firebase'
-import { sendToWebhook } from '../../services/webhook'
+import { sendToWebhook, reportClientError } from '../../services/webhook'
 import { logAudit } from '../../services/auditLog'
 import { uploadJDFile, getJDSignedUrl } from '../../services/supabase'
 import { Loader2, CheckCircle, ChevronDown, X, Paperclip, FileText, ExternalLink } from 'lucide-react'
@@ -701,6 +701,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       setTimeout(() => setSuccess(false), 4000) // ซ่อน success banner หลัง 4 วินาที
     } catch (err) {
       console.error('Submit error:', err)
+      reportClientError('submitHCRequest', err)
       setError('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง')
     } finally {
       setLoading(false)

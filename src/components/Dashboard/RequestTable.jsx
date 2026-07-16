@@ -81,7 +81,7 @@
 import { useEffect, useState, useMemo, useCallback, Fragment } from 'react'
 import { collection, onSnapshot, orderBy, query, doc, updateDoc, getDocs, where, deleteDoc, serverTimestamp, arrayUnion, arrayRemove, limit, Timestamp } from 'firebase/firestore'
 import { db } from '../../services/firebase'
-import { sendStatusUpdate, sendDeleteToSheets, updateOpenDateInSheets } from '../../services/webhook'
+import { sendStatusUpdate, sendDeleteToSheets, updateOpenDateInSheets, reportClientError } from '../../services/webhook'
 import { getJGLabel } from '../../data/jobGrades'
 import { slaLimit } from '../../utils/sla'
 import { logAudit } from '../../services/auditLog'
@@ -396,6 +396,7 @@ export default function RequestTable({
       logAudit({ requestId: id, action: 'Cancel', by: user.email, byName: user.displayName, fromStatus: req?.status, toStatus: 'Cancelled', position: req?.position, department: req?.department })
     } catch (err) {
       console.error('[handleCancel]', err)
+      reportClientError('handleCancel', err, { hcId: req?.hcId })
     } finally {
       setUpdating(null)
     }
@@ -410,6 +411,7 @@ export default function RequestTable({
       logAudit({ requestId: id, action: 'Assign', by: user.email, byName: user.displayName, fromStatus: req?.status, toStatus: 'Recruiting', position: req?.position, department: req?.department })
     } catch (err) {
       console.error('[handleClaim]', err)
+      reportClientError('handleClaim', err, { hcId: req?.hcId })
     } finally {
       setUpdating(null)
     }
@@ -494,6 +496,7 @@ export default function RequestTable({
       })
     } catch (err) {
       console.error('[handleStatusChange]', err)
+      reportClientError('handleStatusChange → ' + newStatus, err, { hcId: req?.hcId })
     }
   }
 
@@ -549,6 +552,7 @@ export default function RequestTable({
       })
     } catch (err) {
       console.error('[handleRejectConfirm]', err)
+      reportClientError('handleRejectConfirm', err, { hcId: req?.hcId })
     }
     setRejectModal({ isOpen: false, id: null })
     setRejectReason('')
@@ -579,6 +583,7 @@ export default function RequestTable({
       })
     } catch (err) {
       console.error('[handleNoShow]', err)
+      reportClientError('handleNoShow', err, { hcId: req?.hcId })
     }
   }
 
@@ -603,6 +608,7 @@ export default function RequestTable({
       setSlaTestDate('')
     } catch (err) {
       console.error('[handleSlaFixSave]', err)
+      reportClientError('handleSlaFixSave', err, { hcId: slaTestModal.hcId })
     }
   }
 
@@ -618,6 +624,7 @@ export default function RequestTable({
       })
     } catch (err) {
       console.error('[handleCVUpload]', err)
+      reportClientError('handleCVUpload', err)
       alert('อัพโหลดไม่สำเร็จ: ' + err.message)
     } finally {
       setCvUploading((prev) => { const s = new Set(prev); s.delete(reqId); return s })
@@ -656,6 +663,7 @@ export default function RequestTable({
       })
     } catch (err) {
       console.error('[handleReopen]', err)
+      reportClientError('handleReopen', err, { hcId: req?.hcId })
     }
   }
 
@@ -683,6 +691,7 @@ export default function RequestTable({
       })
     } catch (err) {
       console.error('[handleReassign]', err)
+      reportClientError('handleReassign', err, { hcId: req?.hcId })
     } finally {
       setReassigningId(null)
       setUpdating(null)
@@ -698,6 +707,7 @@ export default function RequestTable({
       await deleteDoc(doc(db, 'hc_requests', id))
     } catch (e) {
       console.error('Delete error:', e)
+      reportClientError('handleDelete', e, { hcId: req?.hcId })
       setUpdating(null)
       return
     }
@@ -739,6 +749,7 @@ export default function RequestTable({
       if (action === 'delete') await handleDelete(payload.id)
     } catch (err) {
       console.error('[handleConfirm] error:', err)
+      reportClientError('handleConfirm:' + action, err)
     } finally {
       closeConfirm()
     }
