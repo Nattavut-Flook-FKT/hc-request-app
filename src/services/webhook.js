@@ -13,10 +13,16 @@
  */
 
 import { toast } from '../components/Shared/Toast'
+import { auth } from './firebase'
 
 const WEBHOOK_URL = import.meta.env.VITE_GAS_WEBHOOK_URL
 const DATA_URL    = import.meta.env.VITE_GAS_DATA_URL
 const GAS_SECRET  = import.meta.env.VITE_GAS_SECRET || ''
+
+// ชื่อคนที่ login อยู่ — แนบไปกับ request เพื่อให้ Slack alert บอกว่า "ใครกด"
+function currentUserName() {
+  return auth.currentUser?.displayName || auth.currentUser?.email || ''
+}
 
 // ── Rate Limiting (Debounce) ─────────────────────────────────────────────────
 const _pending = new Map()
@@ -98,6 +104,8 @@ export function sendStatusUpdate(
       if (offeringDate)   params.set('offeringDate', offeringDate)
       if (clearInfo)      params.set('clearInfo', '1')
       if (cvUrl)          params.set('cvUrl', cvUrl)
+      const by = currentUserName()
+      if (by)             params.set('by', by)
       if (GAS_SECRET)     params.set('secret', GAS_SECRET)
       console.log('[sendStatusUpdate]', { status, startDate, hcId, candidateName })
       const res  = await fetch(`${DATA_URL}?${params.toString()}`)
@@ -211,6 +219,8 @@ export async function sendDeleteToSheets(hcId) {
   if (!DATA_URL || !hcId) return { success: false, error: 'GAS URL or hcId missing' }
   try {
     const params = new URLSearchParams({ action: 'deleteRow', hcId })
+    const by = currentUserName()
+    if (by) params.set('by', by)
     if (GAS_SECRET) params.set('secret', GAS_SECRET)
     const res  = await fetch(`${DATA_URL}?${params.toString()}`)
     const json = await res.json()

@@ -428,26 +428,40 @@ function slackNewRequest(data) {
     ? 'New HC × ' + data.headcount
     : 'Replacement (ทดแทน ' + (data.replacementFor || '-') + ')'
   var mention = SLACK_SUBTEAM ? ' ' + SLACK_SUBTEAM : ''
-  var text = emoji + ' *HC Request ใหม่*' + mention + '\n' +
+  var text = emoji + ' *HC Request ใหม่*' + mention + (data.hcId ? '  `' + data.hcId + '`' : '') + '\n' +
     '*ตำแหน่ง:* ' + data.position + '  |  *JG:* ' + data.jg + '\n' +
     '*แผนก:* ' + data.department + '  |  *Location:* ' + data.orgTrack + '\n' +
     '*ประเภท:* ' + type + '\n' +
     '*ผู้ยื่น:* ' + data.requesterName + '\n' +
+    (data.reason ? '*เหตุผล:* ' + String(data.reason).substring(0, 200) + '\n' : '') +
     '🔗 ' + APP_URL + '/all-requests'
   Logger.log('[slackNewRequest] calling sendSlack_ …')
   sendSlack_(SLACK_NEW_REQUEST, text)
   Logger.log('[slackNewRequest] DONE')
 }
 
-function slackStatusUpdate(position, department, oldStatus, newStatus, assignedTo, candidateName) {
-  var icons = { Recruiting:'🔍', Interviewing:'🗣️', Offering:'📋', Onboarding:'🟦', Rejected:'❌', Closed:'✅', Cancelled:'🚫', Open:'📂' }
+/**
+ * slackStatusUpdate — แจ้งเปลี่ยนสถานะแบบละเอียด
+ * extra (optional): { hcId, by, candidate, startDate }
+ *   - candidate/startDate อ่านจากแถวจริงใน Sheets → โชว์ได้แม้แอปไม่ได้ส่งมา (เช่น NoShow/Closed)
+ *   - by = ชื่อคนกดในแอป (แอปแนบ ?by= มากับ request)
+ */
+function slackStatusUpdate(position, department, oldStatus, newStatus, assignedTo, candidateName, extra) {
+  extra = extra || {}
+  var icons = { Recruiting:'🔍', Interviewing:'🗣️', Offering:'📋', Onboarding:'🟦', Rejected:'❌', NoShow:'🚷', Closed:'✅', Cancelled:'🚫', Open:'📂', OnHold:'⏸️', InternalTransfer:'🔁', Confidential:'🔒' }
   var emoji = icons[newStatus] || '🔄'
-  var taLine = assignedTo ? '\n*คนรับเคส:* ' + assignedTo : ''
-  var candidateLine = (newStatus === 'Onboarding' && candidateName) ? '\n*Candidate:* ' + candidateName : ''
-  var text = emoji + ' *Status อัพเดต*\n' +
-    '*ตำแหน่ง:* ' + position + ' (' + department + ')\n' +
-    '*สถานะ:* ' + oldStatus + ' → *' + newStatus + '*' + taLine + candidateLine
-  sendSlack_(SLACK_UPDATES, text)
+  var candidate = candidateName || extra.candidate || ''
+  var lines = [
+    emoji + ' *Status อัพเดต*' + (extra.hcId ? '  `' + extra.hcId + '`' : ''),
+    '*ตำแหน่ง:* ' + position + ' (' + department + ')',
+    '*สถานะ:* ' + oldStatus + ' → *' + newStatus + '*',
+  ]
+  if (assignedTo)      lines.push('*คนรับเคส:* ' + assignedTo)
+  if (candidate)       lines.push('*Candidate:* ' + candidate)
+  if (extra.startDate) lines.push('*วันเริ่มงาน:* ' + extra.startDate)
+  if (extra.by)        lines.push('*โดย:* ' + extra.by)
+  lines.push('🔗 ' + APP_URL + '/all-requests')
+  sendSlack_(SLACK_UPDATES, lines.join('\n'))
 }
 
 // alertSlack_ — แจ้งผล sync เข้าห้อง #hc-alert (หรือ SLACK_UPDATES ถ้ายังไม่ตั้ง SLACK_ALERT)
@@ -579,6 +593,7 @@ function doGet(e) {
   if (e.parameter.action === 'deleteRow') {
     if (!isValidSecret_(e)) return responseJson_({ error: 'Unauthorized' })
     var delHcId = e.parameter.hcId
+    var delBy   = e.parameter.by || ''
     if (!delHcId) return responseJson_({ error: 'missing hcId param' })
     var delSheetName = resolveJobOpeningSheet_(delHcId)
     var delSheet = ss.getSheetByName(delSheetName)
@@ -600,10 +615,10 @@ function doGet(e) {
       }
     }
     if (delCount > 0) {
-      alertSlack_('🗑️ *ลบออกจาก Sheets แล้ว*\nHCID: `' + delHcId + '` — ลบ ' + delCount + ' แถว' + (delCount > 1 ? ' (มีแถวซ้ำ)' : ''))
+      alertSlack_('🗑️ *ลบออกจาก Sheets แล้ว*\nHCID: `' + delHcId + '` — ลบ ' + delCount + ' แถว' + (delCount > 1 ? ' (มีแถวซ้ำ)' : '') + ' จาก "' + delSheetName + '"' + (delBy ? '\n*โดย:* ' + delBy : ''))
       return responseJson_({ success: true, deleted: delHcId, count: delCount })
     }
-    alertSlack_('⚠️ *ลบแถวใน Sheets ไม่สำเร็จ*\nHCID: `' + delHcId + '` — หา HCID ไม่เจอในชีท ' + delSheetName + ' (อาจถูกลบไปแล้ว หรือ HCID ไม่ตรง)')
+    alertSlack_('⚠️ *ลบแถวใน Sheets ไม่สำเร็จ*\nHCID: `' + delHcId + '` — หา HCID ไม่เจอในชีท ' + delSheetName + ' (อาจถูกลบไปแล้ว หรือ HCID ไม่ตรง)' + (delBy ? '\n*โดย:* ' + delBy : ''))
     return responseJson_({ success: false, error: 'hcId not found: ' + delHcId })
   }
 
@@ -644,6 +659,7 @@ function doGet(e) {
       const offeringDate   = e.parameter.offeringDate   || null   // วัน Offer ISO string
       const clearInfo      = e.parameter.clearInfo === '1'        // ล้าง candidateName + startDate
       const cvUrl          = e.parameter.cvUrl          || null   // ลิ้ง CV (Google Drive, etc.)
+      const changedBy      = e.parameter.by             || null   // ชื่อคนกดในแอป (ใส่ใน Slack alert)
 
       const VALID = ['Open','Recruiting','Interviewing','Offering','Onboarding','Rejected','NoShow','Closed','Cancelled',
                      'OnHold','InternalTransfer','Confidential']
@@ -654,6 +670,7 @@ function doGet(e) {
       const sheetsStatus = toSheetsStatus_(newStatus)
 
       var position = '', dept = '', oldStatus = ''
+      var rowCandidate = '', rowStartDate = ''   // ค่าจากแถวจริง — ใช้เติมรายละเอียดใน Slack alert
       var jobRowFound = false   // เจอแถว HCID ใน JOB_OPENINGS จริงไหม — ถ้าไม่เจอต้อง alert
 
       // ── อัพเดต JOB_OPENINGS_SHEET โดยใช้ HCID (ถ้ามี) ──────────────────────
@@ -669,6 +686,12 @@ function doGet(e) {
               oldStatus = jobSheet.getRange(rowNum, COL_STATUS).getValue()
               position  = jobSheet.getRange(rowNum, COL_POSITION).getValue()
               dept      = jobSheet.getRange(rowNum, COL_DEPT).getValue()
+              // อ่าน candidate + วันเริ่มงานจากแถวจริง "ก่อน" clearInfo จะล้าง — ใช้ใส่ใน alert
+              rowCandidate = (jobSheet.getRange(rowNum, COL_CANDIDATE).getValue() || '').toString()
+              var rsd = jobSheet.getRange(rowNum, COL_START_DATE).getValue()
+              rowStartDate = rsd instanceof Date && !isNaN(rsd)
+                ? rsd.getDate() + '-' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][rsd.getMonth()] + '-' + rsd.getFullYear()
+                : (rsd || '').toString()
 
               setStatusSafe_(jobSheet.getRange(rowNum, COL_STATUS), sheetsStatus)
               if (assignedToName) {
@@ -762,11 +785,18 @@ function doGet(e) {
         var diagSheet = ss.getSheetByName(jobSheetName)
         // hcId.length ช่วยจับตัวอักษรล่องหน — 'REQ-2026-390' ปกติต้องยาว 12
         var diagInfo  = 'tab: "' + jobSheetName + '"' + (diagSheet ? ' (' + diagSheet.getLastRow() + ' แถว)' : ' — ไม่พบ tab นี้!') + ' · hcId length: ' + String(hcId).length
-        alertSlack_('⚠️ *อัปเดตสถานะใน Sheets ไม่สำเร็จ*\nHCID: `' + hcId + '` → ' + newStatus + '\nหา HCID ไม่เจอในชีท — แถวอาจถูกลบหรือ HCID ไม่ตรง\n' + diagInfo)
+        alertSlack_('⚠️ *อัปเดตสถานะใน Sheets ไม่สำเร็จ*\nHCID: `' + hcId + '` → ' + newStatus + (changedBy ? ' (โดย ' + changedBy + ')' : '') + '\nหา HCID ไม่เจอในชีท — แถวอาจถูกลบหรือ HCID ไม่ตรง\n' + diagInfo)
         return responseJson_({ success: false, error: 'hcId not found in sheet: ' + hcId })
       }
 
-      slackStatusUpdate(position, dept, oldStatus, newStatus, assignedToName, candidateName)
+      // วันเริ่มงานที่โชว์ใน alert: ค่าใหม่จากแอป (ถ้าไม่ใช่ CLEAR) > ค่าเดิมในแถว
+      var alertStartDate = (startDate && startDate !== 'CLEAR') ? startDate : (clearInfo ? '' : rowStartDate)
+      slackStatusUpdate(position, dept, oldStatus, newStatus, assignedToName, candidateName, {
+        hcId: hcId,
+        by: changedBy,
+        candidate: clearInfo ? '' : rowCandidate,
+        startDate: alertStartDate,
+      })
       return responseJson_({ success: true })
     } catch (err) {
       var errHcId = e.parameter.hcId || ''
