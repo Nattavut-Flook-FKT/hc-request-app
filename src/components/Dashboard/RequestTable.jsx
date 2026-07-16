@@ -97,6 +97,7 @@ const STATUS_CONFIG = {
   Offering:         { label: 'Offering',          bg: 'bg-purple-50',     text: 'text-purple-900',      border: 'border-purple-100' },
   Onboarding:       { label: 'W.Onboarding',      bg: 'bg-teal-50',        text: 'text-teal-900',        border: 'border-teal-100' },
   Rejected:         { label: 'Rejected',          bg: 'bg-red-50',         text: 'text-red-700',         border: 'border-red-100' },
+  NoShow:           { label: 'No Show',           bg: 'bg-pink-50',        text: 'text-pink-900',        border: 'border-pink-100' },
   Closed:           { label: 'Closed',            bg: 'bg-green-fresh-50', text: 'text-green-fresh-900', border: 'border-green-fresh-100' },
   Cancelled:        { label: 'Cancelled',         bg: 'bg-neutral-50',     text: 'text-neutral-500',     border: 'border-neutral-100' },
   OnHold:           { label: 'On Hold',           bg: 'bg-banana-50',      text: 'text-banana-900',      border: 'border-banana-100' },
@@ -105,13 +106,13 @@ const STATUS_CONFIG = {
 }
 
 // ─── Tab list และสถานะที่ TA สามารถเปลี่ยนได้ (ยกเว้น Open) ───
-const STATUS_TABS = ['ทั้งหมด', 'Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Rejected', 'Closed', 'Cancelled', 'OnHold', 'Confidential', 'InternalTransfer']
+const STATUS_TABS = ['ทั้งหมด', 'Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Rejected', 'NoShow', 'Closed', 'Cancelled', 'OnHold', 'Confidential', 'InternalTransfer']
 const TA_STATUSES = ['Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Closed', 'OnHold', 'Confidential', 'InternalTransfer']
-const ALL_STATUSES = ['Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Rejected', 'Closed', 'Cancelled', 'OnHold', 'Confidential', 'InternalTransfer']
+const ALL_STATUSES = ['Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Rejected', 'NoShow', 'Closed', 'Cancelled', 'OnHold', 'Confidential', 'InternalTransfer']
 
 // สถานะที่ถือว่า "จบแล้ว" — รวมกันเป็น tab เดียวชื่อ "ประวัติ" เฉพาะตอน filterMine (หน้า "คำขอของฉัน")
 // pattern เดียวกับ ManagerRequestsView.jsx HISTORY_STATUSES
-const HISTORY_TAB_STATUSES = ['Closed', 'Cancelled', 'Rejected']
+const HISTORY_TAB_STATUSES = ['Closed', 'Cancelled', 'Rejected', 'NoShow']
 
 // ค้นหา Email จากชื่อแบบ Dynamic (ตัดชื่อจริงมาเทียบกับ allTAs)
 function getAssignedEmail(req, allTAs = []) {
@@ -223,7 +224,7 @@ function getDaysOpen(req) {
 function SLABadge({ req }) {
   const days = getDaysOpen(req)
   if (days === null) return null
-  const done   = ['Closed', 'Cancelled'].includes(req.status)
+  const done   = ['Closed', 'Cancelled', 'NoShow'].includes(req.status)
   const paused = ['Offering', 'Onboarding'].includes(req.status)
   if (done) return <span className="text-[11px] font-bold text-neutral-400 tabular-nums">{days}d</span>
   if (paused) return (
@@ -553,6 +554,34 @@ export default function RequestTable({
     setRejectReason('')
   }
 
+  // No Show: ผู้สมัครไม่มาเริ่มงานตอนอยู่ W.Onboarding
+  // ต่างจาก Reject ตรงที่ "เก็บข้อมูลไว้" — ไม่ล้าง candidateName / startDate / offeringDate
+  async function handleNoShow(id) {
+    const req = requests.find((r) => r.id === id)
+    try {
+      await updateDoc(doc(db, 'hc_requests', id), {
+        status: 'NoShow',
+        noShowAt: serverTimestamp(),
+        statusHistory: arrayUnion(buildHistoryEntry('NoShow', user)),
+      })
+      // ไม่ส่ง clearInfo → Sheets คงชื่อ candidate + วันเริ่มงานไว้เหมือนกัน
+      sendStatusUpdate(id, 'NoShow', req?.assignedToName, null, null, null, req?.hcId)
+      logAudit({
+        requestId: id,
+        action: 'NoShow',
+        by: user.email,
+        byName: user.displayName,
+        fromStatus: req?.status,
+        toStatus: 'NoShow',
+        position: req?.position,
+        department: req?.department,
+        note: `ผู้สมัครไม่มาเริ่มงาน (candidate: ${req?.candidateName || '—'}, วันเริ่มงาน: ${req?.startDate || '—'})`,
+      })
+    } catch (err) {
+      console.error('[handleNoShow]', err)
+    }
+  }
+
   // Admin: แก้ SLA ย้อนหลัง — เซ็ต slaStartDate (ไม่แตะ createdAt จริง)
   // dateOverride: ถ้าส่งมา ใช้ค่านั้นแทน slaTestDate state (หลีกเลี่ยง async setState race)
   async function handleSlaFixSave(dateOverride) {
@@ -619,11 +648,11 @@ export default function RequestTable({
         action: 'Reopen',
         by: user.email,
         byName: user.displayName,
-        fromStatus: 'Rejected',
+        fromStatus: req?.status,
         toStatus: 'Recruiting',
         position: req?.position,
         department: req?.department,
-        note: 'Rejected → Recruiting ใหม่',
+        note: `${req?.status} → Recruiting ใหม่`,
       })
     } catch (err) {
       console.error('[handleReopen]', err)
@@ -706,6 +735,7 @@ export default function RequestTable({
       if (action === 'cancel') await handleCancel(payload.id)
       if (action === 'close') await handleStatusChange(payload.id, 'Closed')
       if (action === 'reassign') await handleReassign(payload.id, payload.email, payload.name)
+      if (action === 'noshow') await handleNoShow(payload.id)
       if (action === 'delete') await handleDelete(payload.id)
     } catch (err) {
       console.error('[handleConfirm] error:', err)
@@ -740,6 +770,15 @@ export default function RequestTable({
         title: 'ย้ายผู้ดูแลเคส',
         message: payload ? `ต้องการย้ายเคสนี้ไปให้ ${payload.name} ดูแลแทนใช่หรือไม่?` : '',
         confirmText: 'ยืนยันการย้าย',
+        variant: 'warning',
+      }
+    }
+
+    if (action === 'noshow') {
+      return {
+        title: 'บันทึกผู้สมัครไม่มาเริ่มงาน (No Show)',
+        message: 'ต้องการบันทึกว่าผู้สมัครไม่มาเริ่มงานใช่หรือไม่? ข้อมูลชื่อผู้สมัครและวันเริ่มงานจะถูกเก็บไว้ — กด "Recruit ใหม่" ได้ภายหลังเมื่อพร้อมหาคนต่อ',
+        confirmText: 'บันทึก No Show',
         variant: 'warning',
       }
     }
@@ -1182,8 +1221,17 @@ export default function RequestTable({
                               <XCircle size={11} strokeWidth={1} absoluteStrokeWidth /> Reject
                             </button>
                           )}
-                          {/* Rejected → Reopen: เปิด recruit ใหม่ */}
-                          {isTA && req.status === 'Rejected' && (
+                          {/* W.Onboarding → No Show: ผู้สมัครไม่มาเริ่มงาน (เก็บชื่อ candidate + วันเริ่มงานไว้) */}
+                          {isTA && req.status === 'Onboarding' && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openConfirm('noshow', { id: req.id }) }}
+                              className="flex items-center gap-1.5 rounded-lg border border-pink-100 px-2.5 py-1 text-[11px] font-bold text-pink-900 transition-colors hover:bg-pink-50"
+                            >
+                              <XCircle size={11} strokeWidth={1} absoluteStrokeWidth /> No Show
+                            </button>
+                          )}
+                          {/* Rejected / NoShow → Reopen: เปิด recruit ใหม่ */}
+                          {isTA && ['Rejected', 'NoShow'].includes(req.status) && (
                             <button
                               onClick={(e) => { e.stopPropagation(); handleReopen(req.id) }}
                               className="flex items-center gap-1.5 rounded-lg border border-yellow-100 px-2.5 py-1 text-[11px] font-bold text-yellow-900 transition-colors hover:bg-yellow-50"

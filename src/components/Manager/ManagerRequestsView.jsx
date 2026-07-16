@@ -545,7 +545,7 @@ function Scorecard({ stats }) {
 const HISTORY_STATUSES = ['Closed', 'Cancelled', 'Rejected']
 
 // สถานะที่ Manager ไม่ต้องเห็นในหน้า "คำขอของฉัน" เลย (ทุกแท็บ)
-const HIDDEN_STATUSES = new Set(['OnHold', 'Cancelled', 'Rejected'])
+const HIDDEN_STATUSES = new Set(['OnHold', 'Cancelled', 'Rejected', 'NoShow'])
 
 // ─── Main ──────────────────────────────────────────────────
 export default function ManagerRequestsView({ user }) {

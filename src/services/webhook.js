@@ -68,7 +68,7 @@ export async function sendPendingApprovalAlert(email, name) {
 const STATUS_MAP = {
   Open: 'Open', Recruiting: 'Active Sourcing', Interviewing: 'Interviewing',
   Offering: 'Pending Offer', Onboarding: 'Pending Onboard', Closed: 'Onboard',
-  Rejected: 'Turndown', Cancelled: 'Job Cancelled', OnHold: 'On hold',
+  Rejected: 'Turndown', NoShow: 'No Show', Cancelled: 'Job Cancelled', OnHold: 'On hold',
   Confidential: 'Confidential', InternalTransfer: 'Internal Transfer',
 }
 
@@ -237,6 +237,7 @@ export async function syncFromSheets() {
     'Pending Offer':   'Offering',   'Pending Onboard':'Onboarding',
     'Onboard':         'Closed',     'Turndown':       'Rejected',
     'Job Cancelled':   'Cancelled',  'On hold':        'OnHold',
+    'No Show':         'NoShow',     'NoShow':         'NoShow',
     'Internal Transfer':'InternalTransfer', 'Confidential':'Confidential',
     'Recruiting': 'Recruiting', 'Offering': 'Offering',
     'Onboarding': 'Onboarding', 'Closed':   'Closed',

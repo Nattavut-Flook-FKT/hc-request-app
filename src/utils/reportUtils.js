@@ -19,6 +19,7 @@ export const STATUS_TH = {
   Onboarding:       'รอเริ่มงาน',
   Closed:           'ได้คนเริ่มงานแล้ว',
   Rejected:         'ผู้สมัครสละสิทธิ์',
+  NoShow:           'ไม่มาเริ่มงาน',
   Cancelled:        'ยกเลิกคำขอ',
   OnHold:           'พักไว้ชั่วคราว',
   InternalTransfer: 'โอนย้ายภายใน',
@@ -181,7 +182,7 @@ export function getDimensionValue(r, dim) {
 
 /** ลำดับการแสดง dimension values บางตัว (status, month, quarter, requestType) ให้เรียงอย่างมีความหมาย */
 export function dimensionOrder(dim) {
-  if (dim === 'status')      return ['Open','Recruiting','Interviewing','Offering','Onboarding','Closed','Rejected','Cancelled','OnHold','InternalTransfer','Confidential']
+  if (dim === 'status')      return ['Open','Recruiting','Interviewing','Offering','Onboarding','Closed','Rejected','NoShow','Cancelled','OnHold','InternalTransfer','Confidential']
   if (dim === 'month')       return [...MONTH_TH]
   if (dim === 'quarter')     return ['Q1','Q2','Q3','Q4']
   if (dim === 'requestType') return ['New HC','Replace']

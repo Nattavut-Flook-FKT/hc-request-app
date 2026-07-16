@@ -69,7 +69,7 @@ function resolveJobOpeningSheet_(hcId) {
  */
 var STATUS_DROPDOWN_LIST = [
   'To be confirmed', 'Active Sourcing', 'Pending Offer', 'Offer Accepted',
-  'Onboard', 'Job Cancelled', 'Turndown', 'On hold', 'Internal Transfer', 'Confidential'
+  'Onboard', 'Job Cancelled', 'Turndown', 'No Show', 'On hold', 'Internal Transfer', 'Confidential'
 ]
 function setStatusSafe_(cell, value) {
   var needsReset = true
@@ -333,7 +333,7 @@ function updateFirestoreByHcId_(hcId, data) {
     'Internal Transfer': 'InternalTransfer',  'Confidential':      'Confidential',
   }
   var VALID_STATUSES = ['Open','Recruiting','Interviewing','Offering','Onboarding',
-                        'Rejected','Closed','Cancelled','OnHold','InternalTransfer','Confidential']
+                        'Rejected','NoShow','Closed','Cancelled','OnHold','InternalTransfer','Confidential']
   var appStatus = data.status ? (SHEETS_TO_APP_STATUS[data.status] || data.status) : null
 
   if (appStatus && VALID_STATUSES.includes(appStatus)) {
@@ -645,7 +645,7 @@ function doGet(e) {
       const clearInfo      = e.parameter.clearInfo === '1'        // ล้าง candidateName + startDate
       const cvUrl          = e.parameter.cvUrl          || null   // ลิ้ง CV (Google Drive, etc.)
 
-      const VALID = ['Open','Recruiting','Interviewing','Offering','Onboarding','Rejected','Closed','Cancelled',
+      const VALID = ['Open','Recruiting','Interviewing','Offering','Onboarding','Rejected','NoShow','Closed','Cancelled',
                      'OnHold','InternalTransfer','Confidential']
       if (!docId || !newStatus)       return responseJson_({ success: false, error: 'Missing params' })
       if (!VALID.includes(newStatus)) return responseJson_({ success: false, error: 'Invalid status: ' + newStatus })
@@ -1168,6 +1168,7 @@ function toSheetsStatus_(appStatus) {
     'Onboarding':     'Offer Accepted',
     'Closed':         'Onboard',
     'Rejected':       'Job Cancelled',     // Turndown ไม่มีใน dropdown
+    'NoShow':         'No Show',
     'Cancelled':      'Job Cancelled',
     'OnHold':         'On hold',
     'InternalTransfer':'Internal Transfer',
@@ -1180,6 +1181,7 @@ function toSheetsStatus_(appStatus) {
     'To be confirmed':  'To be confirmed',
     'Job Cancelled':    'Job Cancelled',
     'On hold':          'On hold',
+    'No Show':          'No Show',
     'Internal Transfer':'Internal Transfer',
     'Confidential':     'Confidential',
   }
