@@ -669,8 +669,8 @@ export default function RequestTable({
   }
 
   // No Show → Recruit ใหม่: สร้าง "REQ ID ใหม่" ทั้งดุ้น (ไม่แตะเคส No Show เดิม)
-  // เคสเดิมคงสถานะ NoShow + ข้อมูลผู้สมัครไว้เป็นประวัติ; REQ ใหม่เริ่มที่ Recruiting
-  // โดย TA คนเดิมดูแลต่อ และมี reopenedFrom โยงกลับต้นทาง
+  // เคสเดิมคงสถานะ NoShow + ข้อมูลผู้สมัครไว้เป็นประวัติ; REQ ใหม่เริ่มที่ Open
+  // เหมือนคำขอใหม่จริงๆ (ไม่ preassign TA — ต้อง claim เอง) และมี reopenedFrom โยงกลับต้นทาง
   async function handleRecruitNew(id) {
     const req = requests.find((r) => r.id === id)
     if (!req) return
@@ -697,17 +697,13 @@ export default function RequestTable({
         shift:           req.shift || '',
         requesterName:   req.requesterName || '',
         requesterEmail:  req.requesterEmail || '',
-        assignedTo:      req.assignedTo || null,       // TA คนเดิม
-        assignedToName:  req.assignedToName || null,
         jdFileUrl:       req.jdFileUrl || '',          // คง JD เดิม (ตำแหน่งเดียวกัน)
         jdFilePath:      req.jdFilePath || '',
         jdFileName:      req.jdFileName || '',
-        status:          'Recruiting',
+        status:          'Open',
         hcId:            newHcId,
         reopenedFrom:    req.hcId || '',               // ลิงก์ย้อนรอย
-        assignedAt:      serverTimestamp(),
-        createdAt:       serverTimestamp(),            // SLA เริ่มนับใหม่
-        statusHistory:   [buildHistoryEntry('Recruiting', user)],
+        createdAt:       serverTimestamp(),            // SLA เริ่มนับใหม่ (เหมือนคำขอใหม่)
       }
       const docRef = await addDoc(collection(db, 'hc_requests'), payload)
 
@@ -721,7 +717,7 @@ export default function RequestTable({
         action: 'RecruitNew',
         by: user.email,
         byName: user.displayName,
-        toStatus: 'Recruiting',
+        toStatus: 'Open',
         position: req?.position,
         department: req?.department,
         note: `เปิด recruit ใหม่ (${newHcId}) จาก ${req.hcId} — No Show`,
@@ -875,7 +871,7 @@ export default function RequestTable({
     if (action === 'recruitnew') {
       return {
         title: 'เปิด Recruit ใหม่ (REQ ID ใหม่)',
-        message: 'ต้องการเปิดหาคนรอบใหม่เป็น REQ ID ใหม่ใช่หรือไม่? เคส No Show เดิมจะถูกเก็บไว้เป็นประวัติ (ไม่ถูกแก้ไข) และเคสใหม่จะเริ่มที่สถานะ Recruiting โดยคุณดูแลต่อ',
+        message: 'ต้องการเปิดหาคนรอบใหม่เป็น REQ ID ใหม่ใช่หรือไม่? เคส No Show เดิมจะถูกเก็บไว้เป็นประวัติ (ไม่ถูกแก้ไข) และเคสใหม่จะเริ่มที่สถานะ Open เหมือนคำขอใหม่ (รอ claim)',
         confirmText: 'เปิด Recruit ใหม่',
         variant: 'info',
       }
