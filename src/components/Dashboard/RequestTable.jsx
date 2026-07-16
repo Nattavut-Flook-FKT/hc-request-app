@@ -79,9 +79,10 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 import { useEffect, useState, useMemo, useCallback, Fragment } from 'react'
-import { collection, onSnapshot, orderBy, query, doc, updateDoc, getDocs, where, deleteDoc, serverTimestamp, arrayUnion, arrayRemove, limit, Timestamp } from 'firebase/firestore'
+import { collection, onSnapshot, orderBy, query, doc, updateDoc, addDoc, getDocs, where, deleteDoc, serverTimestamp, arrayUnion, arrayRemove, limit, Timestamp } from 'firebase/firestore'
 import { db } from '../../services/firebase'
-import { sendStatusUpdate, sendDeleteToSheets, updateOpenDateInSheets, reportClientError } from '../../services/webhook'
+import { generateHCID } from '../../utils/hcId'
+import { sendStatusUpdate, sendToWebhook, sendDeleteToSheets, updateOpenDateInSheets, reportClientError } from '../../services/webhook'
 import { getJGLabel } from '../../data/jobGrades'
 import { slaLimit } from '../../utils/sla'
 import { logAudit } from '../../services/auditLog'
@@ -667,6 +668,82 @@ export default function RequestTable({
     }
   }
 
+  // No Show → Recruit ใหม่: สร้าง "REQ ID ใหม่" ทั้งดุ้น (ไม่แตะเคส No Show เดิม)
+  // เคสเดิมคงสถานะ NoShow + ข้อมูลผู้สมัครไว้เป็นประวัติ; REQ ใหม่เริ่มที่ Recruiting
+  // โดย TA คนเดิมดูแลต่อ และมี reopenedFrom โยงกลับต้นทาง
+  async function handleRecruitNew(id) {
+    const req = requests.find((r) => r.id === id)
+    if (!req) return
+    setUpdating(id)
+    try {
+      const newHcId = await generateHCID()
+      // copy เฉพาะ field นิยามงาน — reset field วงจรชีวิต/ผู้สมัครทั้งหมด
+      const payload = {
+        requestType:     req.requestType || 'Replacement',
+        employmentType:  req.employmentType || 'Monthly',
+        division:        req.division || '',
+        department:      req.department || '',
+        section:         req.section || '',
+        businessUnit:    req.businessUnit || '',
+        position:        req.position || '',
+        orgTrack:        req.orgTrack || '',
+        jg:              req.jg || '',
+        headcount:       Number(req.headcount) || 1,
+        requirements:    req.requirements || '',
+        reason:          req.reason || '',
+        targetStartDate: req.targetStartDate || '',
+        replacementFor:  req.replacementFor || '',
+        workDaysPerWeek: req.workDaysPerWeek || '',
+        shift:           req.shift || '',
+        requesterName:   req.requesterName || '',
+        requesterEmail:  req.requesterEmail || '',
+        assignedTo:      req.assignedTo || null,       // TA คนเดิม
+        assignedToName:  req.assignedToName || null,
+        jdFileUrl:       req.jdFileUrl || '',          // คง JD เดิม (ตำแหน่งเดียวกัน)
+        jdFilePath:      req.jdFilePath || '',
+        jdFileName:      req.jdFileName || '',
+        status:          'Recruiting',
+        hcId:            newHcId,
+        reopenedFrom:    req.hcId || '',               // ลิงก์ย้อนรอย
+        assignedAt:      serverTimestamp(),
+        createdAt:       serverTimestamp(),            // SLA เริ่มนับใหม่
+        statusHistory:   [buildHistoryEntry('Recruiting', user)],
+      }
+      const docRef = await addDoc(collection(db, 'hc_requests'), payload)
+
+      // สร้างแถวใหม่ใน Sheets (create-row path เหมือนฟอร์ม, strip TA-only fields)
+      const { workDaysPerWeek: _w, shift: _s, ...webhookPayload } = payload
+      sendToWebhook({ ...webhookPayload, id: docRef.id, hcId: newHcId, createdAt: new Date().toISOString() })
+
+      // audit สองทาง: doc ใหม่ + doc เดิม
+      logAudit({
+        requestId: docRef.id,
+        action: 'RecruitNew',
+        by: user.email,
+        byName: user.displayName,
+        toStatus: 'Recruiting',
+        position: req?.position,
+        department: req?.department,
+        note: `เปิด recruit ใหม่ (${newHcId}) จาก ${req.hcId} — No Show`,
+      })
+      logAudit({
+        requestId: id,
+        action: 'ReopenedInto',
+        by: user.email,
+        byName: user.displayName,
+        fromStatus: req?.status,
+        position: req?.position,
+        department: req?.department,
+        note: `No Show → เปิด REQ ใหม่ ${newHcId}`,
+      })
+    } catch (err) {
+      console.error('[handleRecruitNew]', err)
+      reportClientError('handleRecruitNew', err, { hcId: req?.hcId })
+    } finally {
+      setUpdating(null)
+    }
+  }
+
   async function handleReassign(id, newTAEmail, newTAName) {
     setUpdating(id)
     const req = requests.find((r) => r.id === id)
@@ -746,6 +823,7 @@ export default function RequestTable({
       if (action === 'close') await handleStatusChange(payload.id, 'Closed')
       if (action === 'reassign') await handleReassign(payload.id, payload.email, payload.name)
       if (action === 'noshow') await handleNoShow(payload.id)
+      if (action === 'recruitnew') await handleRecruitNew(payload.id)
       if (action === 'delete') await handleDelete(payload.id)
     } catch (err) {
       console.error('[handleConfirm] error:', err)
@@ -791,6 +869,15 @@ export default function RequestTable({
         message: 'ต้องการบันทึกว่าผู้สมัครไม่มาเริ่มงานใช่หรือไม่? ข้อมูลชื่อผู้สมัครและวันเริ่มงานจะถูกเก็บไว้ — กด "Recruit ใหม่" ได้ภายหลังเมื่อพร้อมหาคนต่อ',
         confirmText: 'บันทึก No Show',
         variant: 'warning',
+      }
+    }
+
+    if (action === 'recruitnew') {
+      return {
+        title: 'เปิด Recruit ใหม่ (REQ ID ใหม่)',
+        message: 'ต้องการเปิดหาคนรอบใหม่เป็น REQ ID ใหม่ใช่หรือไม่? เคส No Show เดิมจะถูกเก็บไว้เป็นประวัติ (ไม่ถูกแก้ไข) และเคสใหม่จะเริ่มที่สถานะ Recruiting โดยคุณดูแลต่อ',
+        confirmText: 'เปิด Recruit ใหม่',
+        variant: 'info',
       }
     }
 
@@ -1241,10 +1328,19 @@ export default function RequestTable({
                               <XCircle size={11} strokeWidth={1} absoluteStrokeWidth /> No Show
                             </button>
                           )}
-                          {/* Rejected / NoShow → Reopen: เปิด recruit ใหม่ */}
-                          {isTA && ['Rejected', 'NoShow'].includes(req.status) && (
+                          {/* Rejected → Reopen: reopen ที่ REQ เดิม (ล้างข้อมูล) */}
+                          {isTA && req.status === 'Rejected' && (
                             <button
                               onClick={(e) => { e.stopPropagation(); handleReopen(req.id) }}
+                              className="flex items-center gap-1.5 rounded-lg border border-yellow-100 px-2.5 py-1 text-[11px] font-bold text-yellow-900 transition-colors hover:bg-yellow-50"
+                            >
+                              <UserCheck size={11} strokeWidth={1} absoluteStrokeWidth /> Recruit ใหม่
+                            </button>
+                          )}
+                          {/* NoShow → Recruit ใหม่: สร้าง REQ ID ใหม่ (เก็บเคสเดิมไว้) */}
+                          {isTA && req.status === 'NoShow' && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openConfirm('recruitnew', { id: req.id }) }}
                               className="flex items-center gap-1.5 rounded-lg border border-yellow-100 px-2.5 py-1 text-[11px] font-bold text-yellow-900 transition-colors hover:bg-yellow-50"
                             >
                               <UserCheck size={11} strokeWidth={1} absoluteStrokeWidth /> Recruit ใหม่

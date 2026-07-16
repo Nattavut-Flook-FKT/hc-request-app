@@ -26,8 +26,9 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { collection, addDoc, updateDoc, doc, serverTimestamp, getDocs, query, where, orderBy, limit, getDoc, setDoc, runTransaction } from 'firebase/firestore'
+import { collection, addDoc, updateDoc, doc, serverTimestamp, getDocs, query, where, limit, getDoc } from 'firebase/firestore'
 import { db } from '../../services/firebase'
+import { generateHCID } from '../../utils/hcId'
 import { sendToWebhook, reportClientError } from '../../services/webhook'
 import { logAudit } from '../../services/auditLog'
 import { uploadJDFile, getJDSignedUrl } from '../../services/supabase'
@@ -562,41 +563,6 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
     // Field อื่นๆ → อัพเดตตรงๆ
     setForm((prev) => ({ ...prev, [name]: value }))
   }, [])
-
-  // ─── generateHCID ─────────────────────────────────────────────────────────
-  // สร้าง HCID ในรูปแบบ REQ-YYYY-NNN โดยใช้ Firestore transaction บน counter doc
-  // เพื่อป้องกัน race condition เมื่อมีการ submit พร้อมกันหลาย session
-  async function generateHCID() {
-    const currentYear = new Date().getFullYear()
-    const counterRef  = doc(db, 'counters', `hcId_${currentYear}`)
-
-    // ── Seed counter ถ้ายังไม่มี doc (ครั้งแรก) ────────────────────────────
-    const counterSnap = await getDoc(counterRef)
-    if (!counterSnap.exists()) {
-      const prefix = `REQ-${currentYear}-`
-      const q = query(
-        collection(db, 'hc_requests'),
-        where('hcId', '>=', prefix),
-        where('hcId', '<',  prefix + '\uf8ff'),
-        orderBy('hcId', 'desc'),
-        limit(1)
-      )
-      const snap = await getDocs(q)
-      const currentMax = snap.empty ? 0 : (parseInt(snap.docs[0].data().hcId.split('-')[2]) || 0)
-      // merge:true ป้องกัน overwrite ถ้า concurrent init เกิดขึ้น
-      await setDoc(counterRef, { value: currentMax }, { merge: true })
-    }
-
-    // ── Atomic increment ผ่าน transaction → ป้องกัน duplicate ─────────────
-    const newSeq = await runTransaction(db, async (tx) => {
-      const snap = await tx.get(counterRef)
-      const next = (snap.data()?.value ?? 0) + 1
-      tx.set(counterRef, { value: next })
-      return next
-    })
-
-    return `REQ-${currentYear}-${newSeq}`
-  }
 
   // ─── handleSubmit ──────────────────────────────────────────────────────────
   // ขั้นตอนการ submit ฟอร์ม:
