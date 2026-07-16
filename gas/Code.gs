@@ -466,6 +466,23 @@ function doGet(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet()
 
   // ── DEBUG ──────────────────────────────────────────────────────────────────
+  // ── FIND ROW (read-only diagnostic): จำลอง lookup ของ updateStatus เป๊ะๆ ──
+  // เรียกด้วย ?action=findRow&hcId=REQ-2026-390&secret=XXX
+  if (e.parameter.action === 'findRow') {
+    if (!isValidSecret_(e)) return responseJson_({ error: 'Unauthorized' })
+    var fhc   = (e.parameter.hcId || '').toString()
+    var fname = resolveJobOpeningSheet_(fhc)
+    var fsh   = ss.getSheetByName(fname)
+    var fout  = { hcId: fhc, resolvedTab: fname, tabFound: !!fsh, lastRow: fsh ? fsh.getLastRow() : 0, row: null }
+    if (fsh && fsh.getLastRow() > 1) {
+      var fvals = fsh.getRange(2, COL_HCID, fsh.getLastRow() - 1, 1).getValues()
+      for (var fi = 0; fi < fvals.length; fi++) {
+        if (fvals[fi][0].toString().trim() === fhc.trim()) { fout.row = fi + 2; break }
+      }
+    }
+    return responseJson_(fout)
+  }
+
   if (e.parameter.action === 'debug') {
     if (!isValidSecret_(e)) return responseJson_({ error: 'Unauthorized' })
     var info = { ssId: null, ssName: null, sheets: [], jobSheetFound: false, jobSheetRows: 0 }
@@ -628,8 +645,9 @@ function doGet(e) {
       var jobRowFound = false   // เจอแถว HCID ใน JOB_OPENINGS จริงไหม — ถ้าไม่เจอต้อง alert
 
       // ── อัพเดต JOB_OPENINGS_SHEET โดยใช้ HCID (ถ้ามี) ──────────────────────
+      var jobSheetName = resolveJobOpeningSheet_(hcId)   // เก็บไว้ใส่ใน alert เวลาหาไม่เจอ
       if (hcId) {
-        const jobSheet = ss.getSheetByName(resolveJobOpeningSheet_(hcId))
+        const jobSheet = ss.getSheetByName(jobSheetName)
         if (jobSheet && jobSheet.getLastRow() > 1) {
           const hcidValues = jobSheet.getRange(2, COL_HCID, jobSheet.getLastRow() - 1, 1).getValues()
           for (let i = 0; i < hcidValues.length; i++) {
@@ -728,7 +746,10 @@ function doGet(e) {
       // ── ถ้าส่ง hcId มาแต่หาแถวไม่เจอ → แจ้ง #hc-alert + ตอบ fail ให้แอปโชว์เตือน ──
       // (เดิมตอบ success ทั้งที่ไม่ได้อัปเดตอะไรเลย — ทำให้ Sheets เพี้ยนแบบเงียบๆ)
       if (hcId && !jobRowFound) {
-        alertSlack_('⚠️ *อัปเดตสถานะใน Sheets ไม่สำเร็จ*\nHCID: `' + hcId + '` → ' + newStatus + '\nหา HCID ไม่เจอในชีท — แถวอาจถูกลบหรือ HCID ไม่ตรง')
+        // ใส่สภาพชีท ณ ตอนหาไม่เจอ เพื่อวินิจฉัยย้อนหลังได้ (tab ที่ใช้ค้น + จำนวนแถว)
+        var diagSheet = ss.getSheetByName(jobSheetName)
+        var diagInfo  = 'tab: "' + jobSheetName + '"' + (diagSheet ? ' (' + diagSheet.getLastRow() + ' แถว)' : ' — ไม่พบ tab นี้!')
+        alertSlack_('⚠️ *อัปเดตสถานะใน Sheets ไม่สำเร็จ*\nHCID: `' + hcId + '` → ' + newStatus + '\nหา HCID ไม่เจอในชีท — แถวอาจถูกลบหรือ HCID ไม่ตรง\n' + diagInfo)
         return responseJson_({ success: false, error: 'hcId not found in sheet: ' + hcId })
       }
 
