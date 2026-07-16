@@ -27,6 +27,18 @@ function getJGLabel_(jg) { return jg ? (JG_LABELS[jg] || jg) : '' }
 // ชื่อ sheet หลักที่ใช้เก็บข้อมูลทั้งหมด (ใช้ sheet เดียวต่อเนื่องไม่แยกปี)
 var JOB_OPENINGS_SHEET = 'Job Openings 2025'
 
+/**
+ * normHcid_ — ทำ HCID ให้สะอาดก่อนเทียบ: ตัด zero-width/nbsp ที่ trim() ไม่ตัด,
+ * แปลงขีดทุกแบบ (en-dash –, em-dash —, non-breaking hyphen) เป็น hyphen ปกติ
+ * กันเคส HCID จาก import/copy-paste หน้าตาเหมือนกันแต่ byte ไม่เท่ากัน
+ */
+function normHcid_(v) {
+  return String(v || '')
+    .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, '')   // zero-width, BOM, nbsp
+    .replace(/[\u2010-\u2014\u2212]/g, '-')          // en/em-dash, minus → hyphen
+    .trim().toUpperCase()
+}
+
 function resolveJobOpeningSheet_(hcId) {
   // ทีม TA แยก tab รายปี (เช่น 'Job Openings 2026') — เลือก tab ตามปีใน HCID
   // หมายเหตุ: ss เป็นตัวแปร local ของ doGet/doPost — ต้องหยิบ spreadsheet เองที่นี่
@@ -477,7 +489,7 @@ function doGet(e) {
     if (fsh && fsh.getLastRow() > 1) {
       var fvals = fsh.getRange(2, COL_HCID, fsh.getLastRow() - 1, 1).getValues()
       for (var fi = 0; fi < fvals.length; fi++) {
-        if (fvals[fi][0].toString().trim() === fhc.trim()) { fout.row = fi + 2; break }
+        if (normHcid_(fvals[fi][0]) === normHcid_(fhc)) { fout.row = fi + 2; break }
       }
     }
     return responseJson_(fout)
@@ -532,7 +544,7 @@ function doGet(e) {
     var lastRow = jobSheet.getLastRow()
     var hcidVals = jobSheet.getRange(2, COL_HCID, lastRow - 1, 1).getValues()
     for (var i = 0; i < hcidVals.length; i++) {
-      if (hcidVals[i][0].toString().trim() === testHcId.toString().trim()) {
+      if (normHcid_(hcidVals[i][0]) === normHcid_(testHcId)) {
         var rowNum = i + 2
         var before = {
           candidate: jobSheet.getRange(rowNum, COL_CANDIDATE).getValue(),
@@ -582,7 +594,7 @@ function doGet(e) {
     var delHcids = delSheet.getRange(2, COL_HCID, delLastRow - 1, 1).getValues()
     var delCount = 0
     for (var di = delHcids.length - 1; di >= 0; di--) {
-      if (delHcids[di][0].toString().trim() === delHcId.toString().trim()) {
+      if (normHcid_(delHcids[di][0]) === normHcid_(delHcId)) {
         delSheet.deleteRow(di + 2)
         delCount++
       }
@@ -651,7 +663,7 @@ function doGet(e) {
         if (jobSheet && jobSheet.getLastRow() > 1) {
           const hcidValues = jobSheet.getRange(2, COL_HCID, jobSheet.getLastRow() - 1, 1).getValues()
           for (let i = 0; i < hcidValues.length; i++) {
-            if (hcidValues[i][0].toString().trim() === hcId.toString().trim()) {
+            if (normHcid_(hcidValues[i][0]) === normHcid_(hcId)) {
               jobRowFound = true
               const rowNum = i + 2
               oldStatus = jobSheet.getRange(rowNum, COL_STATUS).getValue()
@@ -748,7 +760,8 @@ function doGet(e) {
       if (hcId && !jobRowFound) {
         // ใส่สภาพชีท ณ ตอนหาไม่เจอ เพื่อวินิจฉัยย้อนหลังได้ (tab ที่ใช้ค้น + จำนวนแถว)
         var diagSheet = ss.getSheetByName(jobSheetName)
-        var diagInfo  = 'tab: "' + jobSheetName + '"' + (diagSheet ? ' (' + diagSheet.getLastRow() + ' แถว)' : ' — ไม่พบ tab นี้!')
+        // hcId.length ช่วยจับตัวอักษรล่องหน — 'REQ-2026-390' ปกติต้องยาว 12
+        var diagInfo  = 'tab: "' + jobSheetName + '"' + (diagSheet ? ' (' + diagSheet.getLastRow() + ' แถว)' : ' — ไม่พบ tab นี้!') + ' · hcId length: ' + String(hcId).length
         alertSlack_('⚠️ *อัปเดตสถานะใน Sheets ไม่สำเร็จ*\nHCID: `' + hcId + '` → ' + newStatus + '\nหา HCID ไม่เจอในชีท — แถวอาจถูกลบหรือ HCID ไม่ตรง\n' + diagInfo)
         return responseJson_({ success: false, error: 'hcId not found in sheet: ' + hcId })
       }
@@ -781,7 +794,7 @@ function doGet(e) {
       var hcidVals = jobSheet.getRange(2, COL_HCID, jobSheet.getLastRow() - 1, 1).getValues()
       var updated = false
       for (var i = 0; i < hcidVals.length; i++) {
-        if (hcidVals[i][0].toString().trim() === hcIdParam.toString().trim()) {
+        if (normHcid_(hcidVals[i][0]) === normHcid_(hcIdParam)) {
           jobSheet.getRange(i + 2, COL_OPEN_JOBS).setValue(openDateFmt)
           updated = true
           break
