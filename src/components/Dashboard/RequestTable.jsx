@@ -623,8 +623,10 @@ export default function RequestTable({
     const req = requests.find((r) => r.id === startDateModal.id)
     try {
       await updateDoc(doc(db, 'hc_requests', startDateModal.id), { startDate: newStartDateVal })
+      // ไม่ await GAS/Sheets — แค่ updateDoc (Firestore) พอที่ modal จะรอ ป้องกัน popup ค้าง
+      // ระหว่าง GAS cold start (toast แจ้งผลสำเร็จ/ล้มเหลวเองอยู่แล้วใน updateStartDateInSheets)
       if (startDateModal.hcId) {
-        await updateStartDateInSheets(startDateModal.hcId, newStartDateVal, startDateReason.trim())
+        updateStartDateInSheets(startDateModal.hcId, newStartDateVal, startDateReason.trim())
       }
       logAudit({
         requestId: startDateModal.id,
