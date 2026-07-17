@@ -464,6 +464,20 @@ function slackStatusUpdate(position, department, oldStatus, newStatus, assignedT
   sendSlack_(SLACK_UPDATES, lines.join('\n'))
 }
 
+// slackStartDateChanged — แจ้งเปลี่ยนวันเริ่มงานโดยไม่กระทบสถานะ (แยกจาก slackStatusUpdate
+// เพราะฟังก์ชันนั้นบังคับโชว์บรรทัด "สถานะ: X → X" ซึ่งงงเปล่าประโยชน์เมื่อสถานะไม่เปลี่ยน)
+function slackStartDateChanged(position, department, hcId, oldDate, newDate, by, reason) {
+  var lines = [
+    '📅 *เปลี่ยนวันเริ่มงาน*' + (hcId ? '  `' + hcId + '`' : ''),
+    '*ตำแหน่ง:* ' + position + ' (' + department + ')',
+    '*วันเริ่มงาน:* ' + (oldDate || '—') + ' → *' + newDate + '*',
+  ]
+  if (reason) lines.push('*เหตุผล:* ' + reason)
+  if (by)     lines.push('*โดย:* ' + by)
+  lines.push('🔗 ' + APP_URL + '/all-requests')
+  sendSlack_(SLACK_UPDATES, lines.join('\n'))
+}
+
 /**
  * alertError_ — รายงานบั๊คแบบละเอียดเข้า #hc-alert
  * @param where ชื่อจุดที่พัง เช่น 'updateStatus', 'doGet:deleteRow'
@@ -890,6 +904,77 @@ function doGet_(e) {
       return responseJson_({ success: updated, row: updated ? 'updated' : 'not found', openDate: openDateFmt })
     } catch(err) {
       alertError_('updateOpenDate', err, e, null)
+      return responseJson_({ success: false, error: err.message })
+    }
+  }
+
+  // ── UPDATE START DATE: แก้วันเริ่มงาน (Onboard Date) ย้อนหลัง ไม่กระทบสถานะ ────
+  // ใช้เมื่อพนักงานขอเลื่อนวันเริ่มงาน — sync COL_START_DATE + legacy sheet + แจ้ง Slack
+  // เรียกด้วย ?action=updateStartDate&hcId=REQ-2026-XXX&startDate=ISO&reason=...&by=...&secret=XXX
+  if (e.parameter.action === 'updateStartDate') {
+    if (!isValidSecret_(e)) return responseJson_({ error: 'Unauthorized' })
+    var sdHcId   = e.parameter.hcId     || ''
+    var sdParam  = e.parameter.startDate || ''
+    var sdReason = e.parameter.reason  || ''
+    var sdBy     = e.parameter.by      || ''
+    if (!sdHcId || !sdParam) return responseJson_({ success: false, error: 'Missing hcId or startDate' })
+    try {
+      var sdMonthsArr = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+      var sdDate = new Date(sdParam)
+      if (isNaN(sdDate)) return responseJson_({ success: false, error: 'Invalid startDate: ' + sdParam })
+      var sdNewFmt = sdDate.getDate() + '-' + sdMonthsArr[sdDate.getMonth()] + '-' + sdDate.getFullYear()
+
+      var sdSheetName = resolveJobOpeningSheet_(sdHcId)
+      var sdSheet = ss.getSheetByName(sdSheetName)
+      if (!sdSheet || sdSheet.getLastRow() <= 1) {
+        alertError_('updateStartDate', new Error('Sheet not found or empty: ' + sdSheetName), e, { tab: sdSheetName })
+        return responseJson_({ success: false, error: 'Sheet not found or empty' })
+      }
+
+      var sdHcidVals = sdSheet.getRange(2, COL_HCID, sdSheet.getLastRow() - 1, 1).getValues()
+      var sdUpdated = false, sdOldFmt = '', sdPosition = '', sdDept = ''
+      for (var sdi = 0; sdi < sdHcidVals.length; sdi++) {
+        if (normHcid_(sdHcidVals[sdi][0]) === normHcid_(sdHcId)) {
+          var sdRowNum = sdi + 2
+          // อ่านค่าเดิมก่อนเขียนทับ — ใช้โชว์ oldDate → newDate ใน Slack
+          var sdOldVal = sdSheet.getRange(sdRowNum, COL_START_DATE).getValue()
+          sdOldFmt = sdOldVal instanceof Date && !isNaN(sdOldVal)
+            ? sdOldVal.getDate() + '-' + sdMonthsArr[sdOldVal.getMonth()] + '-' + sdOldVal.getFullYear()
+            : (sdOldVal || '').toString()
+          sdPosition = sdSheet.getRange(sdRowNum, COL_POSITION).getValue()
+          sdDept     = sdSheet.getRange(sdRowNum, COL_DEPT).getValue()
+
+          sdSheet.getRange(sdRowNum, COL_START_DATE).setValue(sdNewFmt)
+          sdUpdated = true
+          break
+        }
+      }
+
+      if (!sdUpdated) {
+        alertError_('updateStartDate', new Error('hcId not found: ' + sdHcId), e, { tab: sdSheetName, lastRow: sdSheet.getLastRow() })
+        return responseJson_({ success: false, error: 'hcId not found in sheet: ' + sdHcId })
+      }
+
+      // legacy HC_Request sheet — เหมือน pattern ใน updateStatus
+      var sdLegacySheet = ss.getSheetByName('HC_Request')
+      if (sdLegacySheet) {
+        var sdHeaders = sdLegacySheet.getRange(1, 1, 1, sdLegacySheet.getLastColumn()).getValues()[0]
+        var sdIdColIdx    = sdHeaders.indexOf('Request ID')
+        var sdDateColIdx  = sdHeaders.indexOf('วันที่เริ่มงาน')
+        if (sdIdColIdx !== -1 && sdDateColIdx !== -1) {
+          for (var sdj = 2; sdj <= sdLegacySheet.getLastRow(); sdj++) {
+            if (normHcid_(sdLegacySheet.getRange(sdj, sdIdColIdx + 1).getValue()) === normHcid_(sdHcId)) {
+              sdLegacySheet.getRange(sdj, sdDateColIdx + 1).setValue(sdNewFmt)
+              break
+            }
+          }
+        }
+      }
+
+      slackStartDateChanged(sdPosition, sdDept, sdHcId, sdOldFmt, sdNewFmt, sdBy, sdReason)
+      return responseJson_({ success: true, oldDate: sdOldFmt, newDate: sdNewFmt })
+    } catch (err) {
+      alertError_('updateStartDate', err, e, null)
       return responseJson_({ success: false, error: err.message })
     }
   }

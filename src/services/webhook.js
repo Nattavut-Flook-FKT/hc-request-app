@@ -237,6 +237,34 @@ export async function updateOpenDateInSheets(hcId, openDate) {
 }
 
 /**
+ * updateStartDateInSheets — แก้วันเริ่มงาน (Onboard Date) ย้อนหลังโดยไม่กระทบสถานะ
+ * ใช้เมื่อพนักงานขอเลื่อนวันเริ่มงาน — sync คอลัมน์ Onboard Date ใน Sheets + แจ้ง Slack ฝั่ง GAS
+ */
+export async function updateStartDateInSheets(hcId, newStartDate, reason) {
+  if (!DATA_URL || !hcId) return { success: false, error: 'GAS URL or hcId missing' }
+  try {
+    const params = new URLSearchParams({ action: 'updateStartDate', hcId, startDate: newStartDate })
+    if (reason) params.set('reason', reason)
+    const by = currentUserName()
+    if (by) params.set('by', by)
+    if (GAS_SECRET) params.set('secret', GAS_SECRET)
+    const res = await fetch(`${DATA_URL}?${params.toString()}`)
+    const json = await res.json()
+    if (json.success) {
+      toast(`อัปเดตวันเริ่มงานใน Sheets แล้ว`, { type: 'success' })
+    } else {
+      console.warn('[updateStartDateInSheets]', json.error)
+      toast(`อัปเดตวันเริ่มงานใน Sheets ไม่สำเร็จ`, { type: 'error', sub: json.error })
+    }
+    return json
+  } catch (err) {
+    console.error('[updateStartDateInSheets] error:', err)
+    toast(`เชื่อมต่อ Sheets ไม่ได้ — วันเริ่มงาน ${hcId} อาจไม่ sync`, { type: 'error', sub: err.message })
+    return { success: false, error: err.message }
+  }
+}
+
+/**
  * sendDeleteToSheets — สั่ง GAS ลบ "ทุกแถว" ที่ HCID ตรง แล้วคืนผลจริง
  * @returns {Promise<{success: boolean, count?: number, error?: string}>}
  * caller ต้องเช็ค success เพื่อโชว์ toast — ห้ามยิงแล้วลืมแบบเดิม (เคย REQ-2026-485 ค้างใน Sheets แบบเงียบๆ)

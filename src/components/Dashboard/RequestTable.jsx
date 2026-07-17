@@ -82,7 +82,7 @@ import { useEffect, useState, useMemo, useCallback, Fragment } from 'react'
 import { collection, onSnapshot, orderBy, query, doc, updateDoc, addDoc, getDocs, where, deleteDoc, serverTimestamp, arrayUnion, arrayRemove, limit, Timestamp } from 'firebase/firestore'
 import { db } from '../../services/firebase'
 import { generateHCID } from '../../utils/hcId'
-import { sendStatusUpdate, sendToWebhook, sendDeleteToSheets, updateOpenDateInSheets, reportClientError } from '../../services/webhook'
+import { sendStatusUpdate, sendToWebhook, sendDeleteToSheets, updateOpenDateInSheets, updateStartDateInSheets, reportClientError } from '../../services/webhook'
 import { getJGLabel } from '../../data/jobGrades'
 import { slaLimit } from '../../utils/sla'
 import { logAudit } from '../../services/auditLog'
@@ -313,6 +313,10 @@ export default function RequestTable({
   // Admin: แก้ createdAt เพื่อทดสอบ SLA
   const [slaTestModal, setSlaTestModal] = useState({ isOpen: false, id: null, hcId: null, originalCreatedAt: null })
   const [slaTestDate, setSlaTestDate] = useState('')
+  // TA/Admin: แก้วันเริ่มงาน (พนักงานขอเลื่อนวันเริ่มงาน) — ไม่กระทบสถานะ, sync Sheets + Slack + audit
+  const [startDateModal, setStartDateModal] = useState({ isOpen: false, id: null, hcId: null, oldDate: '' })
+  const [newStartDateVal, setNewStartDateVal] = useState('')
+  const [startDateReason, setStartDateReason] = useState('')
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 50
   const [cvUploading, setCvUploading] = useState(new Set()) // Set ของ reqId ที่กำลัง upload
@@ -611,6 +615,35 @@ export default function RequestTable({
       console.error('[handleSlaFixSave]', err)
       reportClientError('handleSlaFixSave', err, { hcId: slaTestModal.hcId })
     }
+  }
+
+  // แก้วันเริ่มงานหลัง Onboarding/Closed (พนักงานขอเลื่อนวันเริ่มงาน) — ไม่กระทบสถานะ
+  async function handleStartDateConfirm() {
+    if (!startDateModal.id || !newStartDateVal || !startDateReason.trim()) return
+    const req = requests.find((r) => r.id === startDateModal.id)
+    try {
+      await updateDoc(doc(db, 'hc_requests', startDateModal.id), { startDate: newStartDateVal })
+      if (startDateModal.hcId) {
+        await updateStartDateInSheets(startDateModal.hcId, newStartDateVal, startDateReason.trim())
+      }
+      logAudit({
+        requestId: startDateModal.id,
+        action: 'StartDateChange',
+        by: user.email,
+        byName: user.displayName,
+        fromStatus: req?.status,
+        toStatus: req?.status,
+        position: req?.position,
+        department: req?.department,
+        note: `วันเริ่มงาน: ${startDateModal.oldDate || '—'} → ${newStartDateVal} (${startDateReason.trim()})`,
+      })
+    } catch (err) {
+      console.error('[handleStartDateConfirm]', err)
+      reportClientError('handleStartDateConfirm', err, { hcId: startDateModal.hcId })
+    }
+    setStartDateModal({ isOpen: false, id: null, hcId: null, oldDate: '' })
+    setNewStartDateVal('')
+    setStartDateReason('')
   }
 
   // ─── CV Upload / Delete ───
@@ -1503,7 +1536,21 @@ export default function RequestTable({
                                   <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
                                     <Calendar size={12} strokeWidth={1} absoluteStrokeWidth /> วันเริ่มงาน
                                   </p>
-                                  <p className="text-sm font-bold text-teal-700">{(() => { const d = new Date(req.startDate); return isNaN(d) ? req.startDate : d.getDate() + '-' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + '-' + d.getFullYear() })()}</p>
+                                  {(isTA || isAdmin) ? (
+                                    <button
+                                      onClick={() => {
+                                        setNewStartDateVal(req.startDate)
+                                        setStartDateReason('')
+                                        setStartDateModal({ isOpen: true, id: req.id, hcId: req.hcId || null, oldDate: req.startDate })
+                                      }}
+                                      className="group flex items-center gap-1.5 text-left"
+                                    >
+                                      <span className="text-sm font-bold text-teal-700">{(() => { const d = new Date(req.startDate); return isNaN(d) ? req.startDate : d.getDate() + '-' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + '-' + d.getFullYear() })()}</span>
+                                      <Pencil size={10} strokeWidth={1} absoluteStrokeWidth className="shrink-0 text-neutral-300 transition-colors group-hover:text-teal-500" />
+                                    </button>
+                                  ) : (
+                                    <p className="text-sm font-bold text-teal-700">{(() => { const d = new Date(req.startDate); return isNaN(d) ? req.startDate : d.getDate() + '-' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + '-' + d.getFullYear() })()}</p>
+                                  )}
                                 </div>
                               )}
                               {req.rejectReason && (
@@ -1836,6 +1883,48 @@ export default function RequestTable({
                 onClick={() => handleSlaFixSave()}
                 disabled={!slaTestDate}
                 className="flex-1 rounded-lg bg-banana-600 px-4 py-2.5 text-sm font-bold text-neutral-50 transition-colors hover:bg-banana-700 disabled:opacity-50"
+              >
+                บันทึก
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── แก้วันเริ่มงาน (พนักงานขอเลื่อนวันเริ่มงาน) — sync Firestore + Sheets + Slack ── */}
+      {startDateModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/45">
+          <div className="mx-4 w-full max-w-sm rounded-[24px] border border-neutral-100 bg-white p-6 shadow-xl">
+            <h3 className="mb-1 text-lg font-bold text-neutral-900">แก้ไขวันเริ่มงาน</h3>
+            <p className="mb-5 text-sm text-neutral-500">ใช้เมื่อพนักงานขอเลื่อนวันเริ่มงาน — จะ sync เข้า Sheets และแจ้งเตือนใน Slack ทันที</p>
+            <label className="mb-2 block text-[11px] font-bold text-neutral-500">วันเริ่มงานใหม่</label>
+            <input
+              id="start-date-fix" name="start-date-fix"
+              type="date"
+              value={newStartDateVal}
+              onChange={(e) => setNewStartDateVal(e.target.value)}
+              className="w-full rounded-lg border border-neutral-100 bg-white px-4 py-2.5 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
+              autoFocus
+            />
+            <label className="mb-2 mt-4 block text-[11px] font-bold text-neutral-500">เหตุผลที่เปลี่ยน *</label>
+            <textarea
+              value={startDateReason}
+              onChange={(e) => setStartDateReason(e.target.value)}
+              placeholder="เช่น พนักงานขอเลื่อนวันเริ่มงาน, ติดธุระส่วนตัว"
+              rows={3}
+              className="w-full resize-none rounded-lg border border-neutral-100 bg-white px-4 py-2.5 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
+            />
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={() => { setStartDateModal({ isOpen: false, id: null, hcId: null, oldDate: '' }); setNewStartDateVal(''); setStartDateReason('') }}
+                className="flex-1 rounded-lg border border-neutral-100 px-4 py-2.5 text-sm font-bold text-neutral-600 transition-colors hover:bg-neutral-50"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleStartDateConfirm}
+                disabled={!newStartDateVal || !startDateReason.trim()}
+                className="flex-1 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-bold text-neutral-50 transition-colors hover:bg-teal-700 disabled:opacity-50"
               >
                 บันทึก
               </button>
