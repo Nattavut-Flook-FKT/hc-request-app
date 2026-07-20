@@ -4,7 +4,8 @@
  * แสดงเคสสถานะ Onboarding (รอเริ่มงาน) + Closed (เริ่มงานแล้ว) พร้อมอีเมลบริษัท
  * ที่ generate ไว้ตอนเปลี่ยนสถานะเป็น Onboarding (field `itEmail`)
  *
- * Filter: ทั้งหมด / รอเริ่มงาน / เริ่มงานแล้ว / เริ่มภายในสัปดาห์นี้ (7 วันข้างหน้า)
+ * Filter: ทั้งหมด / รอเริ่มงาน / เริ่มงานแล้ว / สัปดาห์นี้ / สัปดาห์ถัดไป / เดือนนี้ / เดือนหน้า
+ * (ตัวกรองช่วงเวลา ใช้เฉพาะกับเคสที่ยังรอเริ่มงาน — สัปดาห์แบบ rolling 7 วัน, เดือนแบบปฏิทินจริง)
  * เคสเก่าที่ยังไม่มี itEmail (สร้างก่อนฟีเจอร์นี้มีอยู่) — กดปุ่ม "สร้างอีเมล" เพื่อ
  * generate ย้อนหลังจากชื่อ candidate (ต้องเป็นภาษาอังกฤษ ≥ 2 คำ) หรือกรอกเองได้
  *
@@ -25,10 +26,13 @@ import { toDate, statusTH } from '../utils/reportUtils'
 import { generateFreshketEmail } from '../utils/email'
 
 const VIEWS = [
-  { v: 'all',      label: 'ทั้งหมด' },
-  { v: 'waiting',  label: 'รอเริ่มงาน' },
-  { v: 'started',  label: 'เริ่มงานแล้ว' },
-  { v: 'thisWeek', label: 'เริ่มภายในสัปดาห์นี้' },
+  { v: 'all',       label: 'ทั้งหมด' },
+  { v: 'waiting',   label: 'รอเริ่มงาน' },
+  { v: 'started',   label: 'เริ่มงานแล้ว' },
+  { v: 'thisWeek',  label: 'สัปดาห์นี้' },
+  { v: 'nextWeek',  label: 'สัปดาห์ถัดไป' },
+  { v: 'thisMonth', label: 'เดือนนี้' },
+  { v: 'nextMonth', label: 'เดือนหน้า' },
 ]
 
 export default function ItOnboardingPage({ user, role, isDarkMode, toggleDarkMode }) {
@@ -71,20 +75,40 @@ export default function ItOnboardingPage({ user, role, isDarkMode, toggleDarkMod
     return unsub
   }, [])
 
-  // ช่วง "สัปดาห์นี้" = วันนี้ถึงอีก 7 วันข้างหน้า (เฉพาะเคสที่ยังรอเริ่มงาน)
-  const { todayStart, weekEnd } = useMemo(() => {
+  // ช่วงเวลาสำหรับตัวกรอง — สัปดาห์: rolling 7 วัน (นี้ = 0-7 วัน, ถัดไป = 7-14 วัน)
+  // เดือน: ปฏิทินจริง (วันที่ 1 ถึงวันสุดท้ายของเดือน) เพราะเดือนยาวไม่เท่ากัน
+  const ranges = useMemo(() => {
     const t = new Date(); t.setHours(0, 0, 0, 0)
-    return { todayStart: t.getTime(), weekEnd: t.getTime() + 7 * 24 * 60 * 60 * 1000 }
+    const day = 24 * 60 * 60 * 1000
+    const thisWeekStart = t.getTime()
+    const thisWeekEnd   = thisWeekStart + 7 * day
+    const nextWeekEnd   = thisWeekEnd + 7 * day
+    const y = t.getFullYear(), m = t.getMonth()
+    return {
+      thisWeekStart, thisWeekEnd,
+      nextWeekStart: thisWeekEnd, nextWeekEnd,
+      thisMonthStart: new Date(y, m, 1).getTime(),
+      thisMonthEnd:   new Date(y, m + 1, 0, 23, 59, 59, 999).getTime(),
+      nextMonthStart: new Date(y, m + 1, 1).getTime(),
+      nextMonthEnd:   new Date(y, m + 2, 0, 23, 59, 59, 999).getTime(),
+    }
   }, [])
+
+  function inRange(r, startKey, endKey) {
+    return r.status === 'Onboarding' && r._sortTime >= ranges[startKey] && r._sortTime <= ranges[endKey]
+  }
 
   const waitingCount  = rows.filter((r) => r.status === 'Onboarding').length
   const startedCount  = rows.filter((r) => r.status === 'Closed').length
-  const thisWeekCount = rows.filter((r) => r.status === 'Onboarding' && r._sortTime >= todayStart && r._sortTime <= weekEnd).length
+  const thisWeekCount = rows.filter((r) => inRange(r, 'thisWeekStart', 'thisWeekEnd')).length
 
   const displayed = rows.filter((r) => {
-    if (view === 'waiting')  return r.status === 'Onboarding'
-    if (view === 'started')  return r.status === 'Closed'
-    if (view === 'thisWeek') return r.status === 'Onboarding' && r._sortTime >= todayStart && r._sortTime <= weekEnd
+    if (view === 'waiting')   return r.status === 'Onboarding'
+    if (view === 'started')   return r.status === 'Closed'
+    if (view === 'thisWeek')  return inRange(r, 'thisWeekStart', 'thisWeekEnd')
+    if (view === 'nextWeek')  return inRange(r, 'nextWeekStart', 'nextWeekEnd')
+    if (view === 'thisMonth') return inRange(r, 'thisMonthStart', 'thisMonthEnd')
+    if (view === 'nextMonth') return inRange(r, 'nextMonthStart', 'nextMonthEnd')
     return true
   })
 
@@ -200,7 +224,7 @@ export default function ItOnboardingPage({ user, role, isDarkMode, toggleDarkMod
             <KpiCard label="เริ่มงานแล้ว" value={startedCount} accent={view === 'started'} />
           </button>
           <button onClick={() => setView('thisWeek')} className="w-full text-left">
-            <KpiCard label="เริ่มภายในสัปดาห์นี้" value={thisWeekCount} accent={view === 'thisWeek'} />
+            <KpiCard label="เริ่มสัปดาห์นี้" value={thisWeekCount} accent={view === 'thisWeek'} />
           </button>
         </div>
 
