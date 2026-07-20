@@ -259,6 +259,20 @@ function shortName(fullName) {
   return match ? match[0].trim() : fullName
 }
 
+// ─── แจ้ง IT: generate อีเมลบริษัทจากชื่อ candidate (ภาษาอังกฤษเท่านั้น) ───
+const ENGLISH_NAME_RE = /^[A-Za-z\s.'-]+$/
+function isEnglishName(s) { return !!s && ENGLISH_NAME_RE.test(s.trim()) }
+
+// "Somchai Jaidee" → "somchai.j@freshket.co" — ต้องมีอย่างน้อย 2 คำ (first + last)
+// ชื่อกลาง (ถ้ามี) ไม่มีผล ใช้แค่คำแรกกับคำสุดท้าย
+function generateFreshketEmail(fullName) {
+  const parts = (fullName || '').trim().split(/\s+/).filter(Boolean)
+  if (parts.length < 2) return ''
+  const first = parts[0].toLowerCase().replace(/[^a-z]/g, '')
+  const lastInitial = (parts[parts.length - 1][0] || '').toLowerCase().replace(/[^a-z]/g, '')
+  return first && lastInitial ? `${first}.${lastInitial}@freshket.co` : ''
+}
+
 function buildHistoryEntry(status, user) {
   return { status, changedAt: new Date().toISOString(), changedBy: user.email, changedByName: shortName(user.displayName) }
 }
@@ -307,6 +321,7 @@ export default function RequestTable({
   const [offeringCandidateName, setOfferingCandidateName] = useState('')
   const [offeringCvUrl, setOfferingCvUrl] = useState('')
   const [offeringCustomDate, setOfferingCustomDate] = useState('') // optional: วัน Offering ย้อนหลัง
+  const [itEmailVal, setItEmailVal] = useState('') // อีเมลแจ้ง IT — ถ้าว่าง ใช้ค่า auto-generate จากชื่อ
   // Reject modal: กรอกเหตุผลก่อน Reject
   const [rejectModal, setRejectModal] = useState({ isOpen: false, id: null })
   const [rejectReason, setRejectReason] = useState('')
@@ -484,7 +499,7 @@ export default function RequestTable({
       const startDateParam = CLEAR_START_DATE.includes(newStatus) && req.startDate
         ? 'CLEAR'
         : (extraData.startDate || null)
-      sendStatusUpdate(id, newStatus, updateData.assignedToName || req.assignedToName, assignedAt, startDateParam, extraData.candidateName || null, req?.hcId, offeringDate, clearInfo, extraData.cvUrl || req.cvUrl || null)
+      sendStatusUpdate(id, newStatus, updateData.assignedToName || req.assignedToName, assignedAt, startDateParam, extraData.candidateName || null, req?.hcId, offeringDate, clearInfo, extraData.cvUrl || req.cvUrl || null, extraData.itEmail || null)
       logAudit({
         requestId: id,
         action: newStatus === 'Rejected' ? 'Rejected' : 'StatusChange',
@@ -497,6 +512,7 @@ export default function RequestTable({
         note: [
           extraData.startDate ? `วันเริ่มงาน: ${extraData.startDate}` : null,
           extraData.candidateName ? `Candidate: ${extraData.candidateName}` : null,
+          extraData.itEmail ? `Email: ${extraData.itEmail}` : null,
         ].filter(Boolean).join(', ') || undefined,
       })
     } catch (err) {
@@ -516,10 +532,12 @@ export default function RequestTable({
       if (offeringCustomDate)           extra.offeringDate   = offeringCustomDate
       await handleStatusChange(offeringModal.id, 'Offering', extra)
     } else {
-      // Onboarding: ต้องมี startDate
+      // Onboarding: ต้องมี startDate + ชื่อภาษาอังกฤษ (ใช้ generate อีเมลแจ้ง IT)
       if (!offeringStartDate) return
       const extra = { startDate: offeringStartDate }
       if (offeringCandidateName.trim()) extra.candidateName = offeringCandidateName.trim()
+      const finalItEmail = (itEmailVal || generateFreshketEmail(offeringCandidateName)).trim()
+      if (finalItEmail) extra.itEmail = finalItEmail
       await handleStatusChange(offeringModal.id, 'Onboarding', extra)
     }
     setOfferingModal({ isOpen: false, id: null, mode: 'onboarding' })
@@ -527,6 +545,7 @@ export default function RequestTable({
     setOfferingCandidateName('')
     setOfferingCvUrl('')
     setOfferingCustomDate('')
+    setItEmailVal('')
   }
 
   // Reject confirm: บันทึก Rejected (หยุดที่ Rejected → TA กด "Recruit ใหม่" เองเมื่อพร้อม)
@@ -1954,9 +1973,15 @@ export default function RequestTable({
               value={offeringCandidateName}
               onChange={(e) => setOfferingCandidateName(e.target.value)}
               placeholder="ชื่อ-นามสกุล ผู้สมัคร"
-              className="mb-4 w-full rounded-lg border border-neutral-100 bg-white px-4 py-2.5 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
+              className={`w-full rounded-lg border bg-white px-4 py-2.5 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none ${
+                offeringModal.mode === 'onboarding' && offeringCandidateName.trim() && !isEnglishName(offeringCandidateName)
+                  ? 'mb-1 border-red-300' : 'mb-4 border-neutral-100'
+              }`}
               autoFocus
             />
+            {offeringModal.mode === 'onboarding' && offeringCandidateName.trim() && !isEnglishName(offeringCandidateName) && (
+              <p className="mb-4 text-xs text-red-600">กรุณากรอกชื่อเป็นภาษาอังกฤษ (ใช้สร้างอีเมลบริษัทแจ้ง IT)</p>
+            )}
 
             {offeringModal.mode === 'offering' && (
               <>
@@ -1992,6 +2017,18 @@ export default function RequestTable({
                   type="date"
                   value={offeringStartDate}
                   onChange={(e) => setOfferingStartDate(e.target.value)}
+                  className="mb-4 w-full rounded-lg border border-neutral-100 bg-white px-4 py-2.5 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
+                />
+
+                <label className="mb-2 block text-[11px] font-bold text-neutral-500">
+                  อีเมลบริษัท (แจ้ง IT) <span className="font-normal text-neutral-400">— auto-generate, แก้ไขได้</span>
+                </label>
+                <input
+                  id="offering-it-email" name="offering-it-email"
+                  type="text"
+                  value={itEmailVal || generateFreshketEmail(offeringCandidateName)}
+                  onChange={(e) => setItEmailVal(e.target.value)}
+                  placeholder="somchai.j@freshket.co"
                   className="w-full rounded-lg border border-neutral-100 bg-white px-4 py-2.5 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
                 />
               </>
@@ -1999,14 +2036,19 @@ export default function RequestTable({
 
             <div className="mt-6 flex gap-3">
               <button
-                onClick={() => { setOfferingModal({ isOpen: false, id: null, mode: 'onboarding' }); setOfferingStartDate(''); setOfferingCandidateName(''); setOfferingCvUrl(''); setOfferingCustomDate('') }}
+                onClick={() => { setOfferingModal({ isOpen: false, id: null, mode: 'onboarding' }); setOfferingStartDate(''); setOfferingCandidateName(''); setOfferingCvUrl(''); setOfferingCustomDate(''); setItEmailVal('') }}
                 className="flex-1 rounded-lg border border-neutral-100 px-4 py-2.5 text-sm font-bold text-neutral-600 transition-colors hover:bg-neutral-50"
               >
                 ยกเลิก
               </button>
               <button
                 onClick={handleOfferingConfirm}
-                disabled={offeringModal.mode === 'onboarding' && (!offeringStartDate || !offeringCandidateName.trim())}
+                disabled={offeringModal.mode === 'onboarding' && (
+                  !offeringStartDate ||
+                  !offeringCandidateName.trim() ||
+                  !isEnglishName(offeringCandidateName) ||
+                  !(itEmailVal || generateFreshketEmail(offeringCandidateName))
+                )}
                 className="flex-1 rounded-lg bg-dark-green-600 px-4 py-2.5 text-sm font-bold text-neutral-50 transition-colors hover:bg-dark-green-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {offeringModal.mode === 'offering' ? 'ยืนยัน Offering' : 'ยืนยัน Onboarding'}

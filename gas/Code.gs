@@ -392,6 +392,9 @@ var SLACK_SUBTEAM       = _props.getProperty('SLACK_SUBTEAM')       || ''
 // SLACK_ALERT — webhook ของห้อง #hc-alert สำหรับแจ้งผล sync (ลบ/อัปเดตไม่เจอแถว ฯลฯ)
 // ถ้ายังไม่ตั้งค่า property จะ fallback ไปห้อง SLACK_UPDATES เพื่อไม่ให้ alert หาย
 var SLACK_ALERT         = _props.getProperty('SLACK_ALERT')         || SLACK_UPDATES
+// SLACK_IT — webhook ของห้อง IT สำหรับแจ้งเตรียมบัญชี/อุปกรณ์พนักงานใหม่ตอนเข้า Onboarding
+// ถ้ายังไม่ตั้งค่า property จะ fallback ไปห้อง SLACK_UPDATES (ไม่หายเงียบ แต่ไปผิดห้อง — ต้องตั้งค่าเอง)
+var SLACK_IT            = _props.getProperty('SLACK_IT')            || SLACK_UPDATES
 var APP_URL             = _props.getProperty('APP_URL')             || 'https://hcrequest.web.app'
 // HR Spreadsheet (MainData + Manager_Access) — ต้องตั้งค่าใน Script Properties
 // key: HR_SPREADSHEET_ID  (ไม่มี fallback เพื่อป้องกัน spreadsheet ID หลุดในโค้ด)
@@ -476,6 +479,22 @@ function slackStartDateChanged(position, department, hcId, oldDate, newDate, by,
   if (by)     lines.push('*โดย:* ' + by)
   lines.push('🔗 ' + APP_URL + '/all-requests')
   sendSlack_(SLACK_UPDATES, lines.join('\n'))
+}
+
+// slackNotifyIT_ — แจ้ง IT เตรียมบัญชี/อุปกรณ์พนักงานใหม่ตอนเคสเข้า Onboarding
+// email มาจาก client (generate + ให้ TA เช็ค/แก้ไขใน modal แล้ว) — ไม่เขียนค่านี้ลง Sheets ใดๆ
+// ใช้แค่ในข้อความ Slack เท่านั้น
+function slackNotifyIT_(position, department, hcId, candidateName, email, startDate, by) {
+  var lines = [
+    '🖥️ *แจ้ง IT: เตรียมบัญชีพนักงานใหม่*' + (hcId ? '  `' + hcId + '`' : ''),
+    '*ชื่อ:* ' + (candidateName || '—'),
+    '*อีเมล:* ' + (email || '—'),
+    '*ตำแหน่ง:* ' + position + ' (' + department + ')',
+  ]
+  if (startDate) lines.push('*วันเริ่มงาน:* ' + startDate)
+  if (by)        lines.push('*แจ้งโดย:* ' + by)
+  lines.push('🔗 ' + APP_URL + '/all-requests')
+  sendSlack_(SLACK_IT, lines.join('\n'))
 }
 
 /**
@@ -729,6 +748,7 @@ function doGet_(e) {
       const clearInfo      = e.parameter.clearInfo === '1'        // ล้าง candidateName + startDate
       const cvUrl          = e.parameter.cvUrl          || null   // ลิ้ง CV (Google Drive, etc.)
       const changedBy      = e.parameter.by             || null   // ชื่อคนกดในแอป (ใส่ใน Slack alert)
+      const itEmail        = e.parameter.itEmail        || null   // อีเมลแจ้ง IT ตอนเข้า Onboarding (ไม่เขียนลง Sheets)
 
       const VALID = ['Open','Recruiting','Interviewing','Offering','Onboarding','Rejected','NoShow','Closed','Cancelled',
                      'OnHold','InternalTransfer','Confidential']
@@ -860,6 +880,10 @@ function doGet_(e) {
 
       // วันเริ่มงานที่โชว์ใน alert: ค่าใหม่จากแอป (ถ้าไม่ใช่ CLEAR) > ค่าเดิมในแถว
       var alertStartDate = (startDate && startDate !== 'CLEAR') ? startDate : (clearInfo ? '' : rowStartDate)
+      // แจ้ง IT แยกห้อง — เฉพาะตอนเข้า Onboarding และมี itEmail ส่งมา (generate ฝั่ง client แล้ว)
+      if (newStatus === 'Onboarding' && itEmail) {
+        slackNotifyIT_(position, dept, hcId, candidateName, itEmail, alertStartDate, changedBy)
+      }
       slackStatusUpdate(position, dept, oldStatus, newStatus, assignedToName, candidateName, {
         hcId: hcId,
         by: changedBy,
