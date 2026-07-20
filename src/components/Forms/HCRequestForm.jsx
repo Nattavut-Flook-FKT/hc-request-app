@@ -591,10 +591,11 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       // ต้องทำก่อน addDoc เพื่อให้ hcId พร้อมอยู่ใน payload ตั้งแต่ต้น
       const hcId = await generateHCID()
 
-      // Beta: New HC ที่ยื่นโดย manager ในกลุ่มทดสอบ ต้องรอ CEO approve ก่อน
-      // (admin ข้ามเสมอ — ไม่ต้องอนุมัติ, Replacement ไม่เข้าเงื่อนไขนี้เลย)
-      // Manager คนอื่นที่ไม่อยู่ใน allow-list ได้ status 'Open' ทันทีเหมือนเดิมทุกอย่าง
-      const needsCeoApproval = form.requestType === 'New HC' && role !== 'admin'
+      // Beta: New HC ที่ยื่นโดยใครก็ตามในกลุ่มทดสอบ ต้องรอ CEO approve ก่อน — ไม่ยกเว้น role
+      // (แม้ admin ยื่นเอง ถ้า email อยู่ใน allow-list ก็ต้องผ่านการอนุมัติเหมือนกัน)
+      // Replacement ไม่เข้าเงื่อนไขนี้เลย ไม่ว่าใครยื่น
+      // คนอื่นที่ไม่อยู่ใน allow-list ได้ status 'Open' ทันทีเหมือนเดิมทุกอย่าง
+      const needsCeoApproval = form.requestType === 'New HC'
         && ceoApprovalBetaEmails.includes(user.email.toLowerCase())
       const approvalToken = needsCeoApproval ? crypto.randomUUID() : null
 
