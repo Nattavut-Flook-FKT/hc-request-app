@@ -78,6 +78,7 @@ const AuditLogPage        = lazy(() => import('./pages/AuditLogPage'))
 const CustomPositionsPage = lazy(() => import('./pages/CustomPositionsPage'))
 const AdminToolsPage      = lazy(() => import('./pages/AdminToolsPage'))
 const ImportPage          = lazy(() => import('./components/Admin/ImportPage'))
+const ItOnboardingPage    = lazy(() => import('./pages/ItOnboardingPage'))
 
 // DEV_EMAIL — email ที่กำหนดใน .env (VITE_DEV_EMAIL)
 // ใช้เพื่อตรวจสอบว่าควรแสดง RoleSwitcher (dev tool) หรือไม่
@@ -449,6 +450,18 @@ export default function App() {
           element={
             <RoleGuard role={role} allowed={['admin']} redirectTo="/dashboard">
               <ImportPage {...pageProps} />
+            </RoleGuard>
+          }
+        />
+
+        {/* /it-onboarding — รายชื่อพนักงานใหม่ + อีเมลบริษัทสำหรับ IT เตรียมบัญชี/อุปกรณ์
+            อนุญาต: admin เท่านั้น
+            redirect: ไม่ใช่ admin → /dashboard */}
+        <Route
+          path="/it-onboarding"
+          element={
+            <RoleGuard role={role} allowed={['admin']} redirectTo="/dashboard">
+              <ItOnboardingPage {...pageProps} />
             </RoleGuard>
           }
         />

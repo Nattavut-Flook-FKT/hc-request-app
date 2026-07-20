@@ -27,7 +27,7 @@ import { auth } from '../../services/firebase'
 import {
   LogOut, LayoutDashboard, FilePlus, List,
   Briefcase, FolderOpen, ClipboardList, ScrollText,
-  Users, Tag, DatabaseZap, Upload,
+  Users, Tag, DatabaseZap, Upload, Monitor,
   ChevronLeft, HelpCircle, PieChart,
 } from 'lucide-react'
 import UserGuide from './UserGuide'
@@ -69,10 +69,11 @@ const ADMIN_GROUPS = [
     { path: '/audit-log',    label: 'Audit Log',   icon: ScrollText },
   ]},
   { label: 'Admin', items: [
-    { path: '/custom-positions', label: 'Positions',    icon: Tag },
-    { path: '/users',            label: 'Users',        icon: Users },
-    { path: '/admin-tools',      label: 'Admin Tools',  icon: DatabaseZap },
-    { path: '/import',           label: 'Import Data',  icon: Upload },
+    { path: '/custom-positions', label: 'Positions',      icon: Tag },
+    { path: '/users',            label: 'Users',          icon: Users },
+    { path: '/admin-tools',      label: 'Admin Tools',    icon: DatabaseZap },
+    { path: '/import',           label: 'Import Data',    icon: Upload },
+    { path: '/it-onboarding',    label: 'IT Onboarding',  icon: Monitor },
   ]},
 ]
 
