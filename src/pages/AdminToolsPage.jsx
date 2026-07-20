@@ -18,8 +18,8 @@
  *   - JD files ถูกเก็บใน Supabase Storage ไม่ใช่ Firestore จึงใช้ API คนละชุด
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import { useState, useRef, useCallback } from 'react'
-import { collection, getDocs, getDoc, setDoc, writeBatch, doc, runTransaction, updateDoc, query, where, orderBy, limit } from 'firebase/firestore'
+import { useState, useRef, useCallback, useEffect } from 'react'
+import { collection, getDocs, getDoc, setDoc, writeBatch, doc, runTransaction, updateDoc, query, where, orderBy, limit, serverTimestamp } from 'firebase/firestore'
 import { db } from '../services/firebase'
 import { Clock, Tag, FileText, Trash2, DatabaseZap, Settings2, AlertTriangle, RefreshCw, CheckCircle2, AlertCircle, UserCog, Users, ChevronDown, ChevronUp, Lock, Eye, EyeOff, Upload, Power, PowerOff, X } from 'lucide-react'
 
@@ -103,6 +103,30 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
   const [reassignEmail,  setReassignEmail]  = useState('')
   const [reassignName,   setReassignName]   = useState('')
   const [reassignResult, setReassignResult] = useState(null)
+
+  // ── CEO Approval Beta — allow-list ของ Manager ที่ต้องผ่าน CEO approve ก่อน (New HC) ──
+  const [ceoBetaInput,  setCeoBetaInput]  = useState('')     // comma-separated emails ที่พิมพ์อยู่
+  const [ceoBetaState,  setCeoBetaState]  = useState('idle') // 'idle'|'loading'|'saving'|'saved'|'error'
+
+  useEffect(() => {
+    getDoc(doc(db, 'settings', 'ceoApprovalBeta')).then(snap => {
+      if (snap.exists()) setCeoBetaInput((snap.data().testEmails || []).join(', '))
+    }).catch(() => {})
+  }, [])
+
+  async function saveCeoBeta() {
+    setCeoBetaState('saving')
+    try {
+      const emails = ceoBetaInput.split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
+      await setDoc(doc(db, 'settings', 'ceoApprovalBeta'), { testEmails: emails, updatedAt: serverTimestamp(), updatedBy: user.email })
+      setCeoBetaInput(emails.join(', '))
+      setCeoBetaState('saved')
+      setTimeout(() => setCeoBetaState('idle'), 2000)
+    } catch (err) {
+      console.error('[saveCeoBeta]', err)
+      setCeoBetaState('error')
+    }
+  }
 
   // ── Department Manager Assignment state ──────────────────────────────────
   const [deptState,     setDeptState]     = useState('idle') // 'idle'|'loading'|'ready'|'saving'|'saved'|'error'
@@ -826,6 +850,35 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
             </div>
           </div>
         )}
+
+        {/* ── CEO Approval Beta card ───────────────────────────────────────────── */}
+        <div className="mb-2 rounded-2xl border border-purple-100 bg-purple-50 p-5">
+          <div className="mb-3 flex items-center gap-3">
+            <span className="text-purple-700"><UserCog size={20} strokeWidth={1} absoluteStrokeWidth /></span>
+            <div>
+              <p className="text-sm font-bold text-purple-800">CEO Approval — กลุ่มทดสอบ (Beta)</p>
+              <p className="mt-0.5 text-xs text-neutral-500">
+                Manager ในรายชื่อนี้เท่านั้นที่ยื่น New HC แล้วต้องรอ CEO อนุมัติก่อน — คนอื่นได้ status
+                'Open' ทันทีเหมือนเดิมทุกอย่าง
+              </p>
+            </div>
+          </div>
+          <textarea
+            value={ceoBetaInput}
+            onChange={(e) => setCeoBetaInput(e.target.value)}
+            placeholder="manager1@freshket.co, manager2@freshket.co"
+            rows={2}
+            className="mb-3 w-full resize-none rounded-lg border border-neutral-100 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
+          />
+          <button
+            onClick={saveCeoBeta}
+            disabled={ceoBetaState === 'saving'}
+            className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-xs font-bold text-neutral-50 transition-colors hover:bg-purple-700 disabled:opacity-50"
+          >
+            {ceoBetaState === 'saving' && <Settings2 size={13} strokeWidth={1} absoluteStrokeWidth className="animate-spin" />}
+            {ceoBetaState === 'saving' ? 'กำลังบันทึก...' : ceoBetaState === 'saved' ? 'บันทึกแล้ว ✓' : 'บันทึก'}
+          </button>
+        </div>
 
         {/* ── Fix TA Names card ───────────────────────────────────────────────── */}
         <div className="mb-2 rounded-2xl border border-blue-100 bg-blue-50 p-5">

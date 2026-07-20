@@ -105,12 +105,17 @@ const STATUS_CONFIG = {
   OnHold:           { label: 'On Hold',           bg: 'bg-banana-50',      text: 'text-banana-900',      border: 'border-banana-100' },
   Confidential:     { label: 'Confidential',      bg: 'bg-neutral-900',    text: 'text-neutral-50',      border: 'border-neutral-900' },
   InternalTransfer: { label: 'Internal Transfer', bg: 'bg-blue-600',       text: 'text-neutral-50',      border: 'border-blue-600' },
+  PendingApproval:  { label: 'รออนุมัติ',          bg: 'bg-purple-50',      text: 'text-purple-900',      border: 'border-purple-100' },
+  RejectedByCEO:    { label: 'ไม่อนุมัติ',          bg: 'bg-red-50',         text: 'text-red-700',         border: 'border-red-100' },
 }
 
 // ─── Tab list และสถานะที่ TA สามารถเปลี่ยนได้ (ยกเว้น Open) ───
 const STATUS_TABS = ['ทั้งหมด', 'Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Rejected', 'NoShow', 'Closed', 'Cancelled', 'OnHold', 'Confidential', 'InternalTransfer']
+// PendingApproval/RejectedByCEO (CEO approval gate, beta): TA เปลี่ยนสถานะนี้เองไม่ได้ — โผล่แค่ฝั่ง admin
+// เพื่อ oversight (ต่อท้าย STATUS_TABS แบบมีเงื่อนไข role ตอน render — ดูจุดใช้งาน)
+const CEO_APPROVAL_STATUS_TABS = ['PendingApproval', 'RejectedByCEO']
 const TA_STATUSES = ['Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Closed', 'OnHold', 'Confidential', 'InternalTransfer']
-const ALL_STATUSES = ['Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Rejected', 'NoShow', 'Closed', 'Cancelled', 'OnHold', 'Confidential', 'InternalTransfer']
+const ALL_STATUSES = ['Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Rejected', 'NoShow', 'Closed', 'Cancelled', 'OnHold', 'Confidential', 'InternalTransfer', ...CEO_APPROVAL_STATUS_TABS]
 
 // สถานะที่ถือว่า "จบแล้ว" — รวมกันเป็น tab เดียวชื่อ "ประวัติ" เฉพาะตอน filterMine (หน้า "คำขอของฉัน")
 // pattern เดียวกับ ManagerRequestsView.jsx HISTORY_STATUSES
@@ -962,6 +967,8 @@ export default function RequestTable({
       // สำหรับ TA ถ้ามีการ override แผนก ให้กรองตามแผนก
       base = base.filter(r => r.department === department)
     }
+    // TA ไม่เห็นเคสที่ยังรอ/ถูก CEO ปฏิเสธ (beta) เลย — ไม่ actionable สำหรับ TA, admin เห็นได้เพื่อ oversight
+    if (role === 'ta') base = base.filter(r => !CEO_APPROVAL_STATUS_TABS.includes(r.status))
 
     // Sub-filters (Tabs / Toggle)
     if (filterMine) base = base.filter(r => r.requesterEmail === user.email)
@@ -988,6 +995,7 @@ export default function RequestTable({
     } else if (role === 'ta' && department) {
       list = list.filter(r => r.department === department)
     }
+    if (role === 'ta') list = list.filter(r => !CEO_APPROVAL_STATUS_TABS.includes(r.status))
 
     if (filterMine) list = list.filter((r) => r.requesterEmail === user.email)
     if (filterMyCases) {
@@ -1126,8 +1134,12 @@ export default function RequestTable({
 
       {/* Status Tabs */}
       <div className="flex flex-wrap items-center gap-1 border-b border-neutral-100 pb-0">
-        {/* "ประวัติ" — tab รวม Closed/Cancelled/Rejected ไว้ที่เดียว แสดงเฉพาะหน้า "คำขอของฉัน" (filterMine) */}
-        {(filterMine ? [STATUS_TABS[0], 'ประวัติ', ...STATUS_TABS.slice(1)] : STATUS_TABS).map((tab) => {
+        {/* "ประวัติ" — tab รวม Closed/Cancelled/Rejected ไว้ที่เดียว แสดงเฉพาะหน้า "คำขอของฉัน" (filterMine)
+            PendingApproval/RejectedByCEO — โผล่แค่ฝั่ง admin (oversight คำขอ CEO approval, beta) */}
+        {(() => {
+          const tabsForRole = role === 'admin' ? [...STATUS_TABS, ...CEO_APPROVAL_STATUS_TABS] : STATUS_TABS
+          return filterMine ? [tabsForRole[0], 'ประวัติ', ...tabsForRole.slice(1)] : tabsForRole
+        })().map((tab) => {
           const active = activeTab === tab
           const count = tabCounts[tab] ?? 0
           const tabLabel = STATUS_CONFIG[tab]?.label ?? tab

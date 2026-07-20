@@ -65,6 +65,8 @@ const STATUS = {
   Closed:       { bar: 'bg-neutral-300',    pill: 'bg-neutral-50 text-neutral-500 border-neutral-100',  ring: 'ring-neutral-300' },
   Rejected:     { bar: 'bg-red-600',        pill: 'bg-red-50 text-red-700 border-red-100',              ring: 'ring-red-600' },
   Cancelled:    { bar: 'bg-neutral-200',    pill: 'bg-neutral-50 text-neutral-400 border-neutral-100',  ring: 'ring-neutral-200' },
+  PendingApproval: { bar: 'bg-purple-600',  pill: 'bg-purple-50 text-purple-900 border-purple-100',     ring: 'ring-purple-600' },
+  RejectedByCEO:   { bar: 'bg-red-600',     pill: 'bg-red-50 text-red-700 border-red-100',              ring: 'ring-red-600' },
 }
 
 /**
@@ -153,17 +155,20 @@ function computeSLA(req) {
  * @param {{ status: string }} props
  */
 // ─── Pipeline Track ────────────────────────────────────────
+// label ที่อ่านง่ายกว่า raw status สำหรับ pill พิเศษ (CEO approval gate, beta)
+const PILL_LABEL = { PendingApproval: 'รอ CEO อนุมัติ', RejectedByCEO: 'CEO ไม่อนุมัติ' }
+
 function PipelineTrack({ status }) {
   const idx    = getPipelineIndex(status)
-  const isEnded = status === 'Rejected' || status === 'Cancelled'
+  const isEnded = status === 'Rejected' || status === 'Cancelled' || status === 'PendingApproval' || status === 'RejectedByCEO'
 
-  // Terminal states (Rejected / Cancelled) are not part of the linear
-  // progression — render a standalone pill badge instead of the dot row.
+  // Terminal states (Rejected / Cancelled / PendingApproval / RejectedByCEO) are not part of
+  // the linear progression — render a standalone pill badge instead of the dot row.
   if (isEnded) {
     return (
       <div className="flex items-center gap-1.5">
         <span className={`rounded border px-2 py-0.5 text-[11px] font-bold ${STATUS[status]?.pill ?? ''}`}>
-          {status}
+          {PILL_LABEL[status] ?? status}
         </span>
       </div>
     )
@@ -542,10 +547,15 @@ function Scorecard({ stats }) {
 }
 
 // สถานะที่ถือว่า "จบแล้ว" — ใช้ในแท็บประวัติ (ดูย้อนหลังของแผนก)
-const HISTORY_STATUSES = ['Closed', 'Cancelled', 'Rejected']
+const HISTORY_STATUSES = ['Closed', 'Cancelled', 'Rejected', 'RejectedByCEO']
 
-// สถานะที่ Manager ไม่ต้องเห็นในหน้า "คำขอของฉัน" เลย (ทุกแท็บ)
+// สถานะที่ Manager ไม่ต้องเห็นในหน้า "คำขอของฉัน" เลย (ทุกแท็บ) — ทั้งของตัวเองและแผนกอื่น
 const HIDDEN_STATUSES = new Set(['OnHold', 'Cancelled', 'Rejected', 'NoShow'])
+
+// PendingApproval/RejectedByCEO (CEO approval gate, beta) — ต่างจาก HIDDEN_STATUSES ตรงที่
+// ผู้ยื่นเองต้องเห็นสถานะคำขอตัวเอง (ไม่งั้นจะงงว่าทำไม TA ไม่ดำเนินการต่อ) แค่ "แผนกอื่น" ไม่ต้องเห็น
+// — ซ่อนเฉพาะจาก deptChunkDocs เท่านั้น ไม่ซ่อนจาก ownDocs
+const DEPT_ONLY_HIDDEN_STATUSES = new Set(['PendingApproval', 'RejectedByCEO'])
 
 // ─── Main ──────────────────────────────────────────────────
 export default function ManagerRequestsView({ user }) {
@@ -582,9 +592,14 @@ export default function ManagerRequestsView({ user }) {
     let handleVisibility = null
 
     // merge + dedup หลาย snapshot array โดยใช้ doc id เป็น key
-    function mergeRequests(...lists) {
+    // ownList: request ที่ตัวเองยื่น — เห็น PendingApproval/RejectedByCEO ของตัวเองด้วย
+    // deptLists: request ของแผนกที่ดูแล (ไม่ใช่ของตัวเอง) — ซ่อน PendingApproval/RejectedByCEO เพิ่ม
+    function mergeRequests(ownList, deptLists) {
       const map = new Map()
-      for (const r of lists.flat()) if (!HIDDEN_STATUSES.has(r.status)) map.set(r.id, r)
+      for (const r of ownList) if (!HIDDEN_STATUSES.has(r.status)) map.set(r.id, r)
+      for (const r of deptLists.flat()) {
+        if (!HIDDEN_STATUSES.has(r.status) && !DEPT_ONLY_HIDDEN_STATUSES.has(r.status)) map.set(r.id, r)
+      }
       return [...map.values()].sort((x, y) => {
         const tx = x.createdAt?.toMillis?.() ?? 0
         const ty = y.createdAt?.toMillis?.() ?? 0
@@ -641,7 +656,7 @@ export default function ManagerRequestsView({ user }) {
           qOwn,
           snap => {
             ownDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-            setRequests(mergeRequests(ownDocs, ...deptChunkDocs))
+            setRequests(mergeRequests(ownDocs, deptChunkDocs))
             setLoading(false)
           },
           err => {
@@ -666,7 +681,7 @@ export default function ManagerRequestsView({ user }) {
             qDept,
             snap => {
               deptChunkDocs[ci] = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-              setRequests(mergeRequests(ownDocs, ...deptChunkDocs))
+              setRequests(mergeRequests(ownDocs, deptChunkDocs))
               setLoading(false)
             },
             err => {
@@ -750,7 +765,7 @@ export default function ManagerRequestsView({ user }) {
 
   const displayed = useMemo(() => {
     let list
-    if (tab === 'active') list = requests.filter(r => !['Closed','Cancelled'].includes(r.status))
+    if (tab === 'active') list = requests.filter(r => !['Closed','Cancelled','RejectedByCEO'].includes(r.status))
     else if (tab === 'history') list = !historyYear ? historyAll : historyAll.filter(r => r.createdAt?.toDate?.()?.getFullYear() === historyYear)
     else list = requests
 

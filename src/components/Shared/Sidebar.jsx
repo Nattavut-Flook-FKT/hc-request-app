@@ -27,7 +27,7 @@ import { auth } from '../../services/firebase'
 import {
   LogOut, LayoutDashboard, FilePlus, List,
   Briefcase, FolderOpen, ClipboardList, ScrollText,
-  Users, Tag, DatabaseZap, Upload, Monitor,
+  Users, Tag, DatabaseZap, Upload, Monitor, CheckSquare,
   ChevronLeft, HelpCircle, PieChart,
 } from 'lucide-react'
 import UserGuide from './UserGuide'
@@ -39,6 +39,12 @@ const MANAGER_GROUPS = [
   { label: null, items: [
     { path: '/request',     label: 'ยื่นคำขอ',   icon: FilePlus },
     { path: '/my-requests', label: 'คำขอของฉัน', icon: ClipboardList },
+  ]},
+]
+
+const CEO_GROUPS = [
+  { label: null, items: [
+    { path: '/pending-approvals', label: 'Pending Approvals', icon: CheckSquare },
   ]},
 ]
 
@@ -82,6 +88,7 @@ const ROLE_LABEL = {
   admin:   'Administrator',
   ta:      'TA · People Exp.',
   manager: 'Manager',
+  ceo:     'CEO',
 }
 
 // ขนาด sidebar (px) — DS 18-navigation §13.1
@@ -116,6 +123,7 @@ export default function Sidebar({ user, role }) {
   const groups =
     role === 'admin' ? ADMIN_GROUPS :
     role === 'ta'    ? TA_GROUPS    :
+    role === 'ceo'   ? CEO_GROUPS   :
     MANAGER_GROUPS
 
   return (

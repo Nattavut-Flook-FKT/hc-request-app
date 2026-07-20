@@ -96,6 +96,35 @@ export async function sendPendingApprovalAlert(email, name) {
   }
 }
 
+/**
+ * sendCeoApprovalRequest — แจ้ง CEO ให้ approve/reject คำขอ New HC (beta) ผ่าน Slack
+ * ไม่แตะ Sheets เลย (คำขอยังไม่ sync จนกว่าจะ approve) — ส่งแค่ลิงก์ไปหน้า /approve/{id}/{token}
+ * @param {string} docId  Firestore doc id
+ * @param {string} token  approvalToken สุ่มที่สร้างไว้ตอน submit (one-time, ตรวจใน Firestore rule)
+ * @param {object} data   payload ของคำขอ (position/department/headcount/requesterName/reason)
+ */
+export async function sendCeoApprovalRequest(docId, token, data) {
+  if (!DATA_URL || !docId || !token) return { success: false, error: 'missing docId/token or GAS URL' }
+  try {
+    const params = new URLSearchParams({
+      action: 'ceoApprovalRequest',
+      id: docId,
+      token,
+      position: data.position || '',
+      department: data.department || '',
+      headcount: String(data.headcount ?? ''),
+      requesterName: data.requesterName || '',
+      reason: data.reason || '',
+    })
+    if (GAS_SECRET) params.set('secret', GAS_SECRET)
+    const res = await fetch(`${DATA_URL}?${params.toString()}`)
+    return await res.json()
+  } catch (err) {
+    console.error('[sendCeoApprovalRequest] error:', err)
+    return { success: false, error: err.message }
+  }
+}
+
 // แปลง internal app status → Sheets display status (ใช้ร่วมกันทั้ง sendStatusUpdate และ syncBatchToSheets)
 const STATUS_MAP = {
   Open: 'Open', Recruiting: 'Active Sourcing', Interviewing: 'Interviewing',
