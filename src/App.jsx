@@ -48,7 +48,7 @@
  */
 
 import { useEffect, useState, lazy, Suspense } from 'react'
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth, db } from './services/firebase'
 import { fetchSheetsData, getDepartmentByEmail } from './services/sheetsData'
@@ -79,8 +79,6 @@ const CustomPositionsPage = lazy(() => import('./pages/CustomPositionsPage'))
 const AdminToolsPage      = lazy(() => import('./pages/AdminToolsPage'))
 const ImportPage          = lazy(() => import('./components/Admin/ImportPage'))
 const ItOnboardingPage    = lazy(() => import('./pages/ItOnboardingPage'))
-const ApproveNewHcPage    = lazy(() => import('./pages/ApproveNewHcPage'))
-const PendingApprovalsPage = lazy(() => import('./pages/PendingApprovalsPage'))
 
 // DEV_EMAIL — email ที่กำหนดใน .env (VITE_DEV_EMAIL)
 // ใช้เพื่อตรวจสอบว่าควรแสดง RoleSwitcher (dev tool) หรือไม่
@@ -91,9 +89,6 @@ const DEV_EMAIL = import.meta.env.VITE_DEV_EMAIL
 // Dark mode: เก็บใน localStorage → ใส่ class 'dark' ที่ <html> element
 // ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
-  // location — ใช้เช็ค public route (/approve/:id/:token) ก่อน auth gate ด้านล่าง
-  const location = useLocation()
-
   // user — Firebase user object หลังจาก login สำเร็จ, null = ยังไม่ได้ login
   const [user, setUser] = useState(null)
 
@@ -268,25 +263,6 @@ export default function App() {
     return () => unsubscribe()
   }, [])
 
-  // ─── Public route carve-out: /approve/:id/:token ────────────────────────────
-  // CEO approve/reject คำขอ New HC ผ่านลิงก์ Slack โดยไม่ต้อง login — ต้องอยู่ก่อน
-  // auth gate ทุกจุดด้านล่าง (authLoading/!user/pending/maintenance) ไม่งั้นจะโดนเด้งไป Login
-  if (location.pathname.startsWith('/approve/')) {
-    return (
-      <Suspense fallback={
-        <div className="min-h-screen flex items-center justify-center bg-neutral-50">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-dark-green-600" />
-        </div>
-      }>
-        {/* ต้องผ่าน <Routes>/<Route> จริงๆ ให้ ApproveNewHcPage เรียก useParams() ได้ค่า id/token
-            (render component ตรงๆ โดยไม่มี Route ครอบ จะได้ params ว่างเปล่า) */}
-        <Routes>
-          <Route path="/approve/:id/:token" element={<ApproveNewHcPage />} />
-        </Routes>
-      </Suspense>
-    )
-  }
-
   // ─── Loading State ──────────────────────────────────────────────────────────
   // แสดง spinner ระหว่างรอ Firebase restore session ครั้งแรก
   // ป้องกัน flash ของ Login page ก่อนที่ auth state จะพร้อม
@@ -318,9 +294,8 @@ export default function App() {
 
   // defaultRoute — route เริ่มต้นตาม role
   // manager ไม่มี /dashboard → redirect ไป /my-requests
-  // ceo ไม่มี /dashboard → redirect ไป /pending-approvals
   // ta/admin มี /dashboard → ไปที่นั่น
-  const defaultRoute = role === 'manager' ? '/my-requests' : role === 'ceo' ? '/pending-approvals' : '/dashboard'
+  const defaultRoute = role === 'manager' ? '/my-requests' : '/dashboard'
 
   // pageProps — props ชุดที่ส่งต่อให้ทุก page component
   // รวม user info, role, dark mode state/toggle ไว้ด้วยกันเพื่อความสะดวก
@@ -487,18 +462,6 @@ export default function App() {
           element={
             <RoleGuard role={role} allowed={['admin']} redirectTo="/dashboard">
               <ItOnboardingPage {...pageProps} />
-            </RoleGuard>
-          }
-        />
-
-        {/* /pending-approvals — fallback ในแอพสำหรับอนุมัติคำขอ New HC (เผื่อลิงก์ Slack หาย/หมดอายุ)
-            อนุญาต: ceo, admin
-            redirect: role อื่น → /dashboard */}
-        <Route
-          path="/pending-approvals"
-          element={
-            <RoleGuard role={role} allowed={['ceo', 'admin']} redirectTo="/dashboard">
-              <PendingApprovalsPage {...pageProps} />
             </RoleGuard>
           }
         />

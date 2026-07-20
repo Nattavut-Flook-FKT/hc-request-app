@@ -35,22 +35,12 @@ service cloud.firestore {
 
     // ── HC Requests collection ─────────────────────────────────────────────────
     // create: freshket user ทุกคน (Manager ยื่น request)
-    // update: freshket user ทุกคน (TA/Manager แก้ status) หรือ unauthenticated ที่มี
-    //   approvalToken ตรง (CEO approve/reject ผ่านลิงก์ Slack — beta, ดู PendingApproval)
-    // read: freshket user ทุกคน หรือ unauthenticated อ่านได้เฉพาะ doc ที่ PendingApproval
-    //   (ให้หน้า /approve/:id/:token โชว์สรุปคำขอได้โดยไม่ต้อง login)
+    // update: freshket user ทุกคน (TA/Manager แก้ status)
     // delete: admin เท่านั้น (ป้องกันการลบ record โดยไม่ได้รับอนุญาต)
     match /hc_requests/{docId} {
-      allow read: if isFreshket() || resource.data.status == 'PendingApproval';
+      allow read:   if isFreshket();
       allow create: if isFreshket();
-      allow update: if isFreshket() || (
-        resource.data.status == 'PendingApproval'
-        && 'approvalToken' in resource.data
-        && request.resource.data.approvalToken == resource.data.approvalToken
-        && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['status', 'approvalToken', 'approvedAt', 'rejectReason', 'rejectedAt'])
-        && request.resource.data.status in ['Open', 'RejectedByCEO']
-      );
+      allow update: if isFreshket();
       allow delete: if isAdmin();
     }
 

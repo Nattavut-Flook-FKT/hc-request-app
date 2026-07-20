@@ -31,7 +31,7 @@ import { DIVISIONS } from '../data/orgStructure'
 import { grantEmails, grantedKeys } from '../utils/grants'
 
 // roles ที่อนุญาตให้กำหนดได้ในระบบ — ใช้ validate ทั้งตอน add และ update
-const VALID_ROLES = ['manager', 'ta', 'admin', 'ceo']
+const VALID_ROLES = ['manager', 'ta', 'admin']
 
 export default function UserManagementPage({ user, role, isDarkMode, toggleDarkMode }) {
   // รายการ users ทั้งหมดที่มี role ในระบบ (อัพเดต realtime จาก Firestore)
@@ -296,7 +296,6 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
                     <option value="manager">Manager</option>
                     <option value="ta">TA</option>
                     <option value="admin">Admin</option>
-                    <option value="ceo">CEO</option>
                   </select>
                 </div>
               ))}
@@ -330,7 +329,6 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
                 <option value="manager">Manager</option>
                 <option value="ta">TA / People Experience</option>
                 <option value="admin">Admin</option>
-                <option value="ceo">CEO</option>
               </select>
               <button
                 type="submit" disabled={isBusy}
@@ -472,7 +470,6 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
                         className={`rounded-full border border-neutral-100 px-3 py-1.5 text-xs font-bold transition-colors focus:outline-none ${
                           u.role === 'admin' ? 'bg-purple-50 text-purple-900' :
                           u.role === 'ta' ? 'bg-dark-green-50 text-dark-green-900' :
-                          u.role === 'ceo' ? 'bg-blue-50 text-blue-900' :
                           u.role === 'pending' ? 'bg-yellow-50 text-yellow-900' :
                           'bg-orange-50 text-orange-900'
                         }`}
@@ -482,7 +479,6 @@ export default function UserManagementPage({ user, role, isDarkMode, toggleDarkM
                         <option value="manager">Manager</option>
                         <option value="ta">TA</option>
                         <option value="admin">Admin</option>
-                        <option value="ceo">CEO</option>
                       </select>
                     </td>
                     <td className="px-6 py-4">

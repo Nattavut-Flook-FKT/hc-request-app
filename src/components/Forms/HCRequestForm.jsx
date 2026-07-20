@@ -29,7 +29,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { collection, addDoc, updateDoc, doc, serverTimestamp, getDocs, query, where, limit, getDoc } from 'firebase/firestore'
 import { db } from '../../services/firebase'
 import { generateHCID } from '../../utils/hcId'
-import { sendToWebhook, sendCeoApprovalRequest, reportClientError } from '../../services/webhook'
+import { sendToWebhook, reportClientError } from '../../services/webhook'
 import { logAudit } from '../../services/auditLog'
 import { uploadJDFile, getJDSignedUrl } from '../../services/supabase'
 import { Loader2, CheckCircle, ChevronDown, X, Paperclip, FileText, ExternalLink } from 'lucide-react'
@@ -283,9 +283,6 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   const [deptAutoFilled, setDeptAutoFilled] = useState(false) // true ถ้า department ถูก auto-fill จาก email ของ user
   const [grantedDepts, setGrantedDepts] = useState([])         // แผนกที่ Admin grant ให้ manager คนนี้ (settings/deptManagers) — ถ้ามี จะจำกัด Division/แผนกที่เลือกได้
   const [grantedDivisions, setGrantedDivisions] = useState([]) // division ที่ Admin grant ทั้งสาย (settings/divisionManagers) — Head of Division เห็นทุกแผนกในนั้น
-  // Beta: รายชื่อ email ที่ต้องผ่าน CEO approve ก่อน (settings/ceoApprovalBeta) — จำกัดเฉพาะกลุ่มทดสอบ
-  // ไม่กระทบ Manager คนอื่น ที่ยังได้ status 'Open' ทันทีเหมือนเดิม
-  const [ceoApprovalBetaEmails, setCeoApprovalBetaEmails] = useState([])
   const [allDepts, setAllDepts] = useState(DEPARTMENTS)       // รายชื่อแผนกทั้งหมด (อัพเดตจาก Sheets)
   const [customPositions, setCustomPositions] = useState([])  // ตำแหน่งที่เพิ่มเองจาก Firestore 'custom_positions'
   const [customDepts, setCustomDepts] = useState([])          // แผนกที่เพิ่มเองผ่านหน้า Custom Positions (ไม่อยู่ใน orgStructure.js)
@@ -342,13 +339,8 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       fetchSheetsData(),
       getDoc(doc(db, 'settings', 'deptManagers')),
       getDoc(doc(db, 'settings', 'divisionManagers')),
-      getDoc(doc(db, 'settings', 'ceoApprovalBeta')),
     ])
-      .then(([{ managers, positions: pos, employees: emp }, deptManagersSnap, divisionManagersSnap, ceoApprovalBetaSnap]) => {
-        // Beta group สำหรับ CEO approval gate — allow-list เดียว จัดการผ่าน Admin Tools
-        setCeoApprovalBetaEmails(
-          ceoApprovalBetaSnap.exists() ? (ceoApprovalBetaSnap.data().testEmails || []).map(e => e.toLowerCase().trim()) : []
-        )
+      .then(([{ managers, positions: pos, employees: emp }, deptManagersSnap, divisionManagersSnap]) => {
         // อัพเดต positions map (department → string[]) จาก Sheets
         if (pos && typeof pos === 'object') {
           setPositionsByDept(pos)
@@ -591,24 +583,15 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       // ต้องทำก่อน addDoc เพื่อให้ hcId พร้อมอยู่ใน payload ตั้งแต่ต้น
       const hcId = await generateHCID()
 
-      // Beta: New HC ที่ยื่นโดยใครก็ตามในกลุ่มทดสอบ ต้องรอ CEO approve ก่อน — ไม่ยกเว้น role
-      // (แม้ admin ยื่นเอง ถ้า email อยู่ใน allow-list ก็ต้องผ่านการอนุมัติเหมือนกัน)
-      // Replacement ไม่เข้าเงื่อนไขนี้เลย ไม่ว่าใครยื่น
-      // คนอื่นที่ไม่อยู่ใน allow-list ได้ status 'Open' ทันทีเหมือนเดิมทุกอย่าง
-      const needsCeoApproval = form.requestType === 'New HC'
-        && ceoApprovalBetaEmails.includes(user.email.toLowerCase())
-      const approvalToken = needsCeoApproval ? crypto.randomUUID() : null
-
       // สร้าง payload จาก form state + metadata ของ user
       const payload = {
         ...form,
         headcount: Number(form.headcount),   // แปลงเป็น number (input คืน string)
         requesterName: user.displayName,
         requesterEmail: user.email.toLowerCase(),  // lowercase เพื่อ Firestore query ตรงกันเสมอ
-        status: needsCeoApproval ? 'PendingApproval' : 'Open',
+        status: 'Open',                       // สถานะเริ่มต้นเสมอ
         hcId,                                 // HCID ที่ generate: REQ-YYYY-NNN
         createdAt: serverTimestamp(),          // ให้ Firestore ใส่ timestamp server
-        ...(approvalToken ? { approvalToken } : {}),
       }
 
       // ── Step 2: สร้าง Firestore document ──────────────────────────────────
@@ -654,26 +637,22 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       }
 
       // ── Step 5: ส่ง Webhook notification ─────────────────────────────────
-      // needsCeoApproval = true → ยังไม่แจ้ง TA/Sheets เลย รอ CEO approve ก่อน
-      // (sendToWebhook จะถูกเรียกตอน approve สำเร็จแทน จากหน้า ApproveNewHcPage/PendingApprovalsPage)
-      // ปกติ → sendToWebhook ไปยัง Google Apps Script ซึ่งจะบันทึกลง Sheets + แจ้ง Slack ทีม TA
+      // sendToWebhook ส่งไปยัง Google Apps Script ซึ่งจะ:
+      //   - บันทึกลง Google Sheets
+      //   - ส่ง LINE Notify / Slack notification ไปยัง TA team
       // maintenance: true → GAS จะ skip การส่งแจ้งเตือน
       // workDaysPerWeek และ shift ไม่ส่งไป Sheets — เก็บใน Firestore อย่างเดียว
-      if (needsCeoApproval) {
-        sendCeoApprovalRequest(docRef.id, approvalToken, payload)
-      } else {
-        const { workDaysPerWeek: _w, shift: _s, ...webhookPayload } = payload
-        await sendToWebhook({ ...webhookPayload, id: docRef.id, createdAt: new Date().toISOString(), maintenance: maintenanceMode })
-      }
+      const { workDaysPerWeek: _w, shift: _s, ...webhookPayload } = payload
+      await sendToWebhook({ ...webhookPayload, id: docRef.id, createdAt: new Date().toISOString(), maintenance: maintenanceMode })
 
       // ── Step 6: บันทึก Audit Log ──────────────────────────────────────────
       // logAudit บันทึกลง Firestore collection 'audit_logs' สำหรับ activity tracking
       logAudit({
         requestId:  docRef.id,
-        action:     needsCeoApproval ? 'SubmitPendingApproval' : 'Submit',
+        action:     'Submit',
         by:         user.email,
         byName:     user.displayName,
-        toStatus:   payload.status,
+        toStatus:   'Open',
         position:   payload.position,
         department: payload.department,
       })

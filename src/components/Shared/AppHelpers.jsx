@@ -125,7 +125,7 @@ export function RoleSwitcher({ currentRole, onSwitch, currentDept, onDeptSwitch 
         <div className="flex flex-col gap-1 mb-2 px-1">
           <span className="text-[9px] font-bold text-neutral-400 ml-1 mb-0.5">Roles</span>
           <div className="flex gap-1">
-            {['manager', 'ta', 'admin', 'ceo'].map((r) => (
+            {['manager', 'ta', 'admin'].map((r) => (
               <button
                 key={r}
                 onClick={() => onSwitch(r)}
