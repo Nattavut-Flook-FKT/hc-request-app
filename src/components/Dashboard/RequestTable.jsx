@@ -85,6 +85,7 @@ import { generateHCID } from '../../utils/hcId'
 import { sendStatusUpdate, sendToWebhook, sendDeleteToSheets, updateOpenDateInSheets, updateStartDateInSheets, reportClientError } from '../../services/webhook'
 import { getJGLabel } from '../../data/jobGrades'
 import { slaLimit } from '../../utils/sla'
+import { isEnglishName, generateFreshketEmail } from '../../utils/email'
 import { logAudit } from '../../services/auditLog'
 import { Loader2, UserCheck, XCircle, ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, X, FileText, Search, ChevronRight, Users, Calendar, AlignLeft, ClipboardList, Pencil, Trash2, Upload, File } from 'lucide-react'
 import { getJDSignedUrl, deleteJDFile, uploadCVFile, getCVSignedUrl, deleteCVFile } from '../../services/supabase'
@@ -257,20 +258,6 @@ function shortName(fullName) {
   if (!fullName) return fullName
   const match = fullName.match(/^.+?\)/)
   return match ? match[0].trim() : fullName
-}
-
-// ─── แจ้ง IT: generate อีเมลบริษัทจากชื่อ candidate (ภาษาอังกฤษเท่านั้น) ───
-const ENGLISH_NAME_RE = /^[A-Za-z\s.'-]+$/
-function isEnglishName(s) { return !!s && ENGLISH_NAME_RE.test(s.trim()) }
-
-// "Somchai Jaidee" → "somchai.j@freshket.co" — ต้องมีอย่างน้อย 2 คำ (first + last)
-// ชื่อกลาง (ถ้ามี) ไม่มีผล ใช้แค่คำแรกกับคำสุดท้าย
-function generateFreshketEmail(fullName) {
-  const parts = (fullName || '').trim().split(/\s+/).filter(Boolean)
-  if (parts.length < 2) return ''
-  const first = parts[0].toLowerCase().replace(/[^a-z]/g, '')
-  const lastInitial = (parts[parts.length - 1][0] || '').toLowerCase().replace(/[^a-z]/g, '')
-  return first && lastInitial ? `${first}.${lastInitial}@freshket.co` : ''
 }
 
 function buildHistoryEntry(status, user) {
