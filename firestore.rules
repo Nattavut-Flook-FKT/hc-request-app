@@ -37,11 +37,14 @@ service cloud.firestore {
     // create: freshket user ทุกคน (Manager ยื่น request)
     // update: freshket user ทุกคน (TA/Manager แก้ status) หรือ unauthenticated ที่มี
     //   approvalToken ตรง (CEO approve/reject ผ่านลิงก์ Slack — beta, ดู PendingApproval)
-    // read: freshket user ทุกคน หรือ unauthenticated อ่านได้เฉพาะ doc ที่ PendingApproval
-    //   (ให้หน้า /approve/:id/:token โชว์สรุปคำขอได้โดยไม่ต้อง login)
+    // get (doc เดียว): freshket user ทุกคน หรือ unauthenticated เฉพาะ doc ที่ PendingApproval
+    //   → หน้า /approve/:id/:token โชว์สรุปคำขอได้โดยไม่ต้อง login (ต้องรู้ doc id 20-char random)
+    // list (query): freshket เท่านั้น — สำคัญ: กันคนนอกรัน query where status==PendingApproval
+    //   แล้ว enumerate คำขอ pending ทั้งหมด (ถ้าใช้ allow read รวมกันจะรั่วออกอินเทอร์เน็ต)
     // delete: admin เท่านั้น (ป้องกันการลบ record โดยไม่ได้รับอนุญาต)
     match /hc_requests/{docId} {
-      allow read: if isFreshket() || resource.data.status == 'PendingApproval';
+      allow get:  if isFreshket() || resource.data.status == 'PendingApproval';
+      allow list: if isFreshket();
       allow create: if isFreshket();
       allow update: if isFreshket() || (
         resource.data.status == 'PendingApproval'
