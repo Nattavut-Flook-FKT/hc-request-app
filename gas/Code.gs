@@ -398,6 +398,9 @@ var SLACK_IT            = _props.getProperty('SLACK_IT')            || SLACK_UPD
 // SLACK_CEO_APPROVAL — webhook ของห้อง/DM ที่ CEO เห็น สำหรับแจ้งคำขอ New HC รออนุมัติ (beta)
 // ถ้ายังไม่ตั้งค่า property จะ fallback ไปห้อง SLACK_UPDATES (ไม่หายเงียบ แต่ไปผิดห้อง — ต้องตั้งค่าเอง)
 var SLACK_CEO_APPROVAL  = _props.getProperty('SLACK_CEO_APPROVAL')  || SLACK_UPDATES
+// CEO_EMAIL — อีเมลแจ้งเตือน CEO Approval คู่กับ Slack (comma-separated ได้ถ้าหลายคน)
+// ว่างเปล่า = ไม่ส่งอีเมล (fallback ปลอดภัย ไม่ error)
+var CEO_EMAIL           = _props.getProperty('CEO_EMAIL')           || ''
 var APP_URL             = _props.getProperty('APP_URL')             || 'https://hcrequest.web.app'
 // HR Spreadsheet (MainData + Manager_Access) — ต้องตั้งค่าใน Script Properties
 // key: HR_SPREADSHEET_ID  (ไม่มี fallback เพื่อป้องกัน spreadsheet ID หลุดในโค้ด)
@@ -438,6 +441,20 @@ function slackCeoApprovalRequest(id, token, data) {
     (data.reason ? '*เหตุผล:* ' + String(data.reason).substring(0, 200) + '\n' : '') +
     '🔗 ' + link
   sendSlack_(SLACK_CEO_APPROVAL, text)
+
+  if (CEO_EMAIL) {
+    var subject = 'New HC รออนุมัติ: ' + data.position + ' (' + data.department + ')'
+    var body = 'มีคำขอ New HC รออนุมัติ\n\n' +
+      'ตำแหน่ง: ' + data.position + '\n' +
+      'จำนวน: ' + data.headcount + '\n' +
+      'แผนก: ' + data.department + '\n' +
+      'ผู้ยื่น: ' + data.requesterName + '\n' +
+      (data.reason ? 'เหตุผล: ' + data.reason + '\n' : '') +
+      '\nกดลิงก์เพื่ออนุมัติ/ไม่อนุมัติ:\n' + link
+    CEO_EMAIL.split(',').forEach(function (addr) {
+      MailApp.sendEmail(addr.trim(), subject, body)
+    })
+  }
 }
 
 function slackNewRequest(data) {
