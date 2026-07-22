@@ -595,8 +595,17 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       // (แม้ admin ยื่นเอง ถ้า email อยู่ใน allow-list ก็ต้องผ่านการอนุมัติเหมือนกัน)
       // Replacement ไม่เข้าเงื่อนไขนี้เลย ไม่ว่าใครยื่น
       // คนอื่นที่ไม่อยู่ใน allow-list ได้ status 'Open' ทันทีเหมือนเดิมทุกอย่าง
+      //
+      // อ่าน allow-list สดตรงนี้ (ไม่ใช้ ceoApprovalBetaEmails state ที่ fetch ไว้ตอน mount) —
+      // state นั้น bundle รวมกับ fetchSheetsData() ใน Promise.all เดียวกัน ถ้า GAS ตอบช้า
+      // (cold start) แล้วกด submit ก่อนโหลดเสร็จ state จะยังว่างอยู่ → ข้าม approval แบบเงียบๆ
+      let currentBetaEmails = ceoApprovalBetaEmails
+      if (form.requestType === 'New HC') {
+        const freshSnap = await getDoc(doc(db, 'settings', 'ceoApprovalBeta'))
+        currentBetaEmails = freshSnap.exists() ? (freshSnap.data().testEmails || []).map(e => e.toLowerCase().trim()) : []
+      }
       const needsCeoApproval = form.requestType === 'New HC'
-        && ceoApprovalBetaEmails.includes(user.email.toLowerCase())
+        && currentBetaEmails.includes(user.email.toLowerCase())
       const approvalToken = needsCeoApproval ? crypto.randomUUID() : null
 
       // สร้าง payload จาก form state + metadata ของ user
