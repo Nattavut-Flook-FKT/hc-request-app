@@ -40,7 +40,7 @@ import { BarChart2, List, ChevronDown, ChevronUp } from 'lucide-react'
  * หมายเหตุ: ไม่นับ Cancelled เข้า total
  */
 /** statuses ที่ไม่นับเข้า Total (ยกเลิก / ปฏิเสธ / พักไว้ / โอนภายใน / ลับ) */
-const EXCLUDED_STATUSES = new Set(['Cancelled', 'Rejected', 'NoShow', 'OnHold', 'Confidential', 'InternalTransfer'])
+const EXCLUDED_STATUSES = new Set(['Cancelled', 'Rejected', 'NoShow', 'OnHold', 'Confidential', 'InternalTransfer', 'PendingApproval', 'RejectedByCEO'])
 
 /** statuses ที่ถือว่า "ยังดำเนินการอยู่" — ใช้ตรวจ crossover ปี */
 const ACTIVE_STATUSES = new Set(['Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding'])

@@ -395,6 +395,9 @@ var SLACK_ALERT         = _props.getProperty('SLACK_ALERT')         || SLACK_UPD
 // SLACK_IT — webhook ของห้อง IT สำหรับแจ้งเตรียมบัญชี/อุปกรณ์พนักงานใหม่ตอนเข้า Onboarding
 // ถ้ายังไม่ตั้งค่า property จะ fallback ไปห้อง SLACK_UPDATES (ไม่หายเงียบ แต่ไปผิดห้อง — ต้องตั้งค่าเอง)
 var SLACK_IT            = _props.getProperty('SLACK_IT')            || SLACK_UPDATES
+// SLACK_CEO_APPROVAL — webhook ของห้อง/DM ที่ CEO เห็น สำหรับแจ้งคำขอ New HC รออนุมัติ (beta)
+// ถ้ายังไม่ตั้งค่า property จะ fallback ไปห้อง SLACK_UPDATES (ไม่หายเงียบ แต่ไปผิดห้อง — ต้องตั้งค่าเอง)
+var SLACK_CEO_APPROVAL  = _props.getProperty('SLACK_CEO_APPROVAL')  || SLACK_UPDATES
 var APP_URL             = _props.getProperty('APP_URL')             || 'https://hcrequest.web.app'
 // HR Spreadsheet (MainData + Manager_Access) — ต้องตั้งค่าใน Script Properties
 // key: HR_SPREADSHEET_ID  (ไม่มี fallback เพื่อป้องกัน spreadsheet ID หลุดในโค้ด)
@@ -422,6 +425,19 @@ function isValidSecret_(e) {
 function getHrSpreadsheet_() {
   if (!HR_SPREADSHEET_ID) throw new Error('HR_SPREADSHEET_ID not set in Script Properties')
   return SpreadsheetApp.openById(HR_SPREADSHEET_ID)
+}
+
+// slackCeoApprovalRequest — แจ้ง CEO ให้ approve/reject คำขอ New HC (beta) พร้อมลิงก์เดียว
+// (ไม่แยกลิงก์ approve/reject กันเผลอกดผิดจากอีเมล — เปิดหน้าเดียวแล้วเลือกปุ่มเอง)
+function slackCeoApprovalRequest(id, token, data) {
+  var link = APP_URL + '/approve/' + id + '/' + token
+  var text = '📝 *มีคำขอ New HC รออนุมัติ*\n' +
+    '*ตำแหน่ง:* ' + data.position + '  |  *จำนวน:* ' + data.headcount + '\n' +
+    '*แผนก:* ' + data.department + '\n' +
+    '*ผู้ยื่น:* ' + data.requesterName + '\n' +
+    (data.reason ? '*เหตุผล:* ' + String(data.reason).substring(0, 200) + '\n' : '') +
+    '🔗 ' + link
+  sendSlack_(SLACK_CEO_APPROVAL, text)
 }
 
 function slackNewRequest(data) {
@@ -718,6 +734,25 @@ function doGet_(e) {
       : '🟢 *ระบบ HC Request เปิดใช้งานแล้ว*' + (SLACK_SUBTEAM ? ' ' + SLACK_SUBTEAM : '') + '\nสามารถเข้าใช้งานได้ที่ ' + APP_URL
     sendSlack_(SLACK_NEW_REQUEST, msg)
     sendSlack_(SLACK_UPDATES, msg)
+    return responseJson_({ success: true })
+  }
+
+  // ── CEO APPROVAL REQUEST: แจ้ง CEO ให้ approve/reject คำขอ New HC (beta) ─────
+  // เรียกด้วย ?action=ceoApprovalRequest&id=...&token=...&position=...&department=...
+  //   &headcount=...&requesterName=...&reason=...&secret=XXX
+  // ไม่แตะ Firestore/Sheets เลย — แค่ส่ง Slack พร้อมลิงก์ /approve/{id}/{token}
+  if (e.parameter.action === 'ceoApprovalRequest') {
+    if (!isValidSecret_(e)) return responseJson_({ error: 'Unauthorized' })
+    var caId = e.parameter.id || ''
+    var caToken = e.parameter.token || ''
+    if (!caId || !caToken) return responseJson_({ success: false, error: 'missing id or token' })
+    slackCeoApprovalRequest(caId, caToken, {
+      position: e.parameter.position || '',
+      department: e.parameter.department || '',
+      headcount: e.parameter.headcount || '',
+      requesterName: e.parameter.requesterName || '',
+      reason: e.parameter.reason || '',
+    })
     return responseJson_({ success: true })
   }
 
