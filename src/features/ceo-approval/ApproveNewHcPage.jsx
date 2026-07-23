@@ -14,8 +14,8 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
-import { db } from '../services/firebase'
-import { sendToWebhook } from '../services/webhook'
+import { db } from '@/libs/firebase'
+import { sendToWebhook } from '@/libs/webhook'
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
 
 export default function ApproveNewHcPage() {

@@ -6,10 +6,10 @@
  */
 import { useEffect, useState } from 'react'
 import { collection, doc, onSnapshot, query, updateDoc, where, serverTimestamp } from 'firebase/firestore'
-import { db } from '../services/firebase'
-import { sendToWebhook } from '../services/webhook'
-import { logAudit } from '../services/auditLog'
-import Layout from '../components/Shared/Layout'
+import { db } from '@/libs/firebase'
+import { sendToWebhook } from '@/libs/webhook'
+import { logAudit } from '@/features/audit-log/auditLog'
+import Layout from '@/components/app-shell/Layout'
 import { CheckCircle, XCircle } from 'lucide-react'
 
 export default function PendingApprovalsPage({ user, role, isDarkMode, toggleDarkMode }) {
