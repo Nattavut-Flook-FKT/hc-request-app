@@ -1,9 +1,13 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { fileURLToPath, URL } from 'node:url'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
   server: {
     // อนุญาต ngrok tunnel (subdomain สุ่มทุกครั้งที่รันใหม่) สำหรับเปิดให้คนนอกวงดูชั่วคราว
     allowedHosts: ['.ngrok-free.dev', '.ngrok-free.app', '.ngrok.io'],
