@@ -7,9 +7,9 @@
  * Props: requests {Array} (ผ่าน global filter จาก ReportsPage แล้ว)
  */
 import { useMemo } from 'react'
-import { toDate, getOfferingDate } from '../../utils/reportUtils'
-import { exportWorkbook, exportCSV, dateStamp } from '../../utils/exportExcel'
-import { SectionCard, ExportButtons, DataTable, Bar } from './ReportUI'
+import { toDate, getOfferingDate } from '@/features/reports/reportUtils'
+import { exportWorkbook, exportCSV, dateStamp } from '@/features/reports/exportExcel'
+import { SectionCard, ExportButtons, DataTable, Bar } from '@/components/ui/ReportUI'
 
 const ACTIVE = new Set(['Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding'])
 

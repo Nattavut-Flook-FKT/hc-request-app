@@ -9,9 +9,9 @@
  * Props: requests {Array} (ผ่าน global filter จาก ReportsPage แล้ว)
  */
 import { useMemo } from 'react'
-import { toDate, getOfferingDate, fmtDate, MONTH_TH } from '../../utils/reportUtils'
-import { exportWorkbook, exportCSV, dateStamp } from '../../utils/exportExcel'
-import { KpiCard, SectionCard, ExportButtons, DataTable, Bar } from './ReportUI'
+import { toDate, getOfferingDate, fmtDate, MONTH_TH } from '@/features/reports/reportUtils'
+import { exportWorkbook, exportCSV, dateStamp } from '@/features/reports/exportExcel'
+import { KpiCard, SectionCard, ExportButtons, DataTable, Bar } from '@/components/ui/ReportUI'
 
 /** SLA วัน จาก createdAt → offering (null ถ้ายังไม่ถึง Offering) */
 function slaToOffer(r) {

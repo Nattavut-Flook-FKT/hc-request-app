@@ -11,14 +11,14 @@
  */
 import { useState, useMemo } from 'react'
 import { CalendarRange, Timer, Users, UserCheck, Table2 } from 'lucide-react'
-import Layout from '../components/Shared/Layout'
-import StatsListener from '../components/Shared/StatsListener'
-import { toDate } from '../utils/reportUtils'
-import PeriodSummary from '../components/Reports/PeriodSummary'
-import SLAReport from '../components/Reports/SLAReport'
-import TAPerformanceReport from '../components/Reports/TAPerformanceReport'
-import OnboardingReport from '../components/Reports/OnboardingReport'
-import PivotBuilder from '../components/Reports/PivotBuilder'
+import Layout from '@/components/app-shell/Layout'
+import StatsListener from '@/features/dashboard/StatsListener'
+import { toDate } from '@/features/reports/reportUtils'
+import PeriodSummary from '@/features/reports/PeriodSummary'
+import SLAReport from '@/features/reports/SLAReport'
+import TAPerformanceReport from '@/features/reports/TAPerformanceReport'
+import OnboardingReport from '@/features/reports/OnboardingReport'
+import PivotBuilder from '@/features/reports/PivotBuilder'
 
 const TABS = [
   { v: 'summary',    label: 'สรุปรายเดือน',           icon: CalendarRange },

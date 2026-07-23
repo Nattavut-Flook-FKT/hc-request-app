@@ -9,9 +9,9 @@
  * Props: requests {Array} (ผ่าน global filter จาก ReportsPage แล้ว)
  */
 import { useMemo, useState } from 'react'
-import { toDate, getOfferingDate, fmtDate, MONTH_TH, statusTH } from '../../utils/reportUtils'
-import { exportWorkbook, exportCSV, dateStamp } from '../../utils/exportExcel'
-import { SectionCard, ExportButtons, DataTable } from './ReportUI'
+import { toDate, getOfferingDate, fmtDate, MONTH_TH, statusTH } from '@/features/reports/reportUtils'
+import { exportWorkbook, exportCSV, dateStamp } from '@/features/reports/exportExcel'
+import { SectionCard, ExportButtons, DataTable } from '@/components/ui/ReportUI'
 
 const ONBOARD_STATUS = new Set(['Offering', 'Onboarding', 'Closed'])
 

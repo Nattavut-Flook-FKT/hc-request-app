@@ -16,8 +16,8 @@ import { Download, FileSpreadsheet } from 'lucide-react'
 import {
   ROW_DIMENSIONS, COLUMN_DIMENSIONS, getDimensionValue, dimensionOrder,
   computeSLADays, isReplacement, statusTH,
-} from '../../utils/reportUtils'
-import { exportWorkbook, exportCSV, dateStamp } from '../../utils/exportExcel'
+} from '@/features/reports/reportUtils'
+import { exportWorkbook, exportCSV, dateStamp } from '@/features/reports/exportExcel'
 
 const MEASURES = [
   { value: 'count',  label: 'จำนวนคำขอ' },
