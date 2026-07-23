@@ -10,13 +10,13 @@ import {
   collection, getDocs, query, where, limit, doc, updateDoc, deleteDoc,
   addDoc, deleteField, serverTimestamp,
 } from 'firebase/firestore'
-import { db } from '../services/firebase'
+import { db } from '@/libs/firebase'
 import { FolderOpen, FileText, ExternalLink, Clock, Trash2, Pencil, Plus, X, ChevronDown } from 'lucide-react'
-import { listJDFiles, getJDSignedUrl, deleteJDFile, uploadJDLibraryFile } from '../services/supabase'
-import { fetchSheetsData, getPositionsByDepartment } from '../services/sheetsData'
-import { DIVISIONS, getDepartments, getDivisionByDepartment } from '../data/orgStructure'
-import Layout from '../components/Shared/Layout'
-import ConfirmModal from '../components/Shared/ConfirmModal'
+import { listJDFiles, getJDSignedUrl, deleteJDFile, uploadJDLibraryFile } from '@/libs/supabase'
+import { fetchSheetsData, getPositionsByDepartment } from '@/libs/sheetsData'
+import { DIVISIONS, getDepartments, getDivisionByDepartment } from '@/config/orgStructure'
+import Layout from '@/components/app-shell/Layout'
+import ConfirmModal from '@/components/ui/ConfirmModal'
 
 // ─── PositionCombobox ─────────────────────────────────────────────────────────
 function PositionCombobox({ value, onChange, positions, required }) {
