@@ -596,17 +596,19 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       // Replacement ไม่เข้าเงื่อนไขนี้เลย ไม่ว่าใครยื่น
       // คนอื่นที่ไม่อยู่ใน allow-list ได้ status 'Open' ทันทีเหมือนเดิมทุกอย่าง
       //
-      // อ่าน allow-list สดตรงนี้ (ไม่ใช้ ceoApprovalBetaEmails state ที่ fetch ไว้ตอน mount) —
-      // state นั้น bundle รวมกับ fetchSheetsData() ใน Promise.all เดียวกัน ถ้า GAS ตอบช้า
-      // (cold start) แล้วกด submit ก่อนโหลดเสร็จ state จะยังว่างอยู่ → ข้าม approval แบบเงียบๆ
-      let currentBetaEmails = ceoApprovalBetaEmails
-      if (form.requestType === 'New HC') {
-        const freshSnap = await getDoc(doc(db, 'settings', 'ceoApprovalBeta'))
-        currentBetaEmails = freshSnap.exists() ? (freshSnap.data().testEmails || []).map(e => e.toLowerCase().trim()) : []
-      }
-      const needsCeoApproval = form.requestType === 'New HC'
-        && currentBetaEmails.includes(user.email.toLowerCase())
-      const approvalToken = needsCeoApproval ? crypto.randomUUID() : null
+      // [ปิดชั่วคราว] CEO Approval flow ถูกปิด — ทุก request เด้งเข้า TA ทันที (status Open)
+      // เปิดกลับ: ลบ 2 บรรทัดล่าง แล้ว uncomment บล็อกที่ comment ไว้ด้านล่าง
+      // ponytail: kill-switch บรรทัดเดียว โค้ด approve ที่เหลือ (หน้า /approve, GAS, rules) นอนเงียบไว้
+      const needsCeoApproval = false
+      const approvalToken = null
+      // let currentBetaEmails = ceoApprovalBetaEmails
+      // if (form.requestType === 'New HC') {
+      //   const freshSnap = await getDoc(doc(db, 'settings', 'ceoApprovalBeta'))
+      //   currentBetaEmails = freshSnap.exists() ? (freshSnap.data().testEmails || []).map(e => e.toLowerCase().trim()) : []
+      // }
+      // const needsCeoApproval = form.requestType === 'New HC'
+      //   && currentBetaEmails.includes(user.email.toLowerCase())
+      // const approvalToken = needsCeoApproval ? crypto.randomUUID() : null
 
       // สร้าง payload จาก form state + metadata ของ user
       const payload = {
