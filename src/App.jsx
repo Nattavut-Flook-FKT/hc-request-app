@@ -50,37 +50,37 @@
 import { useEffect, useState, lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { onAuthStateChanged } from 'firebase/auth'
-import { auth, db } from './services/firebase'
-import { fetchSheetsData, getDepartmentByEmail } from './services/sheetsData'
+import { auth, db } from '@/libs/firebase'
+import { fetchSheetsData, getDepartmentByEmail } from '@/libs/sheetsData'
 import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore'
 import { PowerOff, Power } from 'lucide-react'
-import { sendMaintenanceAlert, sendPendingApprovalAlert } from './services/webhook'
+import { sendMaintenanceAlert, sendPendingApprovalAlert } from '@/libs/webhook'
 
-import Login from './components/Auth/Login'
-import PendingApprovalPage from './components/Auth/PendingApprovalPage'
-import Toaster from './components/Shared/Toast'
+import Login from '@/features/auth/Login'
+import PendingApprovalPage from '@/features/auth/PendingApprovalPage'
+import Toaster from '@/components/ui/Toast'
 
 // นำเข้า Shared Components
-import { RoleSwitcher, RoleGuard, MaintenancePage } from './components/Shared/AppHelpers'
+import { RoleSwitcher, RoleGuard, MaintenancePage } from '@/components/app-shell/AppHelpers'
 
 // Eager — หน้าหลักที่ user เข้าทันทีหลัง login (Firestore query ต้องเริ่มโดยไม่ delay)
-import MyRequestsPage from './pages/MyRequestsPage'   // Manager landing page
-import FormPage       from './pages/FormPage'          // Manager submit form
+import MyRequestsPage from '@/features/manager/MyRequestsPage'   // Manager landing page
+import FormPage       from '@/features/hc-request/FormPage'          // Manager submit form
 
 // Lazy — โหลดเฉพาะเมื่อ navigate ไปจริงๆ (ลด initial bundle)
-const DashboardPage       = lazy(() => import('./pages/DashboardPage'))
-const ReportsPage         = lazy(() => import('./pages/ReportsPage'))
-const AllRequestsPage     = lazy(() => import('./pages/AllRequestsPage'))
-const MyCasesPage         = lazy(() => import('./pages/MyCasesPage'))
-const UserManagementPage  = lazy(() => import('./pages/UserManagementPage'))
-const JDFilesPage         = lazy(() => import('./pages/JDFilesPage'))
-const AuditLogPage        = lazy(() => import('./pages/AuditLogPage'))
-const CustomPositionsPage = lazy(() => import('./pages/CustomPositionsPage'))
-const AdminToolsPage      = lazy(() => import('./pages/AdminToolsPage'))
-const ImportPage          = lazy(() => import('./components/Admin/ImportPage'))
-const ItOnboardingPage    = lazy(() => import('./pages/ItOnboardingPage'))
-const ApproveNewHcPage    = lazy(() => import('./pages/ApproveNewHcPage'))
-const PendingApprovalsPage = lazy(() => import('./pages/PendingApprovalsPage'))
+const DashboardPage       = lazy(() => import('@/features/dashboard/DashboardPage'))
+const ReportsPage         = lazy(() => import('@/features/reports/ReportsPage'))
+const AllRequestsPage     = lazy(() => import('@/features/dashboard/AllRequestsPage'))
+const MyCasesPage         = lazy(() => import('@/features/dashboard/MyCasesPage'))
+const UserManagementPage  = lazy(() => import('@/features/admin/UserManagementPage'))
+const JDFilesPage         = lazy(() => import('@/features/jd-files/JDFilesPage'))
+const AuditLogPage        = lazy(() => import('@/features/audit-log/AuditLogPage'))
+const CustomPositionsPage = lazy(() => import('@/features/admin/CustomPositionsPage'))
+const AdminToolsPage      = lazy(() => import('@/features/admin/AdminToolsPage'))
+const ImportPage          = lazy(() => import('@/features/admin/ImportPage'))
+const ItOnboardingPage    = lazy(() => import('@/features/it-onboarding/ItOnboardingPage'))
+const ApproveNewHcPage    = lazy(() => import('@/features/ceo-approval/ApproveNewHcPage'))
+const PendingApprovalsPage = lazy(() => import('@/features/ceo-approval/PendingApprovalsPage'))
 
 // DEV_EMAIL — email ที่กำหนดใน .env (VITE_DEV_EMAIL)
 // ใช้เพื่อตรวจสอบว่าควรแสดง RoleSwitcher (dev tool) หรือไม่
