@@ -20,7 +20,7 @@
 
 import { useMemo, useState } from 'react'
 import { Search, Download } from 'lucide-react'
-import { MONTH_TH, toDate } from '../../utils/reportUtils'
+import { MONTH_TH, toDate } from '@/features/reports/reportUtils'
 
 /** สร้าง array 12 เดือนของปีที่ระบุ ["YYYY-01", ..., "YYYY-12"] */
 function getYearMonths(year) {

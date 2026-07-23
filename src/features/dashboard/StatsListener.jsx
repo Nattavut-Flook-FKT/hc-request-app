@@ -13,7 +13,7 @@
  */
 import { useEffect } from 'react'
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore'
-import { db } from '../../services/firebase'
+import { db } from '@/libs/firebase'
 
 export default function StatsListener({ onData }) {
   useEffect(() => {

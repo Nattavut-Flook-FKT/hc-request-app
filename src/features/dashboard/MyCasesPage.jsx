@@ -12,8 +12,8 @@
  *   toggleDarkMode {function} toggle dark/light mode
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import Layout from '../components/Shared/Layout'
-import RequestTable from '../components/Dashboard/RequestTable'
+import Layout from '@/components/app-shell/Layout'
+import RequestTable from '@/features/dashboard/RequestTable'
 
 export default function MyCasesPage({ user, role, department, isDarkMode, toggleDarkMode }) {
   return (

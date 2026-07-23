@@ -80,16 +80,16 @@
  */
 import { useEffect, useState, useMemo, useCallback, Fragment } from 'react'
 import { collection, onSnapshot, orderBy, query, doc, updateDoc, addDoc, getDocs, where, deleteDoc, serverTimestamp, arrayUnion, arrayRemove, limit, Timestamp } from 'firebase/firestore'
-import { db } from '../../services/firebase'
-import { generateHCID } from '../../utils/hcId'
-import { sendStatusUpdate, sendToWebhook, sendDeleteToSheets, updateOpenDateInSheets, updateStartDateInSheets, reportClientError } from '../../services/webhook'
-import { getJGLabel } from '../../data/jobGrades'
-import { slaLimit } from '../../utils/sla'
-import { isEnglishName, generateFreshketEmail } from '../../utils/email'
-import { logAudit } from '../../services/auditLog'
+import { db } from '@/libs/firebase'
+import { generateHCID } from '@/features/hc-request/hcId'
+import { sendStatusUpdate, sendToWebhook, sendDeleteToSheets, updateOpenDateInSheets, updateStartDateInSheets, reportClientError } from '@/libs/webhook'
+import { getJGLabel } from '@/config/jobGrades'
+import { slaLimit } from '@/features/dashboard/sla'
+import { isEnglishName, generateFreshketEmail } from '@/utils/email'
+import { logAudit } from '@/features/audit-log/auditLog'
 import { Loader2, UserCheck, XCircle, ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, X, FileText, Search, ChevronRight, Users, Calendar, AlignLeft, ClipboardList, Pencil, Trash2, Upload, File } from 'lucide-react'
-import { getJDSignedUrl, deleteJDFile, uploadCVFile, getCVSignedUrl, deleteCVFile } from '../../services/supabase'
-import ConfirmModal from '../Shared/ConfirmModal'
+import { getJDSignedUrl, deleteJDFile, uploadCVFile, getCVSignedUrl, deleteCVFile } from '@/libs/supabase'
+import ConfirmModal from '@/components/ui/ConfirmModal'
 
 // ─── สี Badge ของแต่ละสถานะ — DS Light-variant recipe (functional color-coding, DS-#010) ───
 const STATUS_CONFIG = {

@@ -23,14 +23,14 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import Layout from '../components/Shared/Layout'
-import StatCards from '../components/Dashboard/StatCards'
-import RequestTable from '../components/Dashboard/RequestTable'
-import TAWorkloadPanel from '../components/Dashboard/TAWorkloadPanel'
-import ReportPanel from '../components/Dashboard/ReportPanel'
-import YoYChart from '../components/Dashboard/YoYChart'
-import ManpowerPivot from '../components/Dashboard/ManpowerPivot'
-import StatsListener from '../components/Shared/StatsListener'
+import Layout from '@/components/app-shell/Layout'
+import StatCards from '@/features/dashboard/StatCards'
+import RequestTable from '@/features/dashboard/RequestTable'
+import TAWorkloadPanel from '@/features/dashboard/TAWorkloadPanel'
+import ReportPanel from '@/features/dashboard/ReportPanel'
+import YoYChart from '@/features/dashboard/YoYChart'
+import ManpowerPivot from '@/features/dashboard/ManpowerPivot'
+import StatsListener from '@/features/dashboard/StatsListener'
 import { useState, useMemo } from 'react'
 import { BarChart2, List, ChevronDown, ChevronUp } from 'lucide-react'
 

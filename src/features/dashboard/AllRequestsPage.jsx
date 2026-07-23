@@ -19,11 +19,11 @@
  */
 import { useState } from 'react'
 import { collection, getDocs, query, where } from 'firebase/firestore'
-import { db } from '../services/firebase'
+import { db } from '@/libs/firebase'
 import { RefreshCw, CheckCircle2, AlertCircle, Upload, X } from 'lucide-react'
-import Layout from '../components/Shared/Layout'
-import RequestTable from '../components/Dashboard/RequestTable'
-import { syncFromSheets, syncAllToSheets, syncBatchToSheets } from '../services/webhook'
+import Layout from '@/components/app-shell/Layout'
+import RequestTable from '@/features/dashboard/RequestTable'
+import { syncFromSheets, syncAllToSheets, syncBatchToSheets } from '@/libs/webhook'
 
 export default function AllRequestsPage({ user, role, department, isDarkMode, toggleDarkMode }) {
   // 'idle' | 'running' | 'done' | 'error'

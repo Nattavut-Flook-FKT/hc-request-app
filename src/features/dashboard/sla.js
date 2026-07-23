@@ -1,4 +1,4 @@
-import { getDepartments } from '../data/orgStructure'
+import { getDepartments } from '@/config/orgStructure'
 
 /**
  * slaLimit — เป้าหมาย SLA (วัน) ต่อ request ตามกติกาใหม่:
