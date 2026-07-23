@@ -25,10 +25,10 @@
  */
 import { useEffect, useState } from 'react'
 import { query, collection, orderBy, limit, getDocs, deleteDoc, doc } from 'firebase/firestore'
-import { db } from '../services/firebase'
+import { db } from '@/libs/firebase'
 import { Trash2 } from 'lucide-react'
-import Layout from '../components/Shared/Layout'
-import ConfirmModal from '../components/Shared/ConfirmModal'
+import Layout from '@/components/app-shell/Layout'
+import ConfirmModal from '@/components/ui/ConfirmModal'
 
 // map action type → label ภาษาไทย + DS Light-variant badge tokens
 const STATUS_CONFIG = {

@@ -11,7 +11,7 @@
  */
 
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
-import { db } from './firebase'
+import { db } from '@/libs/firebase'
 
 /**
  * บันทึก Audit Log ลง Firestore hc_logs
