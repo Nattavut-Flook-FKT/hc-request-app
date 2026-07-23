@@ -18,7 +18,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import { resolveDeptNames } from '../data/deptMapping'
+import { resolveDeptNames } from '@/config/deptMapping'
 
 // ── In-memory cache ──────────────────────────────────────────────────────────
 // cache เก็บผลลัพธ์ล่าสุดจาก GAS endpoint เพื่อหลีกเลี่ยงการ fetch ซ้ำบ่อยๆ

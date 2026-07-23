@@ -12,8 +12,8 @@
  * หมายเหตุ: GAS ไม่รองรับ CORS preflight ดังนั้น POST ใช้ mode: 'no-cors'
  */
 
-import { toast } from '../components/Shared/Toast'
-import { auth } from './firebase'
+import { toast } from '@/components/ui/Toast'
+import { auth } from '@/libs/firebase'
 
 const WEBHOOK_URL = import.meta.env.VITE_GAS_WEBHOOK_URL
 const DATA_URL    = import.meta.env.VITE_GAS_DATA_URL
