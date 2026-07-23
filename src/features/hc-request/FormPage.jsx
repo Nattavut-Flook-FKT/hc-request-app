@@ -14,10 +14,10 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 import { lazy, Suspense } from 'react'
-import Layout from '../components/Shared/Layout'
+import Layout from '@/components/app-shell/Layout'
 
 // Lazy load ฟอร์มหลักเพื่อลด bundle size ที่โหลดครั้งแรก
-const HCRequestForm = lazy(() => import('../components/Forms/HCRequestForm'))
+const HCRequestForm = lazy(() => import('@/features/hc-request/HCRequestForm'))
 
 export default function FormPage({ user, role, isDarkMode, toggleDarkMode, maintenanceMode }) {
   return (

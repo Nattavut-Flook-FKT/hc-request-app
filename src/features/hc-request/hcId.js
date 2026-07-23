@@ -9,7 +9,7 @@
  *   - RequestTable → handleRecruitNew (เปิด recruit ใหม่จากเคส No Show)
  */
 import { collection, doc, getDoc, getDocs, setDoc, query, where, orderBy, limit, runTransaction } from 'firebase/firestore'
-import { db } from '../services/firebase'
+import { db } from '@/libs/firebase'
 
 export async function generateHCID() {
   const currentYear = new Date().getFullYear()

@@ -27,16 +27,16 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { collection, addDoc, updateDoc, doc, serverTimestamp, getDocs, query, where, limit, getDoc } from 'firebase/firestore'
-import { db } from '../../services/firebase'
-import { generateHCID } from '../../utils/hcId'
-import { sendToWebhook, sendCeoApprovalRequest, reportClientError } from '../../services/webhook'
-import { logAudit } from '../../services/auditLog'
-import { uploadJDFile, getJDSignedUrl } from '../../services/supabase'
+import { db } from '@/libs/firebase'
+import { generateHCID } from '@/features/hc-request/hcId'
+import { sendToWebhook, sendCeoApprovalRequest, reportClientError } from '@/libs/webhook'
+import { logAudit } from '@/features/audit-log/auditLog'
+import { uploadJDFile, getJDSignedUrl } from '@/libs/supabase'
 import { Loader2, CheckCircle, ChevronDown, X, Paperclip, FileText, ExternalLink } from 'lucide-react'
-import { HQ_JG_LEVELS, OPERATION_JG_LEVELS } from '../../data/jobGrades'
-import { fetchSheetsData, getDepartmentByEmail, getEmployeesByDepartment, getPositionsByDepartment } from '../../services/sheetsData'
-import { DIVISIONS, getDepartments, getSections, getBusinessUnits, getDivisionByDepartment } from '../../data/orgStructure'
-import { grantedKeys } from '../../utils/grants'
+import { HQ_JG_LEVELS, OPERATION_JG_LEVELS } from '@/config/jobGrades'
+import { fetchSheetsData, getDepartmentByEmail, getEmployeesByDepartment, getPositionsByDepartment } from '@/libs/sheetsData'
+import { DIVISIONS, getDepartments, getSections, getBusinessUnits, getDivisionByDepartment } from '@/config/orgStructure'
+import { grantedKeys } from '@/utils/grants'
 
 // ─── ค่าเริ่มต้นของฟอร์ม ───────────────────────────────────────────────────
 // ใช้เป็น template สำหรับ reset หลัง submit สำเร็จ
