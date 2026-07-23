@@ -13,7 +13,7 @@
  */
 import { useState } from 'react'
 import { signInWithPopup, signOut } from 'firebase/auth'
-import { auth, googleProvider } from '../../services/firebase'
+import { auth, googleProvider } from '@/libs/firebase'
 import { AlertCircle } from 'lucide-react'
 
 // domain ที่อนุญาตให้ login ได้ — เปลี่ยนที่นี่หากต้องการรองรับ domain อื่น

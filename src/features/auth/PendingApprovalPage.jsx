@@ -9,7 +9,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 import { signOut } from 'firebase/auth'
-import { auth } from '../../services/firebase'
+import { auth } from '@/libs/firebase'
 import { Clock3, LogOut } from 'lucide-react'
 
 export default function PendingApprovalPage({ user }) {
