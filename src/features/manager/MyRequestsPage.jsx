@@ -16,9 +16,9 @@
  *   toggleDarkMode {function} toggle dark/light mode
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import Layout from '../components/Shared/Layout'
-import RequestTable from '../components/Dashboard/RequestTable'
-import ManagerRequestsView from '../components/Manager/ManagerRequestsView'
+import Layout from '@/components/app-shell/Layout'
+import RequestTable from '@/features/dashboard/RequestTable'
+import ManagerRequestsView from '@/features/manager/ManagerRequestsView'
 
 export default function MyRequestsPage({ user, role, department, isDarkMode, toggleDarkMode }) {
   const useManagerView = role === 'manager' || role === 'admin'

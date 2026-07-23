@@ -37,14 +37,14 @@
  */
 import { useEffect, useState, useMemo } from 'react'
 import { collection, onSnapshot, orderBy, query, where, limit, getDoc, doc } from 'firebase/firestore'
-import { db } from '../../services/firebase'
-import { getJDSignedUrl, getCVSignedUrl } from '../../services/supabase'
+import { db } from '@/libs/firebase'
+import { getJDSignedUrl, getCVSignedUrl } from '@/libs/supabase'
 import { Loader2, FileText, File, UserCheck, Calendar, ChevronDown, ChevronUp, ChevronsUpDown, FilePlus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { getDepartments } from '../../data/orgStructure'
-import { resolveDeptNames } from '../../data/deptMapping'
-import { grantedKeys } from '../../utils/grants'
-import { slaLimit } from '../../utils/sla'
+import { getDepartments } from '@/config/orgStructure'
+import { resolveDeptNames } from '@/config/deptMapping'
+import { grantedKeys } from '@/utils/grants'
+import { slaLimit } from '@/features/dashboard/sla'
 
 /**
  * STATUS — colour token map for every possible request status (DS tokens).
