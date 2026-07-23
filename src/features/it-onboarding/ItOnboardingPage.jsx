@@ -18,12 +18,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { collection, doc, onSnapshot, query, updateDoc, where, limit } from 'firebase/firestore'
 import { Pencil } from 'lucide-react'
-import { db } from '../services/firebase'
-import Layout from '../components/Shared/Layout'
-import { KpiCard, SectionCard, ExportButtons, DataTable } from '../components/Reports/ReportUI'
-import { exportWorkbook, exportCSV, dateStamp } from '../utils/exportExcel'
-import { toDate, statusTH } from '../utils/reportUtils'
-import { generateFreshketEmail } from '../utils/email'
+import { db } from '@/libs/firebase'
+import Layout from '@/components/app-shell/Layout'
+import { KpiCard, SectionCard, ExportButtons, DataTable } from '@/components/ui/ReportUI'
+import { exportWorkbook, exportCSV, dateStamp } from '@/features/reports/exportExcel'
+import { toDate, statusTH } from '@/features/reports/reportUtils'
+import { generateFreshketEmail } from '@/utils/email'
 
 const VIEWS = [
   { v: 'all',       label: 'ทั้งหมด' },
