@@ -20,15 +20,15 @@
  */
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { collection, getDocs, getDoc, setDoc, writeBatch, doc, runTransaction, updateDoc, query, where, orderBy, limit, serverTimestamp } from 'firebase/firestore'
-import { db } from '../services/firebase'
+import { db } from '@/libs/firebase'
 import { Clock, Tag, FileText, Trash2, DatabaseZap, Settings2, AlertTriangle, RefreshCw, CheckCircle2, AlertCircle, UserCog, Users, ChevronDown, ChevronUp, Lock, Eye, EyeOff, Upload, Power, PowerOff, X } from 'lucide-react'
 
 // PIN อ่านจาก env เท่านั้น — ไม่มี fallback ใน source (ถ้า env ไม่ตั้ง = ล็อกตาย ปลดไม่ได้)
 const ADMIN_PIN = import.meta.env.VITE_ADMIN_TOOLS_PIN
-import { listJDFiles, deleteJDFile } from '../services/supabase'
-import { syncFromSheets, syncBatchToSheets, syncAllToSheets } from '../services/webhook'
-import Layout from '../components/Shared/Layout'
-import { grantEmails } from '../utils/grants'
+import { listJDFiles, deleteJDFile } from '@/libs/supabase'
+import { syncFromSheets, syncBatchToSheets, syncAllToSheets } from '@/libs/webhook'
+import Layout from '@/components/app-shell/Layout'
+import { grantEmails } from '@/utils/grants'
 
 /** แปลง input คั่น comma → array อีเมล lowercase (รองรับ 1 แผนกหลาย Manager) */
 function parseEmails(input) {

@@ -23,12 +23,12 @@
  */
 import { useEffect, useState, useRef } from 'react'
 import { doc, onSnapshot, collection, setDoc, deleteDoc, getDoc, getDocs, query, limit, orderBy } from 'firebase/firestore'
-import { db } from '../services/firebase'
+import { db } from '@/libs/firebase'
 import { UserPlus, Trash2, Building2, Network, ChevronDown, ChevronUp, X, Clock3 } from 'lucide-react'
-import Layout from '../components/Shared/Layout'
-import ConfirmModal from '../components/Shared/ConfirmModal'
-import { DIVISIONS } from '../data/orgStructure'
-import { grantEmails, grantedKeys } from '../utils/grants'
+import Layout from '@/components/app-shell/Layout'
+import ConfirmModal from '@/components/ui/ConfirmModal'
+import { DIVISIONS } from '@/config/orgStructure'
+import { grantEmails, grantedKeys } from '@/utils/grants'
 
 // roles ที่อนุญาตให้กำหนดได้ในระบบ — ใช้ validate ทั้งตอน add และ update
 const VALID_ROLES = ['manager', 'ta', 'admin', 'ceo']

@@ -25,10 +25,10 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { doc, collection, writeBatch, getDocs, query, where, limit, getDoc, setDoc, updateDoc } from 'firebase/firestore'
-import { db } from '../../services/firebase'
-import { syncBatchToSheets } from '../../services/webhook'
+import { db } from '@/libs/firebase'
+import { syncBatchToSheets } from '@/libs/webhook'
 import { FolderOpen, Plus, Settings2, RefreshCw, Link, Loader2, Wrench } from 'lucide-react'
-import Layout from '../Shared/Layout'
+import Layout from '@/components/app-shell/Layout'
 
 // ─── convertToCSVUrl — แปลง Google Sheets URL → CSV export URL ───────────────
 // รองรับ: /edit, /view, /pub, หรือ export URL โดยตรง

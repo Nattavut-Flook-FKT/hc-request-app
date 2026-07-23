@@ -22,11 +22,11 @@
  */
 import { useEffect, useState } from 'react'
 import { query, collection, orderBy, getDocs, deleteDoc, doc, addDoc, serverTimestamp } from 'firebase/firestore'
-import { db } from '../services/firebase'
+import { db } from '@/libs/firebase'
 import { Plus, Search, Tag, Trash2, Loader2 } from 'lucide-react'
-import Layout from '../components/Shared/Layout'
-import ConfirmModal from '../components/Shared/ConfirmModal'
-import { DIVISIONS } from '../data/orgStructure'
+import Layout from '@/components/app-shell/Layout'
+import ConfirmModal from '@/components/ui/ConfirmModal'
+import { DIVISIONS } from '@/config/orgStructure'
 
 // ── DS class recipes (07-input · 09-dropdown · 05-button) ──
 const FIELD = 'h-10 w-full rounded-lg border border-neutral-100 bg-white px-3 text-sm text-neutral-900 placeholder:text-neutral-400 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none'
