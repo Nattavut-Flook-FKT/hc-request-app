@@ -23,7 +23,7 @@
 import { useState } from 'react'
 import { signOut } from 'firebase/auth'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { auth } from '../../services/firebase'
+import { auth } from '@/libs/firebase'
 import {
   LogOut, LayoutDashboard, FilePlus, List,
   Briefcase, FolderOpen, ClipboardList, ScrollText,
