@@ -31,7 +31,7 @@ import { db } from '../../services/firebase'
 import { generateHCID } from '../../utils/hcId'
 import { sendToWebhook, sendCeoApprovalRequest, reportClientError } from '../../services/webhook'
 import { logAudit } from '../../services/auditLog'
-import { uploadJDFile, getJDSignedUrl } from '../../services/supabase'
+import { uploadJDFile, getJDSignedUrl, validateJDFile } from '../../services/supabase'
 import { Loader2, CheckCircle, ChevronDown, X, Paperclip, FileText, ExternalLink } from 'lucide-react'
 import { HQ_JG_LEVELS, OPERATION_JG_LEVELS } from '../../data/jobGrades'
 import { fetchSheetsData, getDepartmentByEmail, getEmployeesByDepartment, getPositionsByDepartment } from '../../services/sheetsData'
@@ -572,6 +572,22 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
     setForm((prev) => ({ ...prev, [name]: value }))
   }, [])
 
+  // ─── handleJdFileSelect ────────────────────────────────────────────────────
+  // Validate ไฟล์ JD ทันทีตอนเลือก (type + size) — fail fast ก่อนถึง handleSubmit
+  // กันเคส Firestore doc ถูกสร้างแล้วแต่อัพโหลดพัง → เกิด request กำพร้าที่ไม่เข้า Sheets/Slack
+  function handleJdFileSelect(e) {
+    const file = e.target.files?.[0] ?? null
+    if (!file) return
+    const invalid = validateJDFile(file)
+    if (invalid) {
+      setError(invalid)
+      e.target.value = '' // เคลียร์ input ให้เลือกไฟล์เดิมซ้ำได้หลังแก้
+      return
+    }
+    setError('')
+    setJdFile(file)
+  }
+
   // ─── handleSubmit ──────────────────────────────────────────────────────────
   // ขั้นตอนการ submit ฟอร์ม:
   // 1. generateHCID → สร้าง HCID ในรูปแบบ REQ-YYYY-NNN (atomic counter)
@@ -586,10 +602,13 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
     setLoading(true)
     setError('')
 
+    // hcId อยู่นอก try เพื่อให้ catch ส่งเข้า reportClientError ได้ — ใช้ตามหา doc กำพร้าใน Firestore
+    let hcId = null
+
     try {
       // ── Step 1: สร้าง HCID ในรูปแบบ REQ-YYYY-NNN ─────────────────────────────
       // ต้องทำก่อน addDoc เพื่อให้ hcId พร้อมอยู่ใน payload ตั้งแต่ต้น
-      const hcId = await generateHCID()
+      hcId = await generateHCID()
 
       // Beta: New HC ที่ยื่นโดยใครก็ตามในกลุ่มทดสอบ ต้องรอ CEO approve ก่อน — ไม่ยกเว้น role
       // (แม้ admin ยื่นเอง ถ้า email อยู่ใน allow-list ก็ต้องผ่านการอนุมัติเหมือนกัน)
@@ -699,8 +718,10 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       setTimeout(() => setSuccess(false), 4000) // ซ่อน success banner หลัง 4 วินาที
     } catch (err) {
       console.error('Submit error:', err)
-      reportClientError('submitHCRequest', err)
-      setError('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง')
+      reportClientError('submitHCRequest', err, { hcId })
+      // แสดงสาเหตุจริงถ้าเป็น error อัพโหลดไฟล์ — user จะได้แก้ถูกจุด ไม่ retry ซ้ำจน
+      // เกิด request กำพร้าเพิ่ม (doc ถูกสร้างก่อนอัพโหลด)
+      setError(err.message?.startsWith('อัพโหลดไฟล์ไม่สำเร็จ') ? err.message : 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง')
     } finally {
       setLoading(false)
     }
@@ -720,6 +741,11 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
 
   // jgLevels: รายการ Job Grade ตาม orgTrack (HQ vs OPERATION มี level ต่างกัน)
   const jgLevels = form.orgTrack === 'OPERATION' ? OPERATION_JG_LEVELS : HQ_JG_LEVELS
+
+  // canInlinePreview: เบราว์เซอร์ render ใน iframe ได้เฉพาะ PDF กับรูปภาพ
+  // ไฟล์ Word จะได้กรอบเปล่า (บาง browser สั่ง download แทน) → ต้องเปิดแท็บใหม่
+  // ไม่มีชื่อไฟล์ → เดาว่าเป็น PDF ตามพฤติกรรมเดิม (doc เก่าก่อนรับ Word/รูป)
+  const canInlinePreview = !existingJD?.jdFileName || /\.(pdf|png|jpe?g)$/i.test(existingJD.jdFileName)
 
   // positionOptions: รวม positions จาก Sheets + custom_positions ที่ตรงกับแผนก/track
   // sort alphabetically และ deduplicate ด้วย Set
@@ -1264,7 +1290,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                     type="file"
                     accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
                     className="hidden"
-                    onChange={(e) => setJdFile(e.target.files?.[0] ?? null)}
+                    onChange={handleJdFileSelect}
                   />
                 </label>
               </div>
@@ -1282,7 +1308,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                   type="file"
                   accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
                   className="hidden"
-                  onChange={(e) => setJdFile(e.target.files?.[0] ?? null)}
+                  onChange={handleJdFileSelect}
                 />
               </label>
             )}
@@ -1328,7 +1354,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
        * แสดงเฉพาะบนหน้าจอ lg ขึ้นไป (hidden lg:flex)
        * แสดงเมื่อมี existingJD (request ที่มีไฟล์ JD อยู่แล้วสำหรับตำแหน่ง/แผนกเดียวกัน)
        * ผู้ใช้สามารถ:
-       *   - กดดู PDF ใน iframe (ดึง signed URL จาก Supabase อายุ 1 ชั่วโมง)
+       *   - กดดูไฟล์ใน iframe (ดึง signed URL จาก Supabase อายุ 1 ชั่วโมง)
        *   - เปิดในแท็บใหม่ผ่าน ExternalLink icon
        *   - อัพโหลด JD ใหม่ทับได้จากฟอร์มด้านซ้าย
        */}
@@ -1363,24 +1389,45 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                   onClick={previewUrl ? () => setPreviewUrl(null) : handleOpenExistingJD}
                   disabled={openingJD}
                   className="rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-dark-green-100 hover:text-dark-green-700 disabled:opacity-50"
-                  title={previewUrl ? 'ซ่อน PDF' : 'ดู PDF'}
+                  title={previewUrl ? 'ซ่อนไฟล์ JD' : 'ดูไฟล์ JD'}
                 >
                   {openingJD ? <Loader2 size={14} strokeWidth={1} absoluteStrokeWidth className="animate-spin" /> : previewUrl ? <X size={14} strokeWidth={1} absoluteStrokeWidth /> : <FileText size={14} strokeWidth={1} absoluteStrokeWidth />}
                 </button>
               </div>
             </div>
 
-            {/* PDF Viewer: iframe แสดง PDF จาก Supabase signed URL
+            {/* File Viewer: iframe แสดงไฟล์จาก Supabase signed URL (PDF/รูปภาพเท่านั้น)
              * height คำนวณจาก viewport เพื่อให้พอดีหน้าจอโดยไม่ต้อง scroll
+             * ไฟล์ Word → iframe render ไม่ได้ แสดงปุ่มเปิดแท็บใหม่แทนกรอบเปล่า
              * หรือแสดง placeholder พร้อมปุ่ม "เปิดดูไฟล์ JD" ถ้ายังไม่มี previewUrl
              */}
-            {previewUrl ? (
+            {previewUrl && canInlinePreview ? (
               <iframe
                 src={previewUrl}
                 className="w-full border-0 bg-neutral-100"
                 style={{ height: 'calc(100vh - 160px)', minHeight: '600px' }}
                 title="JD Preview"
               />
+            ) : previewUrl ? (
+              <div className="flex flex-col items-center justify-center gap-3 px-5 py-8">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-dark-green-100 text-dark-green-700">
+                  <FileText size={22} strokeWidth={1} absoluteStrokeWidth />
+                </div>
+                <p className="text-center text-xs text-neutral-500">
+                  ไฟล์ Word ดูในหน้านี้ไม่ได้<br />กดเปิดในแท็บใหม่เพื่อดาวน์โหลด
+                </p>
+                {/* ใช้สไตล์ secondary เหมือนปุ่ม "เปิดดูไฟล์ JD" ด้านล่าง — Primary CTA
+                    ของหน้านี้คือปุ่มยื่นคำขอ ห้ามมี dark-green-600 ตัวที่ 2 ใน viewport */}
+                <a
+                  href={previewUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dark-green-100 bg-white px-4 py-2.5 text-sm font-bold text-dark-green-700 transition-colors hover:bg-dark-green-50"
+                >
+                  <ExternalLink size={14} strokeWidth={1} absoluteStrokeWidth />
+                  เปิดไฟล์ JD
+                </a>
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center gap-3 px-5 py-8">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-dark-green-100 text-dark-green-700">
