@@ -1,16 +1,16 @@
-# Graph Report - hc-request-app  (2026-07-16)
+# Graph Report - hc-request-app  (2026-07-30)
 
 ## Corpus Check
-- 91 files · ~472,232 words
+- 95 files · ~476,817 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 818 nodes · 1117 edges · 58 communities (52 shown, 6 thin omitted)
-- Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
+- 841 nodes · 1178 edges · 51 communities (46 shown, 5 thin omitted)
+- Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 1 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `69038df2`
+- Built from commit: `05211497`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -46,22 +46,15 @@
 - [[_COMMUNITY_Community 28|Community 28]]
 - [[_COMMUNITY_Community 29|Community 29]]
 - [[_COMMUNITY_Community 30|Community 30]]
-- [[_COMMUNITY_Community 31|Community 31]]
-- [[_COMMUNITY_Community 32|Community 32]]
-- [[_COMMUNITY_Community 33|Community 33]]
 - [[_COMMUNITY_Community 34|Community 34]]
 - [[_COMMUNITY_Community 35|Community 35]]
 - [[_COMMUNITY_Community 36|Community 36]]
 - [[_COMMUNITY_Community 37|Community 37]]
 - [[_COMMUNITY_Community 38|Community 38]]
-- [[_COMMUNITY_Community 39|Community 39]]
 - [[_COMMUNITY_Community 40|Community 40]]
 - [[_COMMUNITY_Community 41|Community 41]]
 - [[_COMMUNITY_Community 42|Community 42]]
-- [[_COMMUNITY_Community 43|Community 43]]
 - [[_COMMUNITY_Community 44|Community 44]]
-- [[_COMMUNITY_Community 45|Community 45]]
-- [[_COMMUNITY_Community 46|Community 46]]
 - [[_COMMUNITY_Community 47|Community 47]]
 - [[_COMMUNITY_Community 48|Community 48]]
 - [[_COMMUNITY_Community 49|Community 49]]
@@ -71,8 +64,8 @@
 - [[_COMMUNITY_Community 53|Community 53]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `toDate()` - 16 edges
-2. `db` - 15 edges
+1. `db` - 18 edges
+2. `toDate()` - 17 edges
 3. `แผนย้าย hc-request-app: Firebase → Supabase (+ ประเมิน Next.js)` - 14 edges
 4. `getOfferingDate()` - 10 edges
 5. `Senior Frontend` - 10 edges
@@ -87,21 +80,21 @@
   src/components/Reports/OnboardingReport.jsx → src/utils/reportUtils.js
 - `slaDays()` --calls--> `computeSLADays()`  [EXTRACTED]
   src/components/Dashboard/ReportPanel.jsx → src/utils/reportUtils.js
-- `RequestRow()` --calls--> `slaLimit()`  [EXTRACTED]
-  src/components/Manager/ManagerRequestsView.jsx → src/utils/sla.js
-- `HCRequestForm()` --calls--> `getEmployeesByDepartment()`  [EXTRACTED]
-  src/components/Forms/HCRequestForm.jsx → src/services/sheetsData.js
-- `AddLibraryModal()` --calls--> `getDepartments()`  [EXTRACTED]
-  src/pages/JDFilesPage.jsx → src/data/orgStructure.js
+- `SLABadge()` --calls--> `slaLimit()`  [EXTRACTED]
+  src/components/Dashboard/RequestTable.jsx → src/utils/sla.js
+- `downloadPivotCSV()` --calls--> `Row()`  [INFERRED]
+  src/components/Dashboard/ReportPanel.jsx → src/pages/ApproveNewHcPage.jsx
+- `monthKeyOf()` --calls--> `toDate()`  [EXTRACTED]
+  src/components/Reports/PeriodSummary.jsx → src/utils/reportUtils.js
 
 ## Import Cycles
 - None detected.
 
-## Communities (58 total, 6 thin omitted)
+## Communities (51 total, 5 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.06
-Nodes (49): downloadCSV(), slaDays(), STATUS_DOT, TABS, YEARS, monthLabelOf(), ONBOARD_STATUS, ACTIVE (+41 more)
+Nodes (50): downloadCSV(), slaDays(), STATUS_DOT, VIEWS, TABS, YEARS, monthLabelOf(), ONBOARD_STATUS (+42 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.06
@@ -160,24 +153,24 @@ Cohesion: 0.11
 Nodes (18): Context, Phase 0 — เตรียมสภาพแวดล้อม (1–2 วัน · เสี่ยงต่ำ), Phase 1 — Schema + RLS + สคริปต์ย้ายข้อมูล (3–4 วัน · เสี่ยงกลาง), Phase 2 — สลับ Auth (2–3 วัน · เสี่ยงกลาง-สูง — จุดเสี่ยงสุดของงาน), Phase 3 — เขียน data layer ใหม่ (4–6 วัน · เสี่ยงกลาง แต่เป็นงาน mechanical), Phase 4 — วัน Cutover (1 วัน · เสี่ยงสูงแต่ย้อนกลับได้เต็มรูป), Phase 5 — Realtime + เก็บกวาด integration (2–3 วัน · เสี่ยงต่ำ-กลาง), Phase 6 — ปิดระบบเก่า (0.5–1 วัน · เสี่ยงต่ำ) (+10 more)
 
 ### Community 15 - "Community 15"
-Cohesion: 0.14
-Nodes (11): ALL_STATUSES, buildHistoryEntry(), getDaysOpen(), HISTORY_TAB_STATUSES, shortName(), SLABadge(), STATUS_CONFIG, STATUS_TABS (+3 more)
+Cohesion: 0.13
+Nodes (14): ALL_STATUSES, buildHistoryEntry(), CEO_APPROVAL_STATUS_TABS, getDaysOpen(), HISTORY_TAB_STATUSES, RequestTable(), shortName(), SLABadge() (+6 more)
 
 ### Community 16 - "Community 16"
-Cohesion: 0.11
-Nodes (8): STAT_CONFIG, ACTIVE_STATUSES, STATUS_CFG, STATUS_ORDER, MONTH_TH, ACTIVE_STATUSES, EXCLUDED_STATUSES, TABS
+Cohesion: 0.07
+Nodes (14): STAT_CONFIG, ACTIVE_STATUSES, STATUS_CFG, STATUS_ORDER, MONTH_TH, ACTIVE_STATUSES, EXCLUDED_STATUSES, TABS (+6 more)
 
 ### Community 17 - "Community 17"
-Cohesion: 0.14
-Nodes (13): MaintenancePage(), RoleGuard(), RoleSwitcher(), AdminToolsPage, AllRequestsPage, AuditLogPage, CustomPositionsPage, DashboardPage (+5 more)
+Cohesion: 0.10
+Nodes (18): sendMaintenanceAlert(), sendPendingApprovalAlert(), MaintenancePage(), RoleGuard(), RoleSwitcher(), AdminToolsPage, AllRequestsPage, ApproveNewHcPage (+10 more)
 
 ### Community 18 - "Community 18"
-Cohesion: 0.16
-Nodes (13): currentUserName(), debouncedStatusCall(), _pending, reportClientError(), sendDeleteToSheets(), sendMaintenanceAlert(), sendPendingApprovalAlert(), sendStatusUpdate() (+5 more)
+Cohesion: 0.19
+Nodes (12): currentUserName(), debouncedStatusCall(), _pending, reportClientError(), sendCeoApprovalRequest(), sendDeleteToSheets(), sendStatusUpdate(), STATUS_MAP (+4 more)
 
 ### Community 19 - "Community 19"
-Cohesion: 0.16
-Nodes (10): getJGLabel(), HQ_JG_LEVELS, OPERATION_JG_LEVELS, DEPARTMENTS, getTrackConfigByDepartment(), HYBRID_DEPARTMENT_PREFIXES, INITIAL_FORM, matchesDepartmentPrefix() (+2 more)
+Cohesion: 0.05
+Nodes (55): DEPT_MAINDATA_MAP, resolveDeptNames(), SECTION_MAINDATA_MAP, getJGLabel(), HQ_JG_LEVELS, OPERATION_JG_LEVELS, DIVISIONS, getBusinessUnits() (+47 more)
 
 ### Community 20 - "Community 20"
 Cohesion: 0.18
@@ -216,24 +209,12 @@ Cohesion: 0.18
 Nodes (9): bool, str, main(), Main class for review report generator functionality, Execute the main functionality, Validate the target path exists and is accessible, Perform the main analysis or operation, Generate and display the report (+1 more)
 
 ### Community 29 - "Community 29"
-Cohesion: 0.18
-Nodes (6): STATUS_CONFIG, app, auth, db, firebaseConfig, googleProvider
+Cohesion: 0.16
+Nodes (7): STATUS_CONFIG, logAudit(), app, auth, db, firebaseConfig, googleProvider
 
 ### Community 30 - "Community 30"
-Cohesion: 0.18
-Nodes (8): computeSLA(), getPipelineIndex(), HIDDEN_STATUSES, HISTORY_STATUSES, PipelineTrack(), RequestRow(), STAGES, STATUS
-
-### Community 31 - "Community 31"
-Cohesion: 0.25
-Nodes (7): DIVISIONS, getBusinessUnits(), getDepartments(), getSections(), ORG_STRUCTURE, HCRequestForm(), TECH_DEPTS
-
-### Community 32 - "Community 32"
-Cohesion: 0.27
-Nodes (6): getDivisionByDepartment(), AddLibraryModal(), EditLibraryModal(), getPositionsByDepartment(), deleteJDFile(), uploadJDLibraryFile()
-
-### Community 33 - "Community 33"
-Cohesion: 0.31
-Nodes (10): ExpandedDetail(), ALLOWED_TYPES, CV_ALLOWED_TYPES, deleteCVFile(), getClient(), getCVSignedUrl(), getJDSignedUrl(), listJDFiles() (+2 more)
+Cohesion: 0.40
+Nodes (3): downloadPivotCSV(), Row(), sendToWebhook()
 
 ### Community 34 - "Community 34"
 Cohesion: 0.29
@@ -255,10 +236,6 @@ Nodes (8): Aesthetic Direction, Anti-References, Brand Personality, Design Conte
 Cohesion: 0.36
 Nodes (7): add_card(), add_header_bar(), add_pill(), add_rect(), add_section_label(), add_text(), สร้างสไลด์คู่มือสำหรับ TA Team — HC Request System
 
-### Community 39 - "Community 39"
-Cohesion: 0.22
-Nodes (5): ADMIN_GROUPS, MANAGER_GROUPS, ROLE_LABEL, TA_GROUPS, SLIDES
-
 ### Community 40 - "Community 40"
 Cohesion: 0.25
 Nodes (7): 1. What Is This, CLAUDE.md — HC Request App, DS Rules, DS Version Check (run every session before working), FKT Design Guidelines — Freshket CI Branding & Product System, Project Info, Set Up a CLAUDE.md for Your Project
@@ -271,17 +248,9 @@ Nodes (7): dependencies, firebase-admin, firebase-functions, engines, node, main
 Cohesion: 0.25
 Nodes (7): firestore, rules, hosting, headers, ignore, public, rewrites
 
-### Community 43 - "Community 43"
-Cohesion: 0.32
-Nodes (6): DEPT_MAINDATA_MAP, resolveDeptNames(), SECTION_MAINDATA_MAP, fetchSheetsData(), getDepartmentByEmail(), getEmployeesByDepartment()
-
-### Community 45 - "Community 45"
-Cohesion: 0.29
-Nodes (3): STATUS_COLOR, STATUS_MAP, TYPE_MAP
-
-### Community 46 - "Community 46"
-Cohesion: 0.47
-Nodes (3): VALID_ROLES, grantedKeys(), grantEmails()
+### Community 44 - "Community 44"
+Cohesion: 0.12
+Nodes (4): STATUS_COLOR, STATUS_MAP, TYPE_MAP, HCRequestForm
 
 ### Community 48 - "Community 48"
 Cohesion: 0.50
@@ -292,21 +261,21 @@ Cohesion: 0.50
 Nodes (3): Expanding the ESLint configuration, React Compiler, React + Vite
 
 ## Knowledge Gaps
-- **348 isolated node(s):** `name`, `private`, `version`, `type`, `dev` (+343 more)
+- **357 isolated node(s):** `name`, `private`, `version`, `type`, `dev` (+352 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **6 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **5 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `db` connect `Community 29` to `Community 32`, `Community 35`, `Community 45`, `Community 46`, `Community 15`, `Community 17`, `Community 19`, `Community 30`, `Community 31`?**
-  _High betweenness centrality (0.009) - this node is a cross-community bridge._
-- **Why does `getJDSignedUrl()` connect `Community 33` to `Community 32`, `Community 19`, `Community 30`, `Community 15`?**
+- **Why does `db` connect `Community 29` to `Community 0`, `Community 35`, `Community 44`, `Community 15`, `Community 17`, `Community 19`, `Community 30`?**
+  _High betweenness centrality (0.015) - this node is a cross-community bridge._
+- **Why does `generateFreshketEmail()` connect `Community 15` to `Community 0`?**
   _High betweenness centrality (0.001) - this node is a cross-community bridge._
 - **What connects `สร้างสไลด์คู่มือสำหรับ TA Team — HC Request System`, `สร้างสไลด์คู่มือ TA — ใช้รูปจริงจาก Web App`, `กล่อง callout สีเหลือง` to the rest of the system?**
-  _397 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _406 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.062456140350877196 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.0636030636030636 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
   _Cohesion score 0.0625 - nodes in this community are weakly interconnected._
 - **Should `Community 2` be split into smaller, more focused modules?**

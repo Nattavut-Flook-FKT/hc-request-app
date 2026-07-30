@@ -15,7 +15,7 @@
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/vite.config.js": {
-    "mtime": 1783500775.7374291,
+    "mtime": 1784803680.3882449,
     "ast_hash": "bdecbfdc1b06cd5e06516528096a9e73",
     "semantic_hash": ""
   },
@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/gas/appsscript.json": {
-    "mtime": 1783500775.6593025,
-    "ast_hash": "bcc03d23e3569a35406af7468dd6d9aa",
+    "mtime": 1784720116.7301056,
+    "ast_hash": "ca1072fd0cfac23a77070c0dc7f21b1b",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/gas/.clasp.json": {
@@ -55,8 +55,8 @@
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/.claude/settings.local.json": {
-    "mtime": 1784196386.5321472,
-    "ast_hash": "f16f2d3e4b40ac510f3b6a187cdf2fd8",
+    "mtime": 1784790891.8745825,
+    "ast_hash": "979e3e487817cff7e7dc7467607fb285",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/.claude/launch.json": {
@@ -125,8 +125,8 @@
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/App.jsx": {
-    "mtime": 1783500775.7182717,
-    "ast_hash": "b5b958ac92aa2d94e57a2740b803600a",
+    "mtime": 1784803680.3602962,
+    "ast_hash": "c6246850a6e5e660b14a9d399c38ad03",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/utils/grants.js": {
@@ -135,242 +135,242 @@
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/utils/exportExcel.js": {
-    "mtime": 1783500775.7364933,
+    "mtime": 1784803680.3858707,
     "ast_hash": "c873d8fb87d51323b7b31983538d63c1",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/utils/hcId.js": {
-    "mtime": 1784196038.6750638,
+    "mtime": 1784803680.3865254,
     "ast_hash": "d4958af11acd1c90c7cf9df697a88f93",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/utils/reportUtils.js": {
-    "mtime": 1784190749.7755103,
+    "mtime": 1784803680.3869834,
     "ast_hash": "dbc24e32ca8251dbbd454662f11fcfb9",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/utils/sla.js": {
-    "mtime": 1784012249.293291,
+    "mtime": 1784803680.387345,
     "ast_hash": "49ede26ccb05f9ea0b9f6ea750995b1b",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Forms/HCRequestForm.jsx": {
-    "mtime": 1784196294.3608527,
-    "ast_hash": "694644d125d901bf5a20e0f6d15b915f",
+    "mtime": 1785407824.0941422,
+    "ast_hash": "915f9f1c0c2163a437422cd781215a83",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Auth/Login.jsx": {
-    "mtime": 1783500775.7204409,
+    "mtime": 1784803680.3621984,
     "ast_hash": "6893348bb50582f35747a478bd34f1d4",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Auth/PendingApprovalPage.jsx": {
-    "mtime": 1783500775.7207043,
+    "mtime": 1784803680.3625612,
     "ast_hash": "403a33792f2558cc0bf33bc07ef04209",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Admin/ImportPage.jsx": {
-    "mtime": 1783500775.719792,
+    "mtime": 1784803680.3613806,
     "ast_hash": "94fb2178c5f6c6d5f3f56655e166d313",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Shared/UserGuide.jsx": {
-    "mtime": 1783500775.7292287,
+    "mtime": 1784803680.3751605,
     "ast_hash": "b602f2e8f2c76580f164926d6e994dd0",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Shared/Layout.jsx": {
-    "mtime": 1783500775.727944,
+    "mtime": 1784803680.3732855,
     "ast_hash": "45f32037c81f1d627c592761eeab66d3",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Shared/AppHelpers.jsx": {
-    "mtime": 1783500775.727624,
-    "ast_hash": "3658d44dd09ba23879bb69c914155af5",
+    "mtime": 1784803680.372531,
+    "ast_hash": "f0dc873f5ce320241954f6b8844009b8",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Shared/StatsListener.jsx": {
-    "mtime": 1783500775.7287173,
+    "mtime": 1784803680.3744721,
     "ast_hash": "d6cc2ff270a93acb8eb2cb750921638c",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Shared/Toast.jsx": {
-    "mtime": 1783500775.7289743,
+    "mtime": 1784803680.374787,
     "ast_hash": "cdc2051b9d28b01522f2adcc13b06902",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Shared/Sidebar.jsx": {
-    "mtime": 1783500775.7284844,
-    "ast_hash": "8186b85d554ab24b8a42da41d7329868",
+    "mtime": 1784803680.373976,
+    "ast_hash": "fad4592597c2b4209ce599a549f47741",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Shared/ConfirmModal.jsx": {
-    "mtime": 1783500775.7277856,
+    "mtime": 1784803680.3729608,
     "ast_hash": "9a0ad3592e17a0ec050365307bea473d",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Dashboard/StatCards.jsx": {
-    "mtime": 1783500775.7228827,
+    "mtime": 1784803680.3661766,
     "ast_hash": "09cd2f10f1ec95b58fc6c698ea936b4a",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Dashboard/MonthlyPipeline.jsx": {
-    "mtime": 1783500775.7215157,
+    "mtime": 1784803680.3635051,
     "ast_hash": "555df5c088c02b79c92fe70f2d92862f",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Dashboard/YoYChart.jsx": {
-    "mtime": 1783500775.724466,
+    "mtime": 1784803680.3670034,
     "ast_hash": "026ec78b934315f08dfff1ea782a5126",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Dashboard/RequestTable.jsx": {
-    "mtime": 1784196294.3605735,
-    "ast_hash": "32dbde54f9fe05c9e3d9463eeb360f4e",
+    "mtime": 1784885692.4191446,
+    "ast_hash": "ea31b436391bd75f7bf252d564b3b175",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Dashboard/ManpowerPivot.jsx": {
-    "mtime": 1783500775.7209764,
+    "mtime": 1784803680.36301,
     "ast_hash": "7591e552f99cd170f3f0be781629c5cd",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Dashboard/TAWorkloadPanel.jsx": {
-    "mtime": 1783500775.7231922,
+    "mtime": 1784803680.3664615,
     "ast_hash": "ee97f0208466f0a62992a6d166cf3bcd",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Dashboard/ReportPanel.jsx": {
-    "mtime": 1783500775.7217615,
+    "mtime": 1784803680.3642716,
     "ast_hash": "94a86d2cf4d38819cb4ea093d32e48f5",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Manager/ManagerRequestsView.jsx": {
-    "mtime": 1784190749.7738903,
-    "ast_hash": "db4c36fb2309d7b7b916a52c2f158ea3",
+    "mtime": 1784803680.3684409,
+    "ast_hash": "ed16a8eca3586f200e36970d9a43fff1",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Reports/SLAReport.jsx": {
-    "mtime": 1784013862.7949498,
+    "mtime": 1784803680.3711674,
     "ast_hash": "208f3ed8e9f4e57fdb6287637198063c",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Reports/ReportUI.jsx": {
-    "mtime": 1783500775.726438,
+    "mtime": 1784803680.3706262,
     "ast_hash": "b97dd53a2b7acaac91f4a1923eb0bcbd",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Reports/TAPerformanceReport.jsx": {
-    "mtime": 1784013765.0196772,
+    "mtime": 1784803680.3717592,
     "ast_hash": "b994165663bc7e71d410f871bba08660",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Reports/PivotBuilder.jsx": {
-    "mtime": 1784013871.824123,
+    "mtime": 1784803680.3699682,
     "ast_hash": "ba3e0bea4df14abb60297b628c2f0c86",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Reports/OnboardingReport.jsx": {
-    "mtime": 1784013802.8542237,
+    "mtime": 1784803680.3690286,
     "ast_hash": "121a04bd22d53cac408b1a143a1b2922",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/components/Reports/PeriodSummary.jsx": {
-    "mtime": 1784013704.9740438,
+    "mtime": 1784803680.3695066,
     "ast_hash": "cfe2e4b788363e77ff5148c7dfbbfa18",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/data/orgStructure.js": {
-    "mtime": 1783500775.7300665,
+    "mtime": 1784803680.3766878,
     "ast_hash": "cabf7ea2b9096a69f06979e4e28af8d9",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/data/deptMapping.js": {
-    "mtime": 1783500775.729521,
+    "mtime": 1784803680.3758273,
     "ast_hash": "633a47b4dfd98f4e154ff16124493eec",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/data/jobGrades.js": {
-    "mtime": 1783500775.7297933,
+    "mtime": 1784803680.3764222,
     "ast_hash": "1d7eed0dd26af6dcf925084c238c039f",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/pages/AuditLogPage.jsx": {
-    "mtime": 1783500775.731724,
+    "mtime": 1784803680.3797066,
     "ast_hash": "a79fa5d54e782cc2a0938a4504a0d7d8",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/pages/MyCasesPage.jsx": {
-    "mtime": 1783500775.733247,
+    "mtime": 1784803680.382373,
     "ast_hash": "a60b553ac90eab6e49d290c9cf3f1997",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/pages/UserManagementPage.jsx": {
-    "mtime": 1783500775.7341244,
-    "ast_hash": "3c0687009dc81c4660481db6a2e9edd2",
+    "mtime": 1784803680.3834343,
+    "ast_hash": "44c9269da286826c9e34c07c2e9aa519",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/pages/DashboardPage.jsx": {
-    "mtime": 1784190749.774374,
-    "ast_hash": "aa3c8c54c2b88fa9afef986d40183dcf",
+    "mtime": 1784803680.3804812,
+    "ast_hash": "f10bf542466bb05282efd01a676322fb",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/pages/MyRequestsPage.jsx": {
-    "mtime": 1783500775.7335198,
+    "mtime": 1784803680.382593,
     "ast_hash": "710fde00f472fdc4b285771ea817b74a",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/pages/CustomPositionsPage.jsx": {
-    "mtime": 1783500775.732011,
+    "mtime": 1784803680.3801677,
     "ast_hash": "b9c7fcb25446583fb35b389546ce8153",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/pages/JDFilesPage.jsx": {
-    "mtime": 1783500775.7330086,
+    "mtime": 1784803680.381915,
     "ast_hash": "a9a7a63ad853c3dda43a1129c142ce4a",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/pages/AdminToolsPage.jsx": {
-    "mtime": 1783500775.7308104,
-    "ast_hash": "6db9dcf9796790d2b07cb4942a2da756",
+    "mtime": 1785407746.7145178,
+    "ast_hash": "4b7da9676eeca5cf2fb67a4f0784723f",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/pages/FormPage.jsx": {
-    "mtime": 1783500775.732706,
+    "mtime": 1784803680.3808868,
     "ast_hash": "1c0c765e431408d6ce89816603b038c7",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/pages/AllRequestsPage.jsx": {
-    "mtime": 1783500775.7312312,
+    "mtime": 1784803680.3782973,
     "ast_hash": "ed0ae3c3fa23478fa783c03877b62c86",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/pages/ReportsPage.jsx": {
-    "mtime": 1784013627.4556296,
+    "mtime": 1784803680.3831298,
     "ast_hash": "dc2667704e7c03c123414f9cd3a8a950",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/services/webhook.js": {
-    "mtime": 1784192691.299794,
-    "ast_hash": "207956e2b95a7d4b498d0acb34b13e39",
+    "mtime": 1784885613.6125755,
+    "ast_hash": "72018da1f2656e0a1924fa9537af11b3",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/services/supabase.js": {
-    "mtime": 1783500775.735896,
-    "ast_hash": "bd8d0594bb7ff9f5bffb55e632d4f51b",
+    "mtime": 1785407969.1305938,
+    "ast_hash": "b5afd314051e40c039ef468cdc7c05f2",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/services/auditLog.js": {
-    "mtime": 1783500775.7344682,
+    "mtime": 1784803680.3839338,
     "ast_hash": "f65fb416e0c80a57b80f813dbe13331f",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/services/firebase.js": {
-    "mtime": 1783500775.7347558,
+    "mtime": 1784803680.384359,
     "ast_hash": "940a5cf3470fc3ae80da50cf8c5e91e8",
     "semantic_hash": ""
   },
   "/Users/flook/work/Projects/hc-request-app/src/services/sheetsData.js": {
-    "mtime": 1783500775.7353039,
+    "mtime": 1784803680.384761,
     "ast_hash": "40bd4f926766db12965f89b2f4786544",
     "semantic_hash": ""
   },
@@ -562,6 +562,26 @@
   "/Users/flook/work/Projects/hc-request-app/src/assets/react.svg": {
     "mtime": 1773474542.417917,
     "ast_hash": "f0402b67b6ce880f65666bb49e841696",
+    "semantic_hash": ""
+  },
+  "/Users/flook/work/Projects/hc-request-app/src/utils/email.js": {
+    "mtime": 1784539579.367008,
+    "ast_hash": "58a8720f872e56b7ba9a48e94897ddb8",
+    "semantic_hash": ""
+  },
+  "/Users/flook/work/Projects/hc-request-app/src/pages/ItOnboardingPage.jsx": {
+    "mtime": 1784803680.3812666,
+    "ast_hash": "945e22466b088a976c037887234c51c5",
+    "semantic_hash": ""
+  },
+  "/Users/flook/work/Projects/hc-request-app/src/pages/ApproveNewHcPage.jsx": {
+    "mtime": 1784803680.3790324,
+    "ast_hash": "da96ecb43000065c20d81e0be38034e3",
+    "semantic_hash": ""
+  },
+  "/Users/flook/work/Projects/hc-request-app/src/pages/PendingApprovalsPage.jsx": {
+    "mtime": 1784803680.3828454,
+    "ast_hash": "f6a7367ad7dd9d32bb6c574d528dfd1b",
     "semantic_hash": ""
   }
 }
