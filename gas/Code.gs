@@ -401,6 +401,11 @@ var SLACK_CEO_APPROVAL  = _props.getProperty('SLACK_CEO_APPROVAL')  || SLACK_UPD
 // CEO_EMAIL — อีเมลแจ้งเตือน CEO Approval คู่กับ Slack (comma-separated ได้ถ้าหลายคน)
 // ว่างเปล่า = ไม่ส่งอีเมล (fallback ปลอดภัย ไม่ error)
 var CEO_EMAIL           = _props.getProperty('CEO_EMAIL')           || ''
+// SLACK_BOT_TOKEN — Bot User OAuth Token (xoxb-...) สำหรับ DM ส่วนตัวถึง Manager
+// ต้องสร้าง Slack App เอง (Bot scopes: users:read.email, chat:write) — ว่างเปล่า = ข้าม DM เงียบๆ
+var SLACK_BOT_TOKEN     = _props.getProperty('SLACK_BOT_TOKEN')     || ''
+// DM_MILESTONES — สถานะที่จะ DM ส่วนตัวถึง Manager (แค่จุดสำคัญ กันสแปม)
+var DM_MILESTONES       = ['Offering', 'Onboarding', 'Rejected', 'Closed']
 var APP_URL             = _props.getProperty('APP_URL')             || 'https://hcrequest.web.app'
 // HR Spreadsheet (MainData + Manager_Access) — ต้องตั้งค่าใน Script Properties
 // key: HR_SPREADSHEET_ID  (ไม่มี fallback เพื่อป้องกัน spreadsheet ID หลุดในโค้ด)
@@ -498,6 +503,11 @@ function slackStatusUpdate(position, department, oldStatus, newStatus, assignedT
   if (extra.by)        lines.push('*โดย:* ' + extra.by)
   lines.push('🔗 ' + APP_URL + '/all-requests')
   sendSlack_(SLACK_UPDATES, lines.join('\n'))
+
+  // ── DM ส่วนตัวถึง Manager เจ้าของเคส เฉพาะ milestone สำคัญ (กันสแปมทุกสถานะ) ──
+  if (extra.requesterEmail && DM_MILESTONES.indexOf(newStatus) !== -1) {
+    slackDMManager_(extra.requesterEmail, '👋 เคสของคุณอัพเดต\n' + lines.slice(1).join('\n'))
+  }
 }
 
 // slackStartDateChanged — แจ้งเปลี่ยนวันเริ่มงานโดยไม่กระทบสถานะ (แยกจาก slackStatusUpdate
@@ -566,6 +576,35 @@ function alertError_(where, err, e, ctx) {
 // ใช้กับทุกเหตุการณ์ที่ Admin ต้องรู้: ลบแถวสำเร็จ/ไม่เจอ, อัปเดตสถานะไม่เจอแถว ฯลฯ
 function alertSlack_(text) {
   sendSlack_(SLACK_ALERT, text)
+}
+
+// slackDMManager_ — แปลง email → Slack user ID (cache 6ชม. กัน lookupByEmail ซ้ำ) แล้ว DM ส่วนตัว
+// ต้องมี SLACK_BOT_TOKEN (Bot scopes: users:read.email, chat:write) ไม่งั้นข้ามเงียบๆ
+// email ที่หาไม่เจอใน workspace (เช่น external) ก็ข้ามเงียบๆ เหมือนกัน — ไม่ทำให้ status update พัง
+function slackDMManager_(email, text) {
+  if (!SLACK_BOT_TOKEN || !email) return
+  try {
+    var cache = CacheService.getScriptCache()
+    var key = 'slackuid_' + email
+    var userId = cache.get(key)
+    if (!userId) {
+      var lookup = UrlFetchApp.fetch(
+        'https://slack.com/api/users.lookupByEmail?email=' + encodeURIComponent(email),
+        { headers: { Authorization: 'Bearer ' + SLACK_BOT_TOKEN }, muteHttpExceptions: true }
+      )
+      var data = JSON.parse(lookup.getContentText())
+      if (!data.ok) { Logger.log('[slackDMManager_] lookup fail: ' + data.error); return }
+      userId = data.user.id
+      cache.put(key, userId, 21600) // 6 ชม.
+    }
+    UrlFetchApp.fetch('https://slack.com/api/chat.postMessage', {
+      method: 'post',
+      contentType: 'application/json; charset=utf-8',
+      headers: { Authorization: 'Bearer ' + SLACK_BOT_TOKEN },
+      payload: JSON.stringify({ channel: userId, text: text }),
+      muteHttpExceptions: true,
+    })
+  } catch (err) { Logger.log('[slackDMManager_] EXCEPTION: ' + err.message) }
 }
 
 function sendSlack_(webhookUrl, text) {
@@ -801,6 +840,7 @@ function doGet_(e) {
       const cvUrl          = e.parameter.cvUrl          || null   // ลิ้ง CV (Google Drive, etc.)
       const changedBy      = e.parameter.by             || null   // ชื่อคนกดในแอป (ใส่ใน Slack alert)
       const itEmail        = e.parameter.itEmail        || null   // อีเมลแจ้ง IT ตอนเข้า Onboarding (ไม่เขียนลง Sheets)
+      const requesterEmail = e.parameter.requesterEmail || null   // อีเมล Manager เจ้าของเคส — ใช้ DM ส่วนตัวตอน milestone สำคัญเท่านั้น
 
       const VALID = ['Open','Recruiting','Interviewing','Offering','Onboarding','Rejected','NoShow','Closed','Cancelled',
                      'OnHold','InternalTransfer','Confidential']
@@ -941,6 +981,7 @@ function doGet_(e) {
         by: changedBy,
         candidate: clearInfo ? '' : rowCandidate,
         startDate: alertStartDate,
+        requesterEmail: requesterEmail,
       })
       return responseJson_({ success: true })
     } catch (err) {

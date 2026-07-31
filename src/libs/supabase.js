@@ -1,7 +1,7 @@
 /**
  * supabase.js — Supabase File Storage Service (บริการจัดการไฟล์ผ่าน Supabase Storage)
  * ─────────────────────────────────────────────────────────────────────────────
- * Hybrid Storage Layer — ใช้ Supabase Storage สำหรับเก็บไฟล์ JD (PDF) และ CV (PDF/DOC/DOCX)
+ * Hybrid Storage Layer — ใช้ Supabase Storage สำหรับเก็บไฟล์ JD (PDF/Word/รูปภาพ) และ CV (PDF/DOC/DOCX)
  * ส่วน Auth และ Database หลักยังคงใช้ Firebase / Firestore
  *
  * This module provides a hybrid storage layer: Supabase Storage is used
@@ -14,7 +14,8 @@
  * Auth    : anon key + signed URL แทน Firebase Auth token / anon key + signed URLs instead of Firebase Auth tokens
  *
  * Functions exported:
- *   - uploadJDFile   : อัพโหลดไฟล์ JD (PDF) ไปยัง bucket jd-files / Upload JD PDF to jd-files bucket
+ *   - validateJDFile : ตรวจชนิด+ขนาดไฟล์ JD ก่อนอัพโหลด (ฟอร์มเรียกตอนเลือกไฟล์) / Validate JD file type + size
+ *   - uploadJDFile   : อัพโหลดไฟล์ JD (PDF/Word/รูปภาพ) ไปยัง bucket jd-files / Upload JD file to jd-files bucket
  *   - getJDSignedUrl : สร้าง signed URL (1 ชั่วโมง) สำหรับ JD file / Generate 1-hour signed URL for a JD file
  *   - listJDFiles    : ดึงรายการไฟล์ทั้งหมดใน jd-files bucket / List all files in the jd-files bucket
  *   - deleteJDFile   : ลบไฟล์ JD ออกจาก Supabase / Delete a JD file from Supabase Storage
@@ -49,8 +50,45 @@ async function getClient() {
 /** ขนาดไฟล์สูงสุดที่อนุญาต (MB) / Maximum allowed file size in megabytes */
 const MAX_FILE_SIZE_MB = 10
 
-/** ประเภทไฟล์ที่อนุญาตสำหรับ JD (เฉพาะ PDF) / Allowed MIME types for JD files (PDF only) */
+/** ประเภทไฟล์ที่อนุญาตสำหรับ JD Library (เฉพาะ PDF) / Allowed MIME types for JD Library files (PDF only) */
 const ALLOWED_TYPES = ['application/pdf']
+
+/**
+ * ไฟล์ JD ที่แนบมากับ HC request — รับ PDF, Word, รูปภาพ ตามที่ UI ฟอร์มสัญญาไว้
+ * Map นามสกุลไฟล์ → MIME type (ใช้ทั้ง validate และเป็น contentType fallback
+ * เมื่อ browser ให้ file.type ว่าง เช่น Windows ที่ registry MIME เพี้ยน)
+ */
+const JD_REQUEST_ALLOWED = {
+  '.pdf':  'application/pdf',
+  '.doc':  'application/msword',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.png':  'image/png',
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+}
+
+/** หานามสกุลไฟล์ (lowercase รวมจุด) เช่น 'JD ผู้จัดการ.PDF' → '.pdf' */
+function fileExt(name) {
+  const i = name.lastIndexOf('.')
+  return i === -1 ? '' : name.slice(i).toLowerCase()
+}
+
+/**
+ * ตรวจไฟล์ JD ของ HC request ก่อนอัพโหลด — ใช้ทั้งตอนเลือกไฟล์ในฟอร์ม (fail fast,
+ * กัน Firestore doc กำพร้า) และซ้ำใน uploadJDFile
+ * เช็คจากนามสกุลไฟล์ ไม่ใช่ file.type — MIME จาก browser เชื่อถือไม่ได้ (ว่างได้บน Windows)
+ * @param {File} file
+ * @returns {string|null} ข้อความ error ภาษาไทย หรือ null ถ้าผ่าน
+ */
+export function validateJDFile(file) {
+  if (!JD_REQUEST_ALLOWED[fileExt(file.name)]) {
+    return 'อัพโหลดได้เฉพาะ PDF, Word (.doc/.docx) หรือรูปภาพ (PNG, JPG) เท่านั้น'
+  }
+  if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+    return `ไฟล์ต้องไม่เกิน ${MAX_FILE_SIZE_MB}MB`
+  }
+  return null
+}
 
 /** Supabase Storage bucket names — อ่านจาก env หรือใช้ default */
 const JD_BUCKET = import.meta.env.VITE_SUPABASE_JD_BUCKET || 'jd-files'
@@ -60,16 +98,16 @@ const CV_BUCKET = import.meta.env.VITE_SUPABASE_CV_BUCKET || 'cv-files'
 
 /**
  * อัพโหลดไฟล์ JD ไปยัง Supabase Storage bucket JD_BUCKET
- * Uploads a Job Description (JD) PDF file to the JD_BUCKET Supabase Storage bucket.
+ * Uploads a Job Description (JD) file to the JD_BUCKET Supabase Storage bucket.
  *
  * กระบวนการ / Process:
- *   1. ตรวจสอบประเภทไฟล์ (PDF เท่านั้น) / Validate file type (PDF only)
+ *   1. ตรวจสอบประเภทไฟล์ (PDF/Word/รูปภาพ — ดู JD_REQUEST_ALLOWED) / Validate file type
  *   2. ตรวจสอบขนาดไฟล์ (ไม่เกิน 10MB) / Validate file size (max 10MB)
  *   3. Sanitize ชื่อไฟล์เพื่อความปลอดภัย / Sanitize filename for safety
  *   4. อัพโหลดไปยัง path: {requestId}/{timestamp}_{filename} / Upload to path: {requestId}/{timestamp}_{filename}
  *   5. สร้าง signed URL อายุ 7 วัน / Generate a 7-day signed URL for access
  *
- * @param {File}   file      - ไฟล์ที่จะอัพโหลด (PDF เท่านั้น, ไม่เกิน 10MB) / File to upload (PDF only, max 10MB)
+ * @param {File}   file      - ไฟล์ที่จะอัพโหลด (PDF/Word/PNG/JPG, ไม่เกิน 10MB) / File to upload (max 10MB)
  * @param {string} requestId - Firestore doc ID ที่ใช้เป็นชื่อ folder / Firestore document ID used as the storage folder name
  * @returns {Promise<{url: string|null, path: string|null, error: string|null}>}
  *   - url  : signed URL สำหรับเข้าถึงไฟล์ (7 วัน) หรือ null ถ้าล้มเหลว
@@ -78,19 +116,12 @@ const CV_BUCKET = import.meta.env.VITE_SUPABASE_CV_BUCKET || 'cv-files'
  *   - error: ข้อความ error หรือ null ถ้าสำเร็จ / Error message, or null on success
  */
 export async function uploadJDFile(file, requestId) {
+  // ตรวจประเภท + ขนาดไฟล์ก่อน (helper เดียวกับที่ฟอร์มใช้ตอนเลือกไฟล์)
+  // Validate type + size first (same helper the form uses at select time)
+  const invalid = validateJDFile(file)
+  if (invalid) return { url: null, path: null, error: invalid }
+
   const supabase = await getClient()
-  // ตรวจสอบประเภทไฟล์ก่อนอัพโหลด — รับเฉพาะ PDF
-  // Validate MIME type before upload — only PDF is accepted for JD files
-  if (!ALLOWED_TYPES.includes(file.type)) {
-    return { url: null, path: null, error: 'อัพโหลดได้เฉพาะไฟล์ PDF เท่านั้น' }
-  }
-
-  // ตรวจสอบขนาดไฟล์ — ต้องไม่เกิน 10MB
-  // Validate file size — must not exceed the 10MB limit
-  if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-    return { url: null, path: null, error: `ไฟล์ต้องไม่เกิน ${MAX_FILE_SIZE_MB}MB` }
-  }
-
   try {
     // Sanitize ชื่อไฟล์: แทนที่อักขระพิเศษด้วย underscore เพื่อป้องกัน path traversal
     // Sanitize the filename: replace any character outside [a-zA-Z0-9._-] with underscores
@@ -103,10 +134,13 @@ export async function uploadJDFile(file, requestId) {
     const filePath = `${requestId}/${Date.now()}_${fileName}`
 
     // อัพโหลดไฟล์ไปยัง Supabase Storage — upsert: false ป้องกันการเขียนทับโดยบังเอิญ
+    // contentType เอาจากนามสกุลเสมอ ไม่ใช้ file.type — bucket jd-files บังคับ MIME allowlist
+    // ฝั่ง server ถ้าเครื่อง user ส่ง MIME เพี้ยน (เช่น application/x-pdf บน Windows ที่
+    // registry พัง) จะโดน bucket ตอบ 400 ทั้งที่ไฟล์ถูกต้อง — map ของเราตรงกับ allowlist อยู่แล้ว
     // Upload to Supabase Storage — upsert: false prevents accidental overwrites
     const { error: uploadError } = await supabase.storage
       .from(JD_BUCKET)
-      .upload(filePath, file, { upsert: false, contentType: file.type })
+      .upload(filePath, file, { upsert: false, contentType: JD_REQUEST_ALLOWED[fileExt(file.name)] })
 
     if (uploadError) throw uploadError
 

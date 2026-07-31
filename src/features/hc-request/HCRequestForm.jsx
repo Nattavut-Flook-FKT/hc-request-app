@@ -31,8 +31,8 @@ import { db } from '@/libs/firebase'
 import { generateHCID } from '@/features/hc-request/hcId'
 import { sendToWebhook, sendCeoApprovalRequest, reportClientError } from '@/libs/webhook'
 import { logAudit } from '@/features/audit-log/auditLog'
-import { uploadJDFile, getJDSignedUrl } from '@/libs/supabase'
-import { Loader2, CheckCircle, ChevronDown, X, Paperclip, FileText, ExternalLink } from 'lucide-react'
+import { uploadJDFile, getJDSignedUrl, validateJDFile } from '@/libs/supabase'
+import { Loader2, CheckCircle, AlertTriangle, ChevronDown, X, Paperclip, FileText, ExternalLink } from 'lucide-react'
 import { HQ_JG_LEVELS, OPERATION_JG_LEVELS } from '@/config/jobGrades'
 import { fetchSheetsData, getDepartmentByEmail, getEmployeesByDepartment, getPositionsByDepartment } from '@/libs/sheetsData'
 import { DIVISIONS, getDepartments, getSections, getBusinessUnits, getDivisionByDepartment } from '@/config/orgStructure'
@@ -322,6 +322,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   // ─── JD File Upload State ──────────────────────────────────────────────────
   const [jdFile, setJdFile] = useState(null)            // ไฟล์ JD ที่ user เลือก (File object)
   const [uploadProgress, setUploadProgress] = useState('') // ข้อความแสดงสถานะการ upload
+  const [jdWarning, setJdWarning] = useState('')        // อัพโหลด JD ไม่สำเร็จ แต่คำขอบันทึก + เข้า Sheets แล้ว
   const [replacementCustomMode, setReplacementCustomMode] = useState(false) // true = พิมพ์ชื่อเอง
   const [shiftCustomMode, setShiftCustomMode] = useState(false) // true = เลือก "อื่นๆ" ในกะการทำงาน → กรอกเวลาเอง
 
@@ -522,11 +523,11 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   }, [form.position])
 
   // ─── Effect: Scroll ไปหา Feedback Banner ─────────────────────────────────
-  // เมื่อ success หรือ error เปลี่ยนค่า → scroll smooth ไปด้านบนของฟอร์ม
+  // เมื่อ success / error / jdWarning เปลี่ยนค่า → scroll smooth ไปด้านบนของฟอร์ม
   useEffect(() => {
-    if (!success && !error) return
+    if (!success && !error && !jdWarning) return
     feedbackTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [success, error])
+  }, [success, error, jdWarning])
 
   // ─── handleOpenExistingJD ──────────────────────────────────────────────────
   // สร้าง Supabase signed URL (อายุ 1 ชั่วโมง) สำหรับแสดง PDF ใน iframe sidebar
@@ -572,12 +573,30 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
     setForm((prev) => ({ ...prev, [name]: value }))
   }, [])
 
+  // ─── handleJdFileSelect ────────────────────────────────────────────────────
+  // Validate ไฟล์ JD ทันทีตอนเลือก (type + size) — fail fast เพื่อ UX ที่ดี
+  // user แก้ไฟล์ได้ก่อนกด submit ไม่ต้องกรอกฟอร์มเสร็จแล้วมาเจอ error ทีหลัง
+  // (ไม่ใช่กลไกกัน request กำพร้าแล้ว — Step 3 ใน handleSubmit กันเองในตัว)
+  function handleJdFileSelect(e) {
+    const file = e.target.files?.[0] ?? null
+    if (!file) return
+    const invalid = validateJDFile(file)
+    if (invalid) {
+      setError(invalid)
+      e.target.value = '' // เคลียร์ input ให้เลือกไฟล์เดิมซ้ำได้หลังแก้
+      return
+    }
+    setError('')
+    setJdFile(file)
+  }
+
   // ─── handleSubmit ──────────────────────────────────────────────────────────
   // ขั้นตอนการ submit ฟอร์ม:
   // 1. generateHCID → สร้าง HCID ในรูปแบบ REQ-YYYY-NNN (atomic counter)
   // 2. addDoc → สร้าง Firestore document ใน 'hc_requests' (ได้ docRef.id)
   // 3. (ถ้ามีไฟล์ JD) uploadJDFile → อัพโหลดไป Supabase ด้วย folder = docRef.id
   //    แล้ว updateDoc เพิ่ม jdFileUrl, jdFilePath, jdFileName ลงใน Firestore
+  //    ★ ขั้นนี้ล้มเหลวได้โดยไม่ล้มทั้ง submit → ไปต่อ Step 4-6 พร้อมตั้ง jdWarning
   // 4. ตรวจสอบว่าตำแหน่งเป็น custom position หรือไม่ → addDoc ใน 'custom_positions' ถ้าใช่
   // 5. sendToWebhook → แจ้งเตือน Slack / LINE / GAS Sheet
   // 6. logAudit → บันทึก audit trail (action='Submit', toStatus='Open')
@@ -585,28 +604,34 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
     e.preventDefault()
     setLoading(true)
     setError('')
+    setJdWarning('')
+
+    // hcId อยู่นอก try เพื่อให้ catch ส่งเข้า reportClientError ได้ — ใช้ตามหา doc กำพร้าใน Firestore
+    let hcId = null
 
     try {
       // ── Step 1: สร้าง HCID ในรูปแบบ REQ-YYYY-NNN ─────────────────────────────
       // ต้องทำก่อน addDoc เพื่อให้ hcId พร้อมอยู่ใน payload ตั้งแต่ต้น
-      const hcId = await generateHCID()
+      hcId = await generateHCID()
 
       // Beta: New HC ที่ยื่นโดยใครก็ตามในกลุ่มทดสอบ ต้องรอ CEO approve ก่อน — ไม่ยกเว้น role
       // (แม้ admin ยื่นเอง ถ้า email อยู่ใน allow-list ก็ต้องผ่านการอนุมัติเหมือนกัน)
       // Replacement ไม่เข้าเงื่อนไขนี้เลย ไม่ว่าใครยื่น
       // คนอื่นที่ไม่อยู่ใน allow-list ได้ status 'Open' ทันทีเหมือนเดิมทุกอย่าง
       //
-      // อ่าน allow-list สดตรงนี้ (ไม่ใช้ ceoApprovalBetaEmails state ที่ fetch ไว้ตอน mount) —
-      // state นั้น bundle รวมกับ fetchSheetsData() ใน Promise.all เดียวกัน ถ้า GAS ตอบช้า
-      // (cold start) แล้วกด submit ก่อนโหลดเสร็จ state จะยังว่างอยู่ → ข้าม approval แบบเงียบๆ
-      let currentBetaEmails = ceoApprovalBetaEmails
-      if (form.requestType === 'New HC') {
-        const freshSnap = await getDoc(doc(db, 'settings', 'ceoApprovalBeta'))
-        currentBetaEmails = freshSnap.exists() ? (freshSnap.data().testEmails || []).map(e => e.toLowerCase().trim()) : []
-      }
-      const needsCeoApproval = form.requestType === 'New HC'
-        && currentBetaEmails.includes(user.email.toLowerCase())
-      const approvalToken = needsCeoApproval ? crypto.randomUUID() : null
+      // [ปิดชั่วคราว] CEO Approval flow ถูกปิด — ทุก request เด้งเข้า TA ทันที (status Open)
+      // เปิดกลับ: ลบ 2 บรรทัดล่าง แล้ว uncomment บล็อกที่ comment ไว้ด้านล่าง
+      // ponytail: kill-switch บรรทัดเดียว โค้ด approve ที่เหลือ (หน้า /approve, GAS, rules) นอนเงียบไว้
+      const needsCeoApproval = false
+      const approvalToken = null
+      // let currentBetaEmails = ceoApprovalBetaEmails
+      // if (form.requestType === 'New HC') {
+      //   const freshSnap = await getDoc(doc(db, 'settings', 'ceoApprovalBeta'))
+      //   currentBetaEmails = freshSnap.exists() ? (freshSnap.data().testEmails || []).map(e => e.toLowerCase().trim()) : []
+      // }
+      // const needsCeoApproval = form.requestType === 'New HC'
+      //   && currentBetaEmails.includes(user.email.toLowerCase())
+      // const approvalToken = needsCeoApproval ? crypto.randomUUID() : null
 
       // สร้าง payload จาก form state + metadata ของ user
       const payload = {
@@ -627,16 +652,30 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       // ── Step 3: อัพโหลดไฟล์ JD (ถ้ามี) ───────────────────────────────────
       // uploadJDFile(file, docId) → อัพโหลดไป Supabase bucket ที่ path: jd/{docId}/{filename}
       // แล้ว updateDoc เพิ่ม jdFileUrl, jdFilePath, jdFileName กลับเข้า Firestore
+      //
+      // ห้าม throw ออกจากบล็อกนี้ — doc ถูกสร้างที่ Step 2 แล้ว ถ้า throw จะข้าม Step 4-6
+      // ซึ่งรวม sendToWebhook (ตัวเขียน Sheets + แจ้ง Slack ทีม TA) → เคสค้างอยู่แค่ใน
+      // Firestore ไม่มีใน Sheets และ TA ไม่รู้ตัวเลย (เคส "request กำพร้า")
+      // ไฟล์แนบพัง = เรื่องเล็กกว่าคำขอหลุด pipeline → บันทึกคำขอต่อ แล้วเตือน manager
       if (jdFile) {
         setUploadProgress('กำลังอัพโหลดไฟล์ JD...')
-        const { url, path, error: uploadErr } = await uploadJDFile(jdFile, docRef.id)
-        if (uploadErr) throw new Error('อัพโหลดไฟล์ไม่สำเร็จ: ' + uploadErr)
-        await updateDoc(doc(db, 'hc_requests', docRef.id), {
-          jdFileUrl:  url,   // public URL หรือ storage path
-          jdFilePath: path,  // path ใน Supabase bucket (ใช้สร้าง signed URL ภายหลัง)
-          jdFileName: jdFile.name,
-        })
-        setUploadProgress('')
+        try {
+          const { url, path, error: uploadErr } = await uploadJDFile(jdFile, docRef.id)
+          if (uploadErr) throw new Error(uploadErr)
+          await updateDoc(doc(db, 'hc_requests', docRef.id), {
+            jdFileUrl:  url,   // public URL หรือ storage path
+            jdFilePath: path,  // path ใน Supabase bucket (ใช้สร้าง signed URL ภายหลัง)
+            jdFileName: jdFile.name,
+          })
+        } catch (jdErr) {
+          // ponytail: ไม่ retry — upload พังซ้ำที่เดิมส่วนใหญ่คือ policy/ไฟล์ ไม่ใช่ network fluke
+          // ponytail: ยังไม่มี flow แนบ JD ย้อนหลังต่อเคส → บอก manager ให้ส่งไฟล์ตรงให้ TA
+          console.error('JD upload failed (คำขอถูกบันทึกแล้ว):', jdErr)
+          reportClientError('uploadJD', jdErr, { hcId, docId: docRef.id })
+          setJdWarning(`คำขอ ${hcId} ถูกส่งเข้าระบบ TA เรียบร้อยแล้ว แต่แนบไฟล์ JD ไม่สำเร็จ (${jdErr.message}) — กรุณาส่งไฟล์ JD ให้ทีม TA โดยตรง หรืออัพโหลดเข้า JD Library`)
+        } finally {
+          setUploadProgress('') // เคลียร์ทุกกรณี ไม่ให้ข้อความ "กำลังอัพโหลด..." ค้างบนหน้าจอ
+        }
       }
 
       // ── Step 4: บันทึก Custom Position (ถ้าไม่มีในรายการ) ─────────────────
@@ -676,7 +715,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       }
 
       // ── Step 6: บันทึก Audit Log ──────────────────────────────────────────
-      // logAudit บันทึกลง Firestore collection 'audit_logs' สำหรับ activity tracking
+      // logAudit บันทึกลง Firestore collection 'hc_logs' สำหรับ activity tracking
       logAudit({
         requestId:  docRef.id,
         action:     needsCeoApproval ? 'SubmitPendingApproval' : 'Submit',
@@ -697,7 +736,9 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       setTimeout(() => setSuccess(false), 4000) // ซ่อน success banner หลัง 4 วินาที
     } catch (err) {
       console.error('Submit error:', err)
-      reportClientError('submitHCRequest', err)
+      reportClientError('submitHCRequest', err, { hcId })
+      // error อัพโหลด JD ไม่ผ่านมาทางนี้แล้ว (Step 3 จับเองแล้วไปต่อ) → เหลือแต่ error ที่
+      // ทำให้คำขอไม่ถูกบันทึกจริงๆ เช่น generateHCID / addDoc พัง → ข้อความ generic พอ
       setError('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง')
     } finally {
       setLoading(false)
@@ -718,6 +759,11 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
 
   // jgLevels: รายการ Job Grade ตาม orgTrack (HQ vs OPERATION มี level ต่างกัน)
   const jgLevels = form.orgTrack === 'OPERATION' ? OPERATION_JG_LEVELS : HQ_JG_LEVELS
+
+  // canInlinePreview: เบราว์เซอร์ render ใน iframe ได้เฉพาะ PDF กับรูปภาพ
+  // ไฟล์ Word จะได้กรอบเปล่า (บาง browser สั่ง download แทน) → ต้องเปิดแท็บใหม่
+  // ไม่มีชื่อไฟล์ → เดาว่าเป็น PDF ตามพฤติกรรมเดิม (doc เก่าก่อนรับ Word/รูป)
+  const canInlinePreview = !existingJD?.jdFileName || /\.(pdf|png|jpe?g)$/i.test(existingJD.jdFileName)
 
   // positionOptions: รวม positions จาก Sheets + custom_positions ที่ตรงกับแผนก/track
   // sort alphabetically และ deduplicate ด้วย Set
@@ -814,10 +860,20 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
         )}
 
         {/* ── Success Banner: แสดง 4 วินาทีหลัง submit สำเร็จ ── */}
-        {success && (
+        {/* ซ่อนถ้ามี jdWarning — โชว์ banner เหลืองใบเดียวพอ ไม่ต้องเขียว+เหลืองซ้อนกัน */}
+        {success && !jdWarning && (
           <div className="mb-8 flex items-center gap-3 rounded-lg bg-green-fresh-50 px-5 py-4 text-green-fresh-900">
             <CheckCircle size={20} strokeWidth={1} absoluteStrokeWidth />
             <p className="font-bold">ยื่นคำขอสำเร็จแล้ว! ข้อมูลถูกส่งเข้าระบบเรียบร้อย</p>
+          </div>
+        )}
+
+        {/* ── JD Warning Banner: คำขอบันทึก + เข้า Sheets แล้ว แต่แนบไฟล์ JD ไม่ผ่าน ── */}
+        {/* ไม่ auto-hide (ต่างจาก success ที่หายใน 4 วิ) — manager ต้องอ่านทันแล้วไปทำต่อ */}
+        {jdWarning && (
+          <div className="mb-8 flex items-start gap-3 rounded-lg bg-yellow-50 px-5 py-4 text-yellow-950">
+            <AlertTriangle size={20} strokeWidth={1} absoluteStrokeWidth className="mt-0.5 shrink-0" />
+            <p className="font-bold">{jdWarning}</p>
           </div>
         )}
 
@@ -1262,7 +1318,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                     type="file"
                     accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
                     className="hidden"
-                    onChange={(e) => setJdFile(e.target.files?.[0] ?? null)}
+                    onChange={handleJdFileSelect}
                   />
                 </label>
               </div>
@@ -1280,7 +1336,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                   type="file"
                   accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
                   className="hidden"
-                  onChange={(e) => setJdFile(e.target.files?.[0] ?? null)}
+                  onChange={handleJdFileSelect}
                 />
               </label>
             )}
@@ -1326,7 +1382,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
        * แสดงเฉพาะบนหน้าจอ lg ขึ้นไป (hidden lg:flex)
        * แสดงเมื่อมี existingJD (request ที่มีไฟล์ JD อยู่แล้วสำหรับตำแหน่ง/แผนกเดียวกัน)
        * ผู้ใช้สามารถ:
-       *   - กดดู PDF ใน iframe (ดึง signed URL จาก Supabase อายุ 1 ชั่วโมง)
+       *   - กดดูไฟล์ใน iframe (ดึง signed URL จาก Supabase อายุ 1 ชั่วโมง)
        *   - เปิดในแท็บใหม่ผ่าน ExternalLink icon
        *   - อัพโหลด JD ใหม่ทับได้จากฟอร์มด้านซ้าย
        */}
@@ -1361,24 +1417,45 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                   onClick={previewUrl ? () => setPreviewUrl(null) : handleOpenExistingJD}
                   disabled={openingJD}
                   className="rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-dark-green-100 hover:text-dark-green-700 disabled:opacity-50"
-                  title={previewUrl ? 'ซ่อน PDF' : 'ดู PDF'}
+                  title={previewUrl ? 'ซ่อนไฟล์ JD' : 'ดูไฟล์ JD'}
                 >
                   {openingJD ? <Loader2 size={14} strokeWidth={1} absoluteStrokeWidth className="animate-spin" /> : previewUrl ? <X size={14} strokeWidth={1} absoluteStrokeWidth /> : <FileText size={14} strokeWidth={1} absoluteStrokeWidth />}
                 </button>
               </div>
             </div>
 
-            {/* PDF Viewer: iframe แสดง PDF จาก Supabase signed URL
+            {/* File Viewer: iframe แสดงไฟล์จาก Supabase signed URL (PDF/รูปภาพเท่านั้น)
              * height คำนวณจาก viewport เพื่อให้พอดีหน้าจอโดยไม่ต้อง scroll
+             * ไฟล์ Word → iframe render ไม่ได้ แสดงปุ่มเปิดแท็บใหม่แทนกรอบเปล่า
              * หรือแสดง placeholder พร้อมปุ่ม "เปิดดูไฟล์ JD" ถ้ายังไม่มี previewUrl
              */}
-            {previewUrl ? (
+            {previewUrl && canInlinePreview ? (
               <iframe
                 src={previewUrl}
                 className="w-full border-0 bg-neutral-100"
                 style={{ height: 'calc(100vh - 160px)', minHeight: '600px' }}
                 title="JD Preview"
               />
+            ) : previewUrl ? (
+              <div className="flex flex-col items-center justify-center gap-3 px-5 py-8">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-dark-green-100 text-dark-green-700">
+                  <FileText size={22} strokeWidth={1} absoluteStrokeWidth />
+                </div>
+                <p className="text-center text-xs text-neutral-500">
+                  ไฟล์ Word ดูในหน้านี้ไม่ได้<br />กดเปิดในแท็บใหม่เพื่อดาวน์โหลด
+                </p>
+                {/* ใช้สไตล์ secondary เหมือนปุ่ม "เปิดดูไฟล์ JD" ด้านล่าง — Primary CTA
+                    ของหน้านี้คือปุ่มยื่นคำขอ ห้ามมี dark-green-600 ตัวที่ 2 ใน viewport */}
+                <a
+                  href={previewUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dark-green-100 bg-white px-4 py-2.5 text-sm font-bold text-dark-green-700 transition-colors hover:bg-dark-green-50"
+                >
+                  <ExternalLink size={14} strokeWidth={1} absoluteStrokeWidth />
+                  เปิดไฟล์ JD
+                </a>
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center gap-3 px-5 py-8">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-dark-green-100 text-dark-green-700">

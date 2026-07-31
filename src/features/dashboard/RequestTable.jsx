@@ -404,7 +404,7 @@ export default function RequestTable({
     const req = requests.find((r) => r.id === id)
     try {
       await updateDoc(doc(db, 'hc_requests', id), { status: 'Cancelled', statusHistory: arrayUnion(buildHistoryEntry('Cancelled', user)) })
-      sendStatusUpdate(id, 'Cancelled', null, null, null, null, req?.hcId)
+      sendStatusUpdate(id, 'Cancelled', null, null, null, null, req?.hcId, null, false, null, null, req?.requesterEmail)
       logAudit({ requestId: id, action: 'Cancel', by: user.email, byName: user.displayName, fromStatus: req?.status, toStatus: 'Cancelled', position: req?.position, department: req?.department })
     } catch (err) {
       console.error('[handleCancel]', err)
@@ -419,7 +419,7 @@ export default function RequestTable({
     const req = requests.find((r) => r.id === id)
     try {
       await updateDoc(doc(db, 'hc_requests', id), { status: 'Recruiting', assignedTo: user.email, assignedToName: shortName(user.displayName), assignedAt: serverTimestamp(), statusHistory: arrayUnion(buildHistoryEntry('Recruiting', user)) })
-      sendStatusUpdate(id, 'Recruiting', shortName(user.displayName), new Date().toISOString(), null, null, req?.hcId)
+      sendStatusUpdate(id, 'Recruiting', shortName(user.displayName), new Date().toISOString(), null, null, req?.hcId, null, false, null, null, req?.requesterEmail)
       logAudit({ requestId: id, action: 'Assign', by: user.email, byName: user.displayName, fromStatus: req?.status, toStatus: 'Recruiting', position: req?.position, department: req?.department })
     } catch (err) {
       console.error('[handleClaim]', err)
@@ -491,7 +491,7 @@ export default function RequestTable({
       const startDateParam = CLEAR_START_DATE.includes(newStatus) && req.startDate
         ? 'CLEAR'
         : (extraData.startDate || null)
-      sendStatusUpdate(id, newStatus, updateData.assignedToName || req.assignedToName, assignedAt, startDateParam, extraData.candidateName || null, req?.hcId, offeringDate, clearInfo, extraData.cvUrl || req.cvUrl || null, extraData.itEmail || null)
+      sendStatusUpdate(id, newStatus, updateData.assignedToName || req.assignedToName, assignedAt, startDateParam, extraData.candidateName || null, req?.hcId, offeringDate, clearInfo, extraData.cvUrl || req.cvUrl || null, extraData.itEmail || null, req?.requesterEmail)
       logAudit({
         requestId: id,
         action: newStatus === 'Rejected' ? 'Rejected' : 'StatusChange',
@@ -554,7 +554,7 @@ export default function RequestTable({
         statusHistory: arrayUnion(buildHistoryEntry('Rejected', user)),
       })
       // clearInfo=true → GAS จะล้าง candidateName + startDate ใน Sheets ด้วย
-      sendStatusUpdate(rejectModal.id, 'Rejected', req?.assignedToName, null, null, null, req?.hcId, null, true)
+      sendStatusUpdate(rejectModal.id, 'Rejected', req?.assignedToName, null, null, null, req?.hcId, null, true, null, null, req?.requesterEmail)
       logAudit({
         requestId: rejectModal.id,
         action: 'Rejected',
@@ -585,7 +585,7 @@ export default function RequestTable({
         statusHistory: arrayUnion(buildHistoryEntry('NoShow', user)),
       })
       // ไม่ส่ง clearInfo → Sheets คงชื่อ candidate + วันเริ่มงานไว้เหมือนกัน
-      sendStatusUpdate(id, 'NoShow', req?.assignedToName, null, null, null, req?.hcId)
+      sendStatusUpdate(id, 'NoShow', req?.assignedToName, null, null, null, req?.hcId, null, false, null, null, req?.requesterEmail)
       logAudit({
         requestId: id,
         action: 'NoShow',
@@ -696,7 +696,7 @@ export default function RequestTable({
         statusHistory: arrayUnion(buildHistoryEntry('Recruiting', user)),
       })
       // clearInfo=true → GAS จะล้าง candidateName + startDate ใน Sheets ด้วย
-      sendStatusUpdate(id, 'Recruiting', req.assignedToName, null, null, null, req?.hcId, 'CLEAR', true)
+      sendStatusUpdate(id, 'Recruiting', req.assignedToName, null, null, null, req?.hcId, 'CLEAR', true, null, null, req?.requesterEmail)
       logAudit({
         requestId: id,
         action: 'Reopen',
@@ -796,7 +796,7 @@ export default function RequestTable({
         assignedToName: newTAName,
         assignedAt: serverTimestamp(),
       })
-      sendStatusUpdate(id, req?.status, newTAName, now, null, null, req?.hcId)
+      sendStatusUpdate(id, req?.status, newTAName, now, null, null, req?.hcId, null, false, null, null, req?.requesterEmail)
       logAudit({
         requestId: id,
         action: 'Assign',
@@ -1508,7 +1508,7 @@ export default function RequestTable({
                                         onKeyDown={async e => {
                                           if (e.key === 'Enter') {
                                             await updateDoc(doc(db, 'hc_requests', req.id), { candidateName: candidateEditVal.trim() })
-                                            sendStatusUpdate(req.id, req.status, req.assignedToName, null, req.startDate, candidateEditVal.trim(), req.hcId, null, false, req.cvUrl || null)
+                                            sendStatusUpdate(req.id, req.status, req.assignedToName, null, req.startDate, candidateEditVal.trim(), req.hcId, null, false, req.cvUrl || null, null, req.requesterEmail)
                                             setCandidateEditId(null)
                                           } else if (e.key === 'Escape') {
                                             setCandidateEditId(null)
@@ -1520,7 +1520,7 @@ export default function RequestTable({
                                       <button
                                         onClick={async () => {
                                           await updateDoc(doc(db, 'hc_requests', req.id), { candidateName: candidateEditVal.trim() })
-                                          sendStatusUpdate(req.id, req.status, req.assignedToName, null, req.startDate, candidateEditVal.trim(), req.hcId, null, false, req.cvUrl || null)
+                                          sendStatusUpdate(req.id, req.status, req.assignedToName, null, req.startDate, candidateEditVal.trim(), req.hcId, null, false, req.cvUrl || null, null, req.requesterEmail)
                                           setCandidateEditId(null)
                                         }}
                                         className="shrink-0 rounded-lg bg-purple-600 px-2 py-1 text-[11px] font-bold text-neutral-50 transition-colors hover:bg-purple-700"

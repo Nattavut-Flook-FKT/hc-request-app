@@ -139,7 +139,7 @@ export function sendStatusUpdate(
   startDate = null, candidateName = null,
   hcId = null, offeringDate = null,
   clearInfo = false, cvUrl = null,
-  itEmail = null,
+  itEmail = null, requesterEmail = null,
 ) {
   if (!DATA_URL) {
     console.error('[sendStatusUpdate] VITE_GAS_DATA_URL not configured')
@@ -161,6 +161,7 @@ export function sendStatusUpdate(
       if (clearInfo)      params.set('clearInfo', '1')
       if (cvUrl)          params.set('cvUrl', cvUrl)
       if (itEmail)        params.set('itEmail', itEmail)
+      if (requesterEmail) params.set('requesterEmail', requesterEmail)
       const by = currentUserName()
       if (by)             params.set('by', by)
       if (GAS_SECRET)     params.set('secret', GAS_SECRET)
