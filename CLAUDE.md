@@ -34,7 +34,8 @@ git checkout main && git pull && git checkout hcr/feature/<x> && git merge main
 ### 2. Test local ก่อน commit — ห้ามข้าม
 
 1. `npm run build` — ตัวจับ import พังตัวจริง (alias `@/` ต้อง resolve ครบ) **ต้องผ่าน**
-2. `npm run lint` — baseline **619 errors** เป็นของเดิมทั้งหมด · กฎคือ **ห้ามเพิ่มจาก 619** ไม่ต้องไปแก้ของเดิม
+2. `npm run lint` — baseline **39 errors** เป็นของเดิมทั้งหมด · กฎคือ **ห้ามเพิ่มจาก 39** ไม่ต้องไปแก้ของเดิม
+   (ถ้าได้เลขสูงกว่านี้มาก เช่น 600+ → มี worktree ค้างใน `.claude/worktrees/` ถูกลินต์ไปด้วย เช็ค `git worktree list`)
 3. เปิด preview (`.claude/launch.json` → `hc-request-app`, port 5173) แล้วกดผ่าน route ที่แก้ · เช็ค console error = 0
 4. แก้ไฟล์ใน `src/` เสร็จ → `graphify update .`
 
@@ -44,7 +45,7 @@ Route ทั้งหมด: `/dashboard` `/request` `/reports` `/all-requests` 
 
 **ห้าม deploy จากเครื่อง** (`firebase deploy` ด้วยมือ) — merge เข้า `main` = deploy prod อัตโนมัติผ่าน `.github/workflows/deploy.yml`
 
-merge เข้า `main` ได้เมื่อครบ 3 ข้อ: build ผ่าน · lint ไม่เกิน 619 · กดผ่าน route ที่แก้แล้ว
+merge เข้า `main` ได้เมื่อครบ 3 ข้อ: build ผ่าน · lint ไม่เกิน 39 · กดผ่าน route ที่แก้แล้ว
 → แปลว่า **merge/push `main` = deploy prod ต้องขออนุมัติ user ก่อนทุกครั้ง ห้ามทำเอง**
 
 ```bash
