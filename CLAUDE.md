@@ -9,6 +9,52 @@
 
 ---
 
+## Dev Flow — ทำตามนี้ทุกงานแก้โค้ด ไม่ต้องถาม
+
+Trunk เดียวคือ `main` · ไม่มี `develop` · **ห้าม commit ลง `main` ตรงๆ**
+
+### 1. เลือก branch จากไฟล์ที่จะแก้
+
+| ไฟล์ที่แตะ | branch |
+|---|---|
+| `src/features/<x>/` | `hcr/feature/<x>` |
+| `src/components/ui/` · `src/components/app-shell/` | `hcr/feature/ui-shell` |
+| `src/libs/` · `src/config/` · `src/utils/` · `functions/` · `gas/` · `firestore.rules` · config ราก (`vite`, `tailwind`, `.github/`) | `hcr/chore/platform` |
+| bug ที่กระทบหลายโมดูล | `hcr/fix/<slug>` |
+
+- แตะหลายโฟลเดอร์ → เลือก branch ตาม feature ที่เป็นหัวใจของงาน **ไม่แตกหลาย branch ต่อ 1 งาน**
+- feature branch มีไว้ล่วงหน้าแล้ว: `auth` `hc-request` `ceo-approval` `dashboard` `manager` `reports` `admin` `it-onboarding` `jd-files` `audit-log` `ui-shell` + `hcr/chore/platform`
+
+เข้า branch (sync `main` ก่อนเสมอ เพราะ branch ที่สร้างล่วงหน้าอาจแช่ commit เก่า):
+
+```bash
+git checkout main && git pull && git checkout hcr/feature/<x> && git merge main
+```
+
+### 2. Test local ก่อน commit — ห้ามข้าม
+
+1. `npm run build` — ตัวจับ import พังตัวจริง (alias `@/` ต้อง resolve ครบ) **ต้องผ่าน**
+2. `npm run lint` — baseline **619 errors** เป็นของเดิมทั้งหมด · กฎคือ **ห้ามเพิ่มจาก 619** ไม่ต้องไปแก้ของเดิม
+3. เปิด preview (`.claude/launch.json` → `hc-request-app`, port 5173) แล้วกดผ่าน route ที่แก้ · เช็ค console error = 0
+4. แก้ไฟล์ใน `src/` เสร็จ → `graphify update .`
+
+Route ทั้งหมด: `/dashboard` `/request` `/reports` `/all-requests` `/my-cases` `/my-requests` `/jd-files` `/audit-log` `/users` `/custom-positions` `/admin-tools` `/import` `/it-onboarding`
+
+### 3. Deploy
+
+**ห้าม deploy จากเครื่อง** (`firebase deploy` ด้วยมือ) — merge เข้า `main` = deploy prod อัตโนมัติผ่าน `.github/workflows/deploy.yml`
+
+merge เข้า `main` ได้เมื่อครบ 3 ข้อ: build ผ่าน · lint ไม่เกิน 619 · กดผ่าน route ที่แก้แล้ว
+→ แปลว่า **merge/push `main` = deploy prod ต้องขออนุมัติ user ก่อนทุกครั้ง ห้ามทำเอง**
+
+```bash
+git checkout main && git pull && git merge --no-ff hcr/feature/<x> && git push origin main
+```
+
+หลัง Actions เขียวแล้วอยากปักหมุด rollback: `git tag prod-$(date +%F) && git push --tags`
+
+---
+
 ## DS Version Check (run every session before working)
 
 1. Read `/Users/flook/FKT-WORKSPACE/FKT Design Guidelines/VERSION.md` → find line `Current: vX.X`
