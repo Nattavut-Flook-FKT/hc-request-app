@@ -32,7 +32,7 @@ import { generateHCID } from '../../utils/hcId'
 import { sendToWebhook, sendCeoApprovalRequest, reportClientError } from '../../services/webhook'
 import { logAudit } from '../../services/auditLog'
 import { uploadJDFile, getJDSignedUrl, validateJDFile } from '../../services/supabase'
-import { Loader2, CheckCircle, ChevronDown, X, Paperclip, FileText, ExternalLink } from 'lucide-react'
+import { Loader2, CheckCircle, AlertTriangle, ChevronDown, X, Paperclip, FileText, ExternalLink } from 'lucide-react'
 import { HQ_JG_LEVELS, OPERATION_JG_LEVELS } from '../../data/jobGrades'
 import { fetchSheetsData, getDepartmentByEmail, getEmployeesByDepartment, getPositionsByDepartment } from '../../services/sheetsData'
 import { DIVISIONS, getDepartments, getSections, getBusinessUnits, getDivisionByDepartment } from '../../data/orgStructure'
@@ -322,6 +322,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   // ─── JD File Upload State ──────────────────────────────────────────────────
   const [jdFile, setJdFile] = useState(null)            // ไฟล์ JD ที่ user เลือก (File object)
   const [uploadProgress, setUploadProgress] = useState('') // ข้อความแสดงสถานะการ upload
+  const [jdWarning, setJdWarning] = useState('')        // อัพโหลด JD ไม่สำเร็จ แต่คำขอบันทึก + เข้า Sheets แล้ว
   const [replacementCustomMode, setReplacementCustomMode] = useState(false) // true = พิมพ์ชื่อเอง
   const [shiftCustomMode, setShiftCustomMode] = useState(false) // true = เลือก "อื่นๆ" ในกะการทำงาน → กรอกเวลาเอง
 
@@ -522,11 +523,11 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   }, [form.position])
 
   // ─── Effect: Scroll ไปหา Feedback Banner ─────────────────────────────────
-  // เมื่อ success หรือ error เปลี่ยนค่า → scroll smooth ไปด้านบนของฟอร์ม
+  // เมื่อ success / error / jdWarning เปลี่ยนค่า → scroll smooth ไปด้านบนของฟอร์ม
   useEffect(() => {
-    if (!success && !error) return
+    if (!success && !error && !jdWarning) return
     feedbackTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [success, error])
+  }, [success, error, jdWarning])
 
   // ─── handleOpenExistingJD ──────────────────────────────────────────────────
   // สร้าง Supabase signed URL (อายุ 1 ชั่วโมง) สำหรับแสดง PDF ใน iframe sidebar
@@ -573,8 +574,9 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   }, [])
 
   // ─── handleJdFileSelect ────────────────────────────────────────────────────
-  // Validate ไฟล์ JD ทันทีตอนเลือก (type + size) — fail fast ก่อนถึง handleSubmit
-  // กันเคส Firestore doc ถูกสร้างแล้วแต่อัพโหลดพัง → เกิด request กำพร้าที่ไม่เข้า Sheets/Slack
+  // Validate ไฟล์ JD ทันทีตอนเลือก (type + size) — fail fast เพื่อ UX ที่ดี
+  // user แก้ไฟล์ได้ก่อนกด submit ไม่ต้องกรอกฟอร์มเสร็จแล้วมาเจอ error ทีหลัง
+  // (ไม่ใช่กลไกกัน request กำพร้าแล้ว — Step 3 ใน handleSubmit กันเองในตัว)
   function handleJdFileSelect(e) {
     const file = e.target.files?.[0] ?? null
     if (!file) return
@@ -594,6 +596,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   // 2. addDoc → สร้าง Firestore document ใน 'hc_requests' (ได้ docRef.id)
   // 3. (ถ้ามีไฟล์ JD) uploadJDFile → อัพโหลดไป Supabase ด้วย folder = docRef.id
   //    แล้ว updateDoc เพิ่ม jdFileUrl, jdFilePath, jdFileName ลงใน Firestore
+  //    ★ ขั้นนี้ล้มเหลวได้โดยไม่ล้มทั้ง submit → ไปต่อ Step 4-6 พร้อมตั้ง jdWarning
   // 4. ตรวจสอบว่าตำแหน่งเป็น custom position หรือไม่ → addDoc ใน 'custom_positions' ถ้าใช่
   // 5. sendToWebhook → แจ้งเตือน Slack / LINE / GAS Sheet
   // 6. logAudit → บันทึก audit trail (action='Submit', toStatus='Open')
@@ -601,6 +604,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
     e.preventDefault()
     setLoading(true)
     setError('')
+    setJdWarning('')
 
     // hcId อยู่นอก try เพื่อให้ catch ส่งเข้า reportClientError ได้ — ใช้ตามหา doc กำพร้าใน Firestore
     let hcId = null
@@ -648,16 +652,30 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       // ── Step 3: อัพโหลดไฟล์ JD (ถ้ามี) ───────────────────────────────────
       // uploadJDFile(file, docId) → อัพโหลดไป Supabase bucket ที่ path: jd/{docId}/{filename}
       // แล้ว updateDoc เพิ่ม jdFileUrl, jdFilePath, jdFileName กลับเข้า Firestore
+      //
+      // ห้าม throw ออกจากบล็อกนี้ — doc ถูกสร้างที่ Step 2 แล้ว ถ้า throw จะข้าม Step 4-6
+      // ซึ่งรวม sendToWebhook (ตัวเขียน Sheets + แจ้ง Slack ทีม TA) → เคสค้างอยู่แค่ใน
+      // Firestore ไม่มีใน Sheets และ TA ไม่รู้ตัวเลย (เคส "request กำพร้า")
+      // ไฟล์แนบพัง = เรื่องเล็กกว่าคำขอหลุด pipeline → บันทึกคำขอต่อ แล้วเตือน manager
       if (jdFile) {
         setUploadProgress('กำลังอัพโหลดไฟล์ JD...')
-        const { url, path, error: uploadErr } = await uploadJDFile(jdFile, docRef.id)
-        if (uploadErr) throw new Error('อัพโหลดไฟล์ไม่สำเร็จ: ' + uploadErr)
-        await updateDoc(doc(db, 'hc_requests', docRef.id), {
-          jdFileUrl:  url,   // public URL หรือ storage path
-          jdFilePath: path,  // path ใน Supabase bucket (ใช้สร้าง signed URL ภายหลัง)
-          jdFileName: jdFile.name,
-        })
-        setUploadProgress('')
+        try {
+          const { url, path, error: uploadErr } = await uploadJDFile(jdFile, docRef.id)
+          if (uploadErr) throw new Error(uploadErr)
+          await updateDoc(doc(db, 'hc_requests', docRef.id), {
+            jdFileUrl:  url,   // public URL หรือ storage path
+            jdFilePath: path,  // path ใน Supabase bucket (ใช้สร้าง signed URL ภายหลัง)
+            jdFileName: jdFile.name,
+          })
+        } catch (jdErr) {
+          // ponytail: ไม่ retry — upload พังซ้ำที่เดิมส่วนใหญ่คือ policy/ไฟล์ ไม่ใช่ network fluke
+          // ponytail: ยังไม่มี flow แนบ JD ย้อนหลังต่อเคส → บอก manager ให้ส่งไฟล์ตรงให้ TA
+          console.error('JD upload failed (คำขอถูกบันทึกแล้ว):', jdErr)
+          reportClientError('uploadJD', jdErr, { hcId, docId: docRef.id })
+          setJdWarning(`คำขอ ${hcId} ถูกส่งเข้าระบบ TA เรียบร้อยแล้ว แต่แนบไฟล์ JD ไม่สำเร็จ (${jdErr.message}) — กรุณาส่งไฟล์ JD ให้ทีม TA โดยตรง หรืออัพโหลดเข้า JD Library`)
+        } finally {
+          setUploadProgress('') // เคลียร์ทุกกรณี ไม่ให้ข้อความ "กำลังอัพโหลด..." ค้างบนหน้าจอ
+        }
       }
 
       // ── Step 4: บันทึก Custom Position (ถ้าไม่มีในรายการ) ─────────────────
@@ -697,7 +715,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       }
 
       // ── Step 6: บันทึก Audit Log ──────────────────────────────────────────
-      // logAudit บันทึกลง Firestore collection 'audit_logs' สำหรับ activity tracking
+      // logAudit บันทึกลง Firestore collection 'hc_logs' สำหรับ activity tracking
       logAudit({
         requestId:  docRef.id,
         action:     needsCeoApproval ? 'SubmitPendingApproval' : 'Submit',
@@ -719,9 +737,9 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
     } catch (err) {
       console.error('Submit error:', err)
       reportClientError('submitHCRequest', err, { hcId })
-      // แสดงสาเหตุจริงถ้าเป็น error อัพโหลดไฟล์ — user จะได้แก้ถูกจุด ไม่ retry ซ้ำจน
-      // เกิด request กำพร้าเพิ่ม (doc ถูกสร้างก่อนอัพโหลด)
-      setError(err.message?.startsWith('อัพโหลดไฟล์ไม่สำเร็จ') ? err.message : 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง')
+      // error อัพโหลด JD ไม่ผ่านมาทางนี้แล้ว (Step 3 จับเองแล้วไปต่อ) → เหลือแต่ error ที่
+      // ทำให้คำขอไม่ถูกบันทึกจริงๆ เช่น generateHCID / addDoc พัง → ข้อความ generic พอ
+      setError('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง')
     } finally {
       setLoading(false)
     }
@@ -842,10 +860,20 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
         )}
 
         {/* ── Success Banner: แสดง 4 วินาทีหลัง submit สำเร็จ ── */}
-        {success && (
+        {/* ซ่อนถ้ามี jdWarning — โชว์ banner เหลืองใบเดียวพอ ไม่ต้องเขียว+เหลืองซ้อนกัน */}
+        {success && !jdWarning && (
           <div className="mb-8 flex items-center gap-3 rounded-lg bg-green-fresh-50 px-5 py-4 text-green-fresh-900">
             <CheckCircle size={20} strokeWidth={1} absoluteStrokeWidth />
             <p className="font-bold">ยื่นคำขอสำเร็จแล้ว! ข้อมูลถูกส่งเข้าระบบเรียบร้อย</p>
+          </div>
+        )}
+
+        {/* ── JD Warning Banner: คำขอบันทึก + เข้า Sheets แล้ว แต่แนบไฟล์ JD ไม่ผ่าน ── */}
+        {/* ไม่ auto-hide (ต่างจาก success ที่หายใน 4 วิ) — manager ต้องอ่านทันแล้วไปทำต่อ */}
+        {jdWarning && (
+          <div className="mb-8 flex items-start gap-3 rounded-lg bg-yellow-50 px-5 py-4 text-yellow-950">
+            <AlertTriangle size={20} strokeWidth={1} absoluteStrokeWidth className="mt-0.5 shrink-0" />
+            <p className="font-bold">{jdWarning}</p>
           </div>
         )}
 
