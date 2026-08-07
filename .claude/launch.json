@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "hc-request-app",
-      "runtimeExecutable": "/tmp/vite-hc.sh",
-      "runtimeArgs": [],
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
       "port": 5173
     }
   ]

@@ -37,6 +37,26 @@ export const SECTION_MAINDATA_MAP = {
 }
 
 /**
+ * ทิศกลับของ resolveDeptNames: ชื่อแบบ Maindata/ข้อมูลเก่า → ชื่อแผนกใน Org Chart
+ * ใช้กับ grant ของ Manager (settings/deptManagers) ที่ Admin เลือกจากชื่อแผนกในข้อมูลเก่า
+ * เช่น grant 'Distribution Center-LKB' → ['Distribution Center'] ซึ่งมีอยู่จริงใน orgStructure
+ * ถ้าไม่รู้จัก → คืนชื่อเดิม (แผนก custom ที่เพิ่มเองก็ยังใช้ได้)
+ * @returns {string[]} 1 ชื่อขึ้นไป (เช่น 'Tech&Product' ตรงกับ 3 แผนกใน Org Chart)
+ */
+export function toOrgDepts(name) {
+  if (!name) return []
+  const hits = Object.entries(DEPT_MAINDATA_MAP)
+    .filter(([dept, alts]) => dept !== name && alts.includes(name))
+    .map(([dept]) => dept)
+  return hits.length ? hits : [name]
+}
+
+/** ทิศกลับของ SECTION_MAINDATA_MAP: 'Distribution Center-LKB' → 'LKB' (ไม่เจอ = '') */
+export function toOrgSection(name) {
+  return Object.entries(SECTION_MAINDATA_MAP).find(([, v]) => v === name)?.[0] || ''
+}
+
+/**
  * แปลงชื่อแผนก (Org Chart) → ชื่อใน Maindata
  * รองรับ section เพื่อ narrow down ตาม section ที่เลือก
  */

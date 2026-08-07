@@ -37,6 +37,7 @@ import { HQ_JG_LEVELS, OPERATION_JG_LEVELS } from '@/config/jobGrades'
 import { fetchSheetsData, getDepartmentByEmail, getEmployeesByDepartment, getPositionsByDepartment } from '@/libs/sheetsData'
 import { DIVISIONS, getDepartments, getSections, getBusinessUnits, getDivisionByDepartment } from '@/config/orgStructure'
 import { grantedKeys } from '@/utils/grants'
+import { toOrgDepts, toOrgSection } from '@/config/deptMapping'
 
 // ─── ค่าเริ่มต้นของฟอร์ม ───────────────────────────────────────────────────
 // ใช้เป็น template สำหรับ reset หลัง submit สำเร็จ
@@ -283,6 +284,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   const [deptAutoFilled, setDeptAutoFilled] = useState(false) // true ถ้า department ถูก auto-fill จาก email ของ user
   const [grantedDepts, setGrantedDepts] = useState([])         // แผนกที่ Admin grant ให้ manager คนนี้ (settings/deptManagers) — ถ้ามี จะจำกัด Division/แผนกที่เลือกได้
   const [grantedDivisions, setGrantedDivisions] = useState([]) // division ที่ Admin grant ทั้งสาย (settings/divisionManagers) — Head of Division เห็นทุกแผนกในนั้น
+  const [grantedSections, setGrantedSections] = useState([])   // section ที่ grant มาแบบเจาะคลัง (เช่น grant 'Distribution Center-LKB' → 'LKB') — ว่าง = ไม่จำกัด
   // Beta: รายชื่อ email ที่ต้องผ่าน CEO approve ก่อน (settings/ceoApprovalBeta) — จำกัดเฉพาะกลุ่มทดสอบ
   // ไม่กระทบ Manager คนอื่น ที่ยังได้ status 'Open' ทันทีเหมือนเดิม
   const [ceoApprovalBetaEmails, setCeoApprovalBetaEmails] = useState([])
@@ -361,8 +363,14 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
         // grantedKeys รองรับทั้งค่าเก่า (อีเมลเดี่ยว) และใหม่ (array — 1 แผนกหลาย Manager)
         // แผนกที่ Admin grant ให้ user คนนี้โดยตรง (settings/deptManagers ที่หน้า Users)
         const deptManagersMap = deptManagersSnap.exists() ? deptManagersSnap.data() : {}
-        const granted = grantedKeys(deptManagersMap, user.email)
+        // grant เก็บชื่อแผนกตามที่พบใน hc_requests ซึ่งอาจเป็นชื่อแบบ Maindata (เช่น 'Distribution Center-LKB')
+        // ที่ไม่มีใน orgStructure → ต้อง map กลับเป็นชื่อ Org Chart ก่อน ไม่งั้นหา division ไม่เจอ
+        // แล้ว dropdown Division จะว่าง (มีแต่ option เปล่า) จนยื่นคำขอไม่ได้
+        const rawGranted = grantedKeys(deptManagersMap, user.email)
+        const granted = [...new Set(rawGranted.flatMap(toOrgDepts))]
         setGrantedDepts(granted)
+        // grant ที่เจาะระดับคลัง → จำกัด Section ให้เหลือเฉพาะคลังที่ได้รับสิทธิ์
+        setGrantedSections(rawGranted.map(toOrgSection).filter(Boolean))
 
         // Division ที่ Admin grant ทั้งสายให้ user คนนี้ (Head of Division — settings/divisionManagers)
         const divisionManagersMap = divisionManagersSnap.exists() ? divisionManagersSnap.data() : {}
@@ -751,7 +759,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   // → จำกัด Division/แผนกที่เลือกได้เฉพาะที่ grant ไว้เท่านั้น (ไม่ใช้กับ admin ที่ยื่นแทนได้ทุกแผนก)
   const deptRestricted = role === 'manager' && (grantedDepts.length > 0 || grantedDivisions.length > 0)
   const visibleDivisions = deptRestricted
-    ? [...new Set([...grantedDepts.map(getDivisionByDepartment), ...grantedDivisions])]
+    ? [...new Set([...grantedDepts.map(getDivisionByDepartment), ...grantedDivisions])].filter(Boolean)
     : DIVISIONS
 
   // trackConfig: config ของ Location track ตาม department ที่เลือก
@@ -993,7 +1001,9 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                   className="w-full h-10 rounded-lg border border-neutral-100 bg-white px-4 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
                 >
                   <option value="">เลือก Section (ถ้ามี)</option>
-                  {getSections(form.division, form.department).map((s) => (
+                  {getSections(form.division, form.department)
+                    .filter((s) => !grantedSections.length || grantedSections.includes(s))
+                    .map((s) => (
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
