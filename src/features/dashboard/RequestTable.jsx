@@ -90,6 +90,7 @@ import { logAudit } from '@/features/audit-log/auditLog'
 import { Loader2, UserCheck, XCircle, ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, X, FileText, Search, ChevronRight, Users, Calendar, AlignLeft, ClipboardList, Pencil, Trash2, Upload, File } from 'lucide-react'
 import { getJDSignedUrl, deleteJDFile, uploadCVFile, getCVSignedUrl, deleteCVFile } from '@/libs/supabase'
 import ConfirmModal from '@/components/ui/ConfirmModal'
+import EditCaseModal from '@/features/dashboard/EditCaseModal'
 
 // ─── สี Badge ของแต่ละสถานะ — DS Light-variant recipe (functional color-coding, DS-#010) ───
 const STATUS_CONFIG = {
@@ -308,6 +309,7 @@ export default function RequestTable({
   // Onboarding modal: กรอกวันเริ่มงานก่อนเปลี่ยนสถานะ
   const [offeringModal, setOfferingModal] = useState({ isOpen: false, id: null, mode: 'onboarding' })
   const [offeringStartDate, setOfferingStartDate] = useState('')
+  const [editCaseReq, setEditCaseReq] = useState(null)           // req ที่ admin กำลังแก้ข้อมูล (null = ปิด modal)
   const [candidateEditId, setCandidateEditId] = useState(null)   // id ที่กำลัง edit
   const [candidateEditVal, setCandidateEditVal] = useState('')   // ค่าที่กำลังพิมพ์
   const [offeringCandidateName, setOfferingCandidateName] = useState('')
@@ -1483,6 +1485,17 @@ export default function RequestTable({
                     {isExpanded && (
                       <tr key={`${req.id}-detail`} className="bg-dark-green-50">
                         <td colSpan={9} className="px-6 pb-6 pt-0">
+                          {/* แก้ข้อมูลที่กรอกตอนยื่นคำขอ — admin เท่านั้น (Candidate/วันเริ่มงาน มีปุ่มแก้ของตัวเองอยู่ในแผงด้านล่าง) */}
+                          {isAdmin && (
+                            <div className="mb-3 flex justify-end">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setEditCaseReq(req) }}
+                                className="flex items-center gap-1.5 rounded-lg border border-neutral-100 bg-white px-3 py-1.5 text-[11px] font-bold text-neutral-600 transition-colors hover:bg-neutral-50"
+                              >
+                                <Pencil size={12} strokeWidth={1} absoluteStrokeWidth /> แก้ไขข้อมูลเคส
+                              </button>
+                            </div>
+                          )}
                           <div className="grid grid-cols-1 gap-8 rounded-2xl border border-neutral-100 bg-white p-6 md:grid-cols-2 lg:grid-cols-4">
 
                             {/* จำนวน HC + วันที่ */}
@@ -1909,6 +1922,11 @@ export default function RequestTable({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── แก้ข้อมูลเคส (admin) — เขียนเฉพาะ field ที่เปลี่ยน + audit log ── */}
+      {editCaseReq && (
+        <EditCaseModal req={editCaseReq} user={user} onClose={() => setEditCaseReq(null)} />
       )}
 
       {/* ── แก้วันเริ่มงาน (พนักงานขอเลื่อนวันเริ่มงาน) — sync Firestore + Sheets + Slack ── */}

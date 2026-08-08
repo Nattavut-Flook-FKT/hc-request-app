@@ -297,6 +297,45 @@ export async function updateStartDateInSheets(hcId, newStartDate, reason) {
 }
 
 /**
+ * updateFieldsInSheets — sync ข้อมูลเคสที่ admin แก้ย้อนหลังเข้า Sheets
+ *
+ * ส่งเฉพาะ field ที่เปลี่ยนจริง — GAS จะเขียนทีละ cell ไม่ทับทั้งแถว
+ * (สถานะ / PIC / Candidate / Onboard Date ที่ TA แก้ในชีตเองต้องไม่หาย)
+ *
+ * @param {string} hcId   - เช่น "REQ-2026-411"
+ * @param {Object} fields - { position: '...', jg: 'JG5', ... } เฉพาะที่เปลี่ยน
+ * @returns {Promise<{success: boolean, updated?: string[], skipped?: string[], error?: string}>}
+ *          skipped = field ที่ Sheets ไม่มีคอลัมน์เก็บ (section, orgTrack, workDaysPerWeek, shift)
+ */
+export async function updateFieldsInSheets(hcId, fields) {
+  if (!DATA_URL || !hcId) return { success: false, error: 'GAS URL or hcId missing' }
+  if (!fields || Object.keys(fields).length === 0) return { success: true, updated: [], skipped: [] }
+  try {
+    const params = new URLSearchParams({ action: 'updateFields', hcId, fields: JSON.stringify(fields) })
+    const by = currentUserName()
+    if (by) params.set('by', by)
+    if (GAS_SECRET) params.set('secret', GAS_SECRET)
+    const res  = await fetch(`${DATA_URL}?${params.toString()}`)
+    const json = await res.json()
+    if (json.success) {
+      toast(`อัปเดต ${hcId} ใน Sheets แล้ว`, {
+        type: 'success',
+        // field ที่ Sheets ไม่มีคอลัมน์ — บอกไปตรงๆ ว่าอยู่แค่ในระบบ ไม่ใช่เงียบแล้วให้ไปเจอเอง
+        sub: json.skipped?.length ? `ไม่มีคอลัมน์ใน Sheets: ${json.skipped.join(', ')}` : undefined,
+      })
+    } else {
+      console.warn('[updateFieldsInSheets]', json.error)
+      toast(`อัปเดต ${hcId} ใน Sheets ไม่สำเร็จ — กรุณาแก้แถวใน Sheets เอง`, { type: 'error', sub: json.error })
+    }
+    return json
+  } catch (err) {
+    console.error('[updateFieldsInSheets] error:', err)
+    toast(`เชื่อมต่อ Sheets ไม่ได้ — ${hcId} ใน Sheets ยังเป็นข้อมูลเดิม`, { type: 'error', sub: err.message })
+    return { success: false, error: err.message }
+  }
+}
+
+/**
  * sendDeleteToSheets — สั่ง GAS ลบ "ทุกแถว" ที่ HCID ตรง แล้วคืนผลจริง
  * @returns {Promise<{success: boolean, count?: number, error?: string}>}
  * caller ต้องเช็ค success เพื่อโชว์ toast — ห้ามยิงแล้วลืมแบบเดิม (เคย REQ-2026-485 ค้างใน Sheets แบบเงียบๆ)

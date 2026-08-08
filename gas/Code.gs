@@ -1096,6 +1096,30 @@ function doGet_(e) {
     }
   }
 
+  // ── UPDATE FIELDS: admin แก้ข้อมูลเคสย้อนหลัง → sync คอลัมน์ที่ Sheets เก็บไว้ ──
+  // เรียกด้วย ?action=updateFields&hcId=REQ-2026-XXX&fields=<JSON urlencoded>&by=...&secret=XXX
+  // fields = { position: '...', jg: 'JG5', ... } — ส่งมาเฉพาะ field ที่เปลี่ยนจริง
+  //
+  // ponytail: ใช้ GET เพราะฝั่งแอปต้องอ่านผลกลับ (doPost ถูกเรียกแบบ no-cors อ่าน response ไม่ได้)
+  //           เพดานคือความยาว URL — reason/requirements ยาวมากๆ จะยิงไม่ผ่าน
+  //           ถ้าชนเพดานจริงค่อยย้ายไป doPost แล้วให้แอป poll ผลทีหลัง
+  if (e.parameter.action === 'updateFields') {
+    if (!isValidSecret_(e)) return responseJson_({ error: 'Unauthorized' })
+    var ufHcId = e.parameter.hcId || ''
+    if (!ufHcId) return responseJson_({ success: false, error: 'Missing hcId' })
+
+    var ufFields
+    try { ufFields = JSON.parse(e.parameter.fields || '{}') }
+    catch (_) { return responseJson_({ success: false, error: 'Invalid fields JSON' }) }
+
+    try {
+      return updateFieldsHandler_(ss, ufHcId, ufFields)
+    } catch (err) {
+      alertError_('updateFields', err, e, { hcId: ufHcId })
+      return responseJson_({ success: false, error: err.message })
+    }
+  }
+
   // ── FETCH CSV PROXY: ดึง CSV จาก URL ผ่าน GAS (ไม่มีปัญหา CORS) ─────────────
   // เรียกด้วย ?action=fetchCSV&url=ENCODED_URL&secret=XXX
   // GAS ใช้ UrlFetchApp ซึ่งทำงาน server-side ไม่ถูก browser CORS block
@@ -1450,6 +1474,119 @@ function doPost_(e) {
   } catch (err) {
     return responseJson_({ success: false, error: err.message })
   }
+}
+
+// =====================================
+// UPDATE FIELDS HANDLER
+// แก้ข้อมูลเคสย้อนหลัง (admin) — เขียนเฉพาะ field ที่ส่งมา ไม่แตะคอลัมน์อื่น
+// ────────────────────────────────────────────────────────────────────────────
+// ต่างจาก syncBatchHandler_ ตรงที่ไม่เขียนทับทั้งแถว — สถานะ / PIC / Candidate /
+// Onboard Date ที่ TA แก้ในชีตเองต้องอยู่เหมือนเดิม
+//
+// คืน { success, updated: [field...], skipped: [field...] }
+// skipped = field ที่ Sheets ไม่มีคอลัมน์เก็บ (section, orgTrack, workDaysPerWeek, shift)
+// =====================================
+
+// field ในแอป → คอลัมน์ใน "Job Openings YYYY" + ตัวแปลงค่าให้ตรงรูปแบบที่ชีตใช้
+var JOB_OPENING_FIELD_COLS = {
+  employmentType: { col: COL_EMP_TYPE, fmt: function (v) { return v || 'Monthly' } },
+  requestType:    { col: COL_JOB_TYPE, fmt: function (v) { return v === 'New HC' ? 'New HC' : 'Replace' } },
+  position:       { col: COL_POSITION, fmt: function (v) { return v || '' } },
+  jg:             { col: COL_RANK,     fmt: function (v) { return getJGLabel_(v) } },
+  department:     { col: COL_DEPT,     fmt: function (v) { return v || '' } },
+}
+
+// field ในแอป → ชื่อ header ใน sheet legacy 'HC_Request' (คนละชุดกับ Job Openings)
+var LEGACY_FIELD_HEADERS = {
+  requestType:    'ประเภทคำขอ',
+  jg:             'Job Grade',
+  position:       'ตำแหน่ง',
+  department:     'แผนก',
+  headcount:      'จำนวน HC',
+  reason:         'เหตุผล',
+  requirements:   'Requirements',
+  replacementFor: 'ทดแทน (ชื่อ)',
+}
+
+function updateFieldsHandler_(ss, hcId, fields) {
+  var updated = [], skipped = []
+
+  var sheetName = resolveJobOpeningSheet_(hcId)
+  var sheet     = ss.getSheetByName(sheetName)
+  if (!sheet || sheet.getLastRow() <= 1) {
+    return responseJson_({ success: false, error: 'Sheet not found or empty: ' + sheetName })
+  }
+
+  // หาแถวของ HCID นี้ (pattern เดียวกับ updateStartDate)
+  var hcidVals = sheet.getRange(2, COL_HCID, sheet.getLastRow() - 1, 1).getValues()
+  var rowNum = 0
+  for (var i = 0; i < hcidVals.length; i++) {
+    if (normHcid_(hcidVals[i][0]) === normHcid_(hcId)) { rowNum = i + 2; break }
+  }
+  if (!rowNum) {
+    return responseJson_({ success: false, error: 'hcId not found in sheet: ' + hcId })
+  }
+
+  // ── Job Openings YYYY ────────────────────────────────────────────────────
+  Object.keys(fields).forEach(function (key) {
+    var map = JOB_OPENING_FIELD_COLS[key]
+    if (!map) return
+    sheet.getRange(rowNum, map.col).setValue(map.fmt(fields[key]))
+    updated.push(key)
+  })
+
+  // Business Unit (คอลัมน์ H) เก็บค่าเดียวจาก division หรือ businessUnit
+  // ลำดับ division ก่อน ต้องตรงกับ syncBatchHandler_ / syncBatchToSheets
+  // ไม่งั้น full resync รอบถัดไปจะเขียนทับค่าที่ admin เพิ่งแก้
+  if ('businessUnit' in fields || 'division' in fields) {
+    sheet.getRange(rowNum, COL_BU).setValue(fields.division || fields.businessUnit || '')
+    if ('businessUnit' in fields) updated.push('businessUnit')
+    if ('division' in fields)     updated.push('division')
+  }
+
+  // ── HC_Request (legacy) — หาแถวจาก header 'Request ID' ───────────────────
+  var legacy = ss.getSheetByName('HC_Request')
+  if (legacy && legacy.getLastRow() > 1) {
+    var headers  = legacy.getRange(1, 1, 1, legacy.getLastColumn()).getValues()[0]
+    var idColIdx = headers.indexOf('Request ID')
+    var legacyRow = 0
+    if (idColIdx !== -1) {
+      for (var j = 2; j <= legacy.getLastRow(); j++) {
+        if (normHcid_(legacy.getRange(j, idColIdx + 1).getValue()) === normHcid_(hcId)) { legacyRow = j; break }
+      }
+    }
+    if (legacyRow) {
+      Object.keys(fields).forEach(function (key) {
+        var header = LEGACY_FIELD_HEADERS[key]
+        if (!header) return
+        var colIdx = headers.indexOf(header)
+        if (colIdx === -1) return
+        legacy.getRange(legacyRow, colIdx + 1).setValue(fields[key] === undefined ? '' : fields[key])
+        if (updated.indexOf(key) === -1) updated.push(key)
+      })
+
+      // targetStartDate ลงคนละคอลัมน์ตามประเภทคำขอ — เขียนช่องที่ใช้ ล้างอีกช่อง
+      // requestType อาจถูกแก้พร้อมกันในรอบนี้ ถ้าไม่ได้ส่งมาก็อ่านค่าปัจจุบันจากชีต
+      if ('targetStartDate' in fields) {
+        var reqType = 'requestType' in fields
+          ? fields.requestType
+          : (sheet.getRange(rowNum, COL_JOB_TYPE).getValue() === 'New HC' ? 'New HC' : 'Replacement')
+        var startIdx = headers.indexOf('วันที่เริ่มงาน')
+        var lwdIdx   = headers.indexOf('วันที่ลาออก (LWD)')
+        var isNewHc  = reqType === 'New HC'
+        if (startIdx !== -1) legacy.getRange(legacyRow, startIdx + 1).setValue(isNewHc ? (fields.targetStartDate || '') : '')
+        if (lwdIdx   !== -1) legacy.getRange(legacyRow, lwdIdx   + 1).setValue(isNewHc ? '' : (fields.targetStartDate || ''))
+        if (startIdx !== -1 || lwdIdx !== -1) updated.push('targetStartDate')
+      }
+    }
+  }
+
+  // field ที่ไม่มีคอลัมน์ใน Sheets เลย — คืนกลับให้แอปแจ้ง admin ว่าแก้แค่ใน Firestore
+  Object.keys(fields).forEach(function (key) {
+    if (updated.indexOf(key) === -1) skipped.push(key)
+  })
+
+  return responseJson_({ success: true, row: rowNum, updated: updated, skipped: skipped })
 }
 
 // =====================================
