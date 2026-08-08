@@ -9,6 +9,62 @@
 
 ---
 
+## Dev Flow — ทำตามนี้ทุกงานแก้โค้ด ไม่ต้องถาม
+
+Trunk เดียวคือ `main` · ไม่มี `develop` · **ห้าม commit ลง `main` ตรงๆ**
+
+### 1. เลือก branch จากไฟล์ที่จะแก้
+
+| ไฟล์ที่แตะ | branch |
+|---|---|
+| `src/features/<x>/` | `hcr/feature/<x>` |
+| `src/components/ui/` · `src/components/app-shell/` | `hcr/feature/ui-shell` |
+| `src/libs/` · `src/config/` · `src/utils/` · `functions/` · `gas/` · `firestore.rules` · config ราก (`vite`, `tailwind`, `.github/`) | `hcr/chore/platform` |
+| bug ที่กระทบหลายโมดูล | `hcr/fix/<slug>` |
+
+- แตะหลายโฟลเดอร์ → เลือก branch ตาม feature ที่เป็นหัวใจของงาน **ไม่แตกหลาย branch ต่อ 1 งาน**
+- feature branch มีไว้ล่วงหน้าแล้ว: `auth` `hc-request` `ceo-approval` `dashboard` `manager` `reports` `admin` `it-onboarding` `jd-files` `audit-log` `ui-shell` + `hcr/chore/platform`
+
+เข้า branch (sync `main` ก่อนเสมอ เพราะ branch ที่สร้างล่วงหน้าอาจแช่ commit เก่า):
+
+```bash
+git checkout main && git pull && git checkout hcr/feature/<x> && git merge main
+```
+
+### 2. Test local ก่อน commit — ห้ามข้าม
+
+1. `npm run build` — ตัวจับ import พังตัวจริง (alias `@/` ต้อง resolve ครบ) **ต้องผ่าน**
+2. `npm run lint` — baseline **39 errors** เป็นของเดิมทั้งหมด · กฎคือ **ห้ามเพิ่มจาก 39** ไม่ต้องไปแก้ของเดิม
+   (ถ้าได้เลขสูงกว่านี้มาก เช่น 600+ → มี worktree ค้างใน `.claude/worktrees/` ถูกลินต์ไปด้วย เช็ค `git worktree list`)
+3. เปิด preview (`.claude/launch.json` → `hc-request-app`, port 5173) แล้วกดผ่าน route ที่แก้ · เช็ค console error = 0
+4. แก้ไฟล์ใน `src/` เสร็จ → `graphify update .`
+
+Route ทั้งหมด: `/dashboard` `/request` `/reports` `/all-requests` `/my-cases` `/my-requests` `/jd-files` `/audit-log` `/users` `/custom-positions` `/admin-tools` `/import` `/it-onboarding`
+
+### 3. Deploy
+
+**ห้าม deploy จากเครื่อง** (`firebase deploy` ด้วยมือ) — merge เข้า `main` = deploy prod อัตโนมัติผ่าน `.github/workflows/deploy.yml`
+
+merge เข้า `main` ได้เมื่อครบ 3 ข้อ: build ผ่าน · lint ไม่เกิน 39 · กดผ่าน route ที่แก้แล้ว
+→ แปลว่า **merge/push `main` = deploy prod ต้องขออนุมัติ user ก่อนทุกครั้ง ห้ามทำเอง**
+
+```bash
+git checkout main && git pull && git merge --no-ff hcr/feature/<x> && git push origin main
+```
+
+หลัง Actions เขียวแล้วอยากปักหมุด rollback: `git tag prod-$(date +%F) && git push --tags`
+
+### 4. GAS (`gas/Code.gs`) — คนละช่องทางกับ hosting ระวังเป็นพิเศษ
+
+`clasp push` ดันไฟล์จาก **working tree ของ branch ที่ checkout อยู่** git ไม่ได้คุม → branch ไหนก็ยิงขึ้น production ได้ แม้ state ยังไม่ครบ
+
+- **`clasp push` ได้จาก `main` เท่านั้น** — อยู่ feature/chore branch ห้าม push เด็ดขาด แม้แก้ `gas/Code.gs` บน branch นั้น
+- แก้ `gas/Code.gs` บน branch → merge เข้า `main` ให้ครบทุก branch ที่แตะไฟล์นี้ก่อน แล้วค่อย `clasp push` จาก `main`
+- push เสร็จปักหมุดว่า commit ไหน = deployment ไหน: `git tag gas@<version> && git push --tags`
+  (ไม่มี tag = ตอบไม่ได้ว่า prod รันโค้ดตัวไหน ซึ่งเคยพลาดมาแล้ว — commit `0521149` Slack DM อยู่ใน git แต่ไม่เคยขึ้น prod)
+
+---
+
 ## DS Version Check (run every session before working)
 
 1. Read `/Users/flook/FKT-WORKSPACE/FKT Design Guidelines/VERSION.md` → find line `Current: vX.X`

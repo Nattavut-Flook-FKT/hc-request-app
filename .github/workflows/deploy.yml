@@ -1,0 +1,42 @@
+name: Deploy to Firebase Hosting
+
+# merge/push เข้า main = deploy prod (ไม่ต้อง deploy จากเครื่องอีก)
+# workflow_dispatch = กด deploy เองจากแท็บ Actions ได้ ตอนอยาก re-deploy commit เดิม
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# กัน 2 job ทับกันถ้า push ติดๆ กัน — ตัวใหม่รอตัวเก่าจบ ไม่ cancel เพราะ deploy ครึ่งทางอันตรายกว่ารอ
+concurrency:
+  group: deploy-hosting
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # ponytail: เก็บ .env ทั้งไฟล์เป็น secret เดียว (ENV_FILE) ไม่ตั้งแยก 12 ตัว
+      # เพิ่ม/ลบ VITE_* ทีหลังไม่ต้องมาแก้ workflow — แก้ที่ secret ที่เดียว
+      - name: Write .env from secret
+        run: printf '%s\n' "$ENV_FILE" > .env
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+
+      - run: npm run build
+
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          channelId: live
+          projectId: hcrequest
