@@ -54,6 +54,15 @@ git checkout main && git pull && git merge --no-ff hcr/feature/<x> && git push o
 
 หลัง Actions เขียวแล้วอยากปักหมุด rollback: `git tag prod-$(date +%F) && git push --tags`
 
+### 4. GAS (`gas/Code.gs`) — คนละช่องทางกับ hosting ระวังเป็นพิเศษ
+
+`clasp push` ดันไฟล์จาก **working tree ของ branch ที่ checkout อยู่** git ไม่ได้คุม → branch ไหนก็ยิงขึ้น production ได้ แม้ state ยังไม่ครบ
+
+- **`clasp push` ได้จาก `main` เท่านั้น** — อยู่ feature/chore branch ห้าม push เด็ดขาด แม้แก้ `gas/Code.gs` บน branch นั้น
+- แก้ `gas/Code.gs` บน branch → merge เข้า `main` ให้ครบทุก branch ที่แตะไฟล์นี้ก่อน แล้วค่อย `clasp push` จาก `main`
+- push เสร็จปักหมุดว่า commit ไหน = deployment ไหน: `git tag gas@<version> && git push --tags`
+  (ไม่มี tag = ตอบไม่ได้ว่า prod รันโค้ดตัวไหน ซึ่งเคยพลาดมาแล้ว — commit `0521149` Slack DM อยู่ใน git แต่ไม่เคยขึ้น prod)
+
 ---
 
 ## DS Version Check (run every session before working)
