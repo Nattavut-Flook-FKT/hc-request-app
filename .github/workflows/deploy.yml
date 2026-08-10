@@ -32,6 +32,11 @@ jobs:
         env:
           ENV_FILE: ${{ secrets.ENV_FILE }}
 
+      # secret ไม่ถูกตั้ง → printf เขียน .env เปล่า → build ผ่านเฉยๆ แต่ bundle ไม่มี Firebase config
+      # = CI เขียวแต่ prod เปิดไม่ติด · ตายตรงนี้ดีกว่าไปตายบน prod
+      - name: Fail fast ถ้า .env ไม่มีของ
+        run: grep -q '^VITE_FIREBASE_API_KEY=.' .env || { echo "::error::secret ENV_FILE ไม่ถูกตั้ง (หรือไม่มี VITE_FIREBASE_API_KEY) — ดู CLAUDE.md §3"; exit 1; }
+
       - run: npm run build
 
       - uses: FirebaseExtended/action-hosting-deploy@v0
