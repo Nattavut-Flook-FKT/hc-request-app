@@ -408,6 +408,10 @@ function RequestRow({ req }) {
             <span className="text-[10px] font-bold text-neutral-300">
               {req.requestType === 'New HC' ? 'New' : 'Replace'}
             </span>
+            {/* ประเภทการจ้าง (Emp. Type) — default Monthly เหมือนที่อื่นในระบบ */}
+            <span className="text-[10px] font-bold text-neutral-400">
+              {req.employmentType || 'Monthly'}
+            </span>
           </div>
           <p className="truncate text-sm font-bold leading-tight text-neutral-900" title={req.position}>
             {req.position}
