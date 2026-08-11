@@ -128,7 +128,7 @@ export default function EditCaseModal({ req, user, onClose }) {
         <div className="px-6 pt-6">
           <h3 className="mb-1 text-lg font-bold text-neutral-900">แก้ไขข้อมูลเคส</h3>
           <p className="mb-5 text-sm text-neutral-500">
-            {req.hcId || req.id} — การแก้ไขจะถูกบันทึกใน Audit Log และไม่ sync กลับ Google Sheets
+            {req.hcId || req.id} — การแก้ไขจะถูกบันทึกใน Audit Log และ sync กลับ Google Sheets อัตโนมัติ
           </p>
         </div>
 
