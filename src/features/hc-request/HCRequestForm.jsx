@@ -26,9 +26,10 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { collection, addDoc, updateDoc, doc, serverTimestamp, getDocs, query, where, limit, getDoc } from 'firebase/firestore'
+import { collection, addDoc, setDoc, updateDoc, doc, serverTimestamp, getDocs, query, where, limit, getDoc } from 'firebase/firestore'
 import { db } from '@/libs/firebase'
 import { generateHCID } from '@/features/hc-request/hcId'
+import { reserveSubmission, CLEARED } from '@/features/hc-request/submissionKey'
 import { sendToWebhook, sendCeoApprovalRequest, reportClientError } from '@/libs/webhook'
 import { logAudit } from '@/features/audit-log/auditLog'
 import { uploadJDFile, getJDSignedUrl, validateJDFile } from '@/libs/supabase'
@@ -37,6 +38,7 @@ import { HQ_JG_LEVELS, OPERATION_JG_LEVELS } from '@/config/jobGrades'
 import { fetchSheetsData, getDepartmentByEmail, getEmployeesByDepartment, getPositionsByDepartment } from '@/libs/sheetsData'
 import { DIVISIONS, getDepartments, getSections, getBusinessUnits, getDivisionByDepartment } from '@/config/orgStructure'
 import { grantedKeys } from '@/utils/grants'
+import { toOrgDepts, toOrgSection } from '@/config/deptMapping'
 
 // ─── ค่าเริ่มต้นของฟอร์ม ───────────────────────────────────────────────────
 // ใช้เป็น template สำหรับ reset หลัง submit สำเร็จ
@@ -270,6 +272,10 @@ function PositionCombobox({ value, onChange, positions, required }) {
 export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   // ─── Refs ──────────────────────────────────────────────────────────────────
   const feedbackTopRef = useRef(null) // ใช้ scroll ไปหา success/error banner หลัง submit
+  // idempotency key ต่อ 1 การกรอกฟอร์ม — กด "ยื่น" ซ้ำหลังพลาด จะเขียนทับ doc เดิม ไม่สร้างเคสใหม่
+  // เคลียร์เมื่อ submit สำเร็จ (Step 2 ผ่าน) → ครั้งต่อไปได้ key ใหม่
+  // ponytail: อยู่ใน memory เท่านั้น — reload แล้วยื่นซ้ำยังซ้ำได้ ค่อยย้ายไป sessionStorage ถ้าเจอจริง
+  const submissionRef = useRef(CLEARED)
 
   // ─── Form State ────────────────────────────────────────────────────────────
   const [form, setForm] = useState(INITIAL_FORM)          // ข้อมูลทุก field ในฟอร์ม
@@ -283,6 +289,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   const [deptAutoFilled, setDeptAutoFilled] = useState(false) // true ถ้า department ถูก auto-fill จาก email ของ user
   const [grantedDepts, setGrantedDepts] = useState([])         // แผนกที่ Admin grant ให้ manager คนนี้ (settings/deptManagers) — ถ้ามี จะจำกัด Division/แผนกที่เลือกได้
   const [grantedDivisions, setGrantedDivisions] = useState([]) // division ที่ Admin grant ทั้งสาย (settings/divisionManagers) — Head of Division เห็นทุกแผนกในนั้น
+  const [grantedSections, setGrantedSections] = useState([])   // section ที่ grant มาแบบเจาะคลัง (เช่น grant 'Distribution Center-LKB' → 'LKB') — ว่าง = ไม่จำกัด
   // Beta: รายชื่อ email ที่ต้องผ่าน CEO approve ก่อน (settings/ceoApprovalBeta) — จำกัดเฉพาะกลุ่มทดสอบ
   // ไม่กระทบ Manager คนอื่น ที่ยังได้ status 'Open' ทันทีเหมือนเดิม
   const [ceoApprovalBetaEmails, setCeoApprovalBetaEmails] = useState([])
@@ -361,8 +368,14 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
         // grantedKeys รองรับทั้งค่าเก่า (อีเมลเดี่ยว) และใหม่ (array — 1 แผนกหลาย Manager)
         // แผนกที่ Admin grant ให้ user คนนี้โดยตรง (settings/deptManagers ที่หน้า Users)
         const deptManagersMap = deptManagersSnap.exists() ? deptManagersSnap.data() : {}
-        const granted = grantedKeys(deptManagersMap, user.email)
+        // grant เก็บชื่อแผนกตามที่พบใน hc_requests ซึ่งอาจเป็นชื่อแบบ Maindata (เช่น 'Distribution Center-LKB')
+        // ที่ไม่มีใน orgStructure → ต้อง map กลับเป็นชื่อ Org Chart ก่อน ไม่งั้นหา division ไม่เจอ
+        // แล้ว dropdown Division จะว่าง (มีแต่ option เปล่า) จนยื่นคำขอไม่ได้
+        const rawGranted = grantedKeys(deptManagersMap, user.email)
+        const granted = [...new Set(rawGranted.flatMap(toOrgDepts))]
         setGrantedDepts(granted)
+        // grant ที่เจาะระดับคลัง → จำกัด Section ให้เหลือเฉพาะคลังที่ได้รับสิทธิ์
+        setGrantedSections(rawGranted.map(toOrgSection).filter(Boolean))
 
         // Division ที่ Admin grant ทั้งสายให้ user คนนี้ (Head of Division — settings/divisionManagers)
         const divisionManagersMap = divisionManagersSnap.exists() ? divisionManagersSnap.data() : {}
@@ -592,8 +605,9 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
 
   // ─── handleSubmit ──────────────────────────────────────────────────────────
   // ขั้นตอนการ submit ฟอร์ม:
-  // 1. generateHCID → สร้าง HCID ในรูปแบบ REQ-YYYY-NNN (atomic counter)
-  // 2. addDoc → สร้าง Firestore document ใน 'hc_requests' (ได้ docRef.id)
+  // 0. จอง docId ฝั่ง client 1 ครั้งต่อการกรอกฟอร์ม (idempotency key) — กดยื่นซ้ำไม่เกิดเคสซ้ำ
+  // 1. generateHCID → สร้าง HCID ในรูปแบบ REQ-YYYY-NNN (atomic counter, reuse ถ้ากดซ้ำ)
+  // 2. setDoc(docId) → สร้าง/เขียนทับ Firestore document ใน 'hc_requests'
   // 3. (ถ้ามีไฟล์ JD) uploadJDFile → อัพโหลดไป Supabase ด้วย folder = docRef.id
   //    แล้ว updateDoc เพิ่ม jdFileUrl, jdFilePath, jdFileName ลงใน Firestore
   //    ★ ขั้นนี้ล้มเหลวได้โดยไม่ล้มทั้ง submit → ไปต่อ Step 4-6 พร้อมตั้ง jdWarning
@@ -610,9 +624,20 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
     let hcId = null
 
     try {
+      // ── Step 0: idempotency key ──────────────────────────────────────────
+      // docId ถูกกำหนดฝั่ง client ครั้งเดียวต่อการกรอกฟอร์ม 1 ครั้ง (ไม่ใช้ addDoc ที่สุ่ม id ใหม่ทุกครั้ง)
+      // → user กดยื่นซ้ำเพราะเจอ error = setDoc ทับ doc เดิม ไม่เกิดเคสซ้ำใน Firestore/Sheets
+      submissionRef.current = reserveSubmission(
+        submissionRef.current,
+        () => doc(collection(db, 'hc_requests')).id,
+      )
+      const docId = submissionRef.current.docId
+
       // ── Step 1: สร้าง HCID ในรูปแบบ REQ-YYYY-NNN ─────────────────────────────
-      // ต้องทำก่อน addDoc เพื่อให้ hcId พร้อมอยู่ใน payload ตั้งแต่ต้น
-      hcId = await generateHCID()
+      // ต้องทำก่อนเขียน doc เพื่อให้ hcId พร้อมอยู่ใน payload ตั้งแต่ต้น
+      // reuse ของเดิมถ้าเคย generate สำเร็จแล้ว → กดซ้ำไม่กิน running number เพิ่ม
+      hcId = submissionRef.current.hcId || await generateHCID()
+      submissionRef.current.hcId = hcId
 
       // Beta: New HC ที่ยื่นโดยใครก็ตามในกลุ่มทดสอบ ต้องรอ CEO approve ก่อน — ไม่ยกเว้น role
       // (แม้ admin ยื่นเอง ถ้า email อยู่ใน allow-list ก็ต้องผ่านการอนุมัติเหมือนกัน)
@@ -647,7 +672,12 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
 
       // ── Step 2: สร้าง Firestore document ──────────────────────────────────
       // ต้องสร้างก่อนเพื่อได้ docRef.id ใช้เป็น folder name ใน Supabase
-      const docRef = await addDoc(collection(db, 'hc_requests'), payload)
+      // setDoc + docId ที่ fix ไว้ = retry ปลอดภัย (เขียนทับ ไม่เพิ่มเคส)
+      const docRef = doc(db, 'hc_requests', docId)
+      await setDoc(docRef, payload)
+      // ผ่านจุดนี้ = คำขอถูกบันทึกแล้ว → ห้ามให้ error ขั้นถัดไปพา user ไปกดยื่นซ้ำ
+      // เคลียร์ key ทิ้งด้วย เพื่อให้คำขอ "ใบถัดไป" ได้ docId ใหม่ ไม่ทับใบนี้
+      submissionRef.current = CLEARED
 
       // ── Step 3: อัพโหลดไฟล์ JD (ถ้ามี) ───────────────────────────────────
       // uploadJDFile(file, docId) → อัพโหลดไป Supabase bucket ที่ path: jd/{docId}/{filename}
@@ -696,9 +726,16 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
           createdBy: user.email,
           createdAt: serverTimestamp(),
         }
-        await addDoc(collection(db, 'custom_positions'), customDoc)
-        // อัพเดต local state ด้วยเพื่อแสดงใน dropdown ทันที
-        setCustomPositions((prev) => [...prev, customDoc])
+        // ห้าม throw — doc คำขอถูกสร้างที่ Step 2 แล้ว ถ้าหลุดออกไป catch ข้างนอกจะบอก user
+        // ว่า "ลองใหม่" ทั้งที่คำขอเข้าระบบแล้ว → user กดซ้ำ เกิดเคสซ้ำ (ต้นตอเดิมของปัญหา)
+        try {
+          await addDoc(collection(db, 'custom_positions'), customDoc)
+          // อัพเดต local state ด้วยเพื่อแสดงใน dropdown ทันที
+          setCustomPositions((prev) => [...prev, customDoc])
+        } catch (cpErr) {
+          console.error('custom_positions failed (คำขอถูกบันทึกแล้ว):', cpErr)
+          reportClientError('saveCustomPosition', cpErr, { hcId, docId: docRef.id })
+        }
       }
 
       // ── Step 5: ส่ง Webhook notification ─────────────────────────────────
@@ -737,9 +774,9 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
     } catch (err) {
       console.error('Submit error:', err)
       reportClientError('submitHCRequest', err, { hcId })
-      // error อัพโหลด JD ไม่ผ่านมาทางนี้แล้ว (Step 3 จับเองแล้วไปต่อ) → เหลือแต่ error ที่
-      // ทำให้คำขอไม่ถูกบันทึกจริงๆ เช่น generateHCID / addDoc พัง → ข้อความ generic พอ
-      setError('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง')
+      // ทุก error หลัง Step 2 ถูกจับในตัวเองแล้ว (JD upload / custom position / webhook / audit)
+      // → มาถึงนี่ = คำขอยังไม่ถูกบันทึกจริง กดยื่นซ้ำได้ และซ้ำได้อย่างปลอดภัย (docId เดิม)
+      setError('ยังส่งคำขอไม่สำเร็จ — คำขอยังไม่เข้าระบบ กดยื่นซ้ำได้เลย ระบบจะไม่สร้างเคสซ้ำ')
     } finally {
       setLoading(false)
     }
@@ -751,7 +788,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   // → จำกัด Division/แผนกที่เลือกได้เฉพาะที่ grant ไว้เท่านั้น (ไม่ใช้กับ admin ที่ยื่นแทนได้ทุกแผนก)
   const deptRestricted = role === 'manager' && (grantedDepts.length > 0 || grantedDivisions.length > 0)
   const visibleDivisions = deptRestricted
-    ? [...new Set([...grantedDepts.map(getDivisionByDepartment), ...grantedDivisions])]
+    ? [...new Set([...grantedDepts.map(getDivisionByDepartment), ...grantedDivisions])].filter(Boolean)
     : DIVISIONS
 
   // trackConfig: config ของ Location track ตาม department ที่เลือก
@@ -993,7 +1030,9 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
                   className="w-full h-10 rounded-lg border border-neutral-100 bg-white px-4 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
                 >
                   <option value="">เลือก Section (ถ้ามี)</option>
-                  {getSections(form.division, form.department).map((s) => (
+                  {getSections(form.division, form.department)
+                    .filter((s) => !grantedSections.length || grantedSections.includes(s))
+                    .map((s) => (
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
