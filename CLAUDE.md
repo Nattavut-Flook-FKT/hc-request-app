@@ -43,18 +43,8 @@ Route ทั้งหมด: `/dashboard` `/request` `/reports` `/all-requests` 
 
 ### 3. Deploy
 
-> **สถานะจริง ณ 2026-08-10: CI ยัง deploy ไม่ได้ — GitHub เก็บโค้ดอย่างเดียว**
-> `deploy.yml` รันไป 2 ครั้ง ล้มทั้ง 2 (`Input required and not supplied: firebaseServiceAccount`)
-> เพราะ **ยังไม่ได้ตั้ง secret เลยแม้แต่ตัวเดียว** (`gh secret list` ว่าง)
-> ระหว่างนี้ prod ขึ้นด้วย `firebase deploy --only hosting` มือเท่านั้น
->
-> **ปลดล็อก CI = ตั้ง 2 secret นี้ แล้วกฎด้านล่างถึงจะเป็นจริง:**
-> ```bash
-> gh secret set ENV_FILE < .env                        # ทั้งไฟล์ .env
-> gh secret set FIREBASE_SERVICE_ACCOUNT < key.json    # Firebase console → Project settings → Service accounts → Generate new private key
-> ```
-> ⚠️ ตั้ง `FIREBASE_SERVICE_ACCOUNT` ตัวเดียวไม่ได้ — ต้องมี `ENV_FILE` ด้วย ไม่งั้น CI เขียวแต่ prod เปิดไม่ติด
-> (มี step `Fail fast ถ้า .env ไม่มีของ` กันไว้แล้ว แต่อย่าไปพึ่ง — ตั้งให้ครบทั้งคู่)
+> **สถานะจริง ณ 2026-08-11: CI deploy ทำงานแล้ว** — secret ครบทั้ง `ENV_FILE` และ `FIREBASE_SERVICE_ACCOUNT` (ตั้ง 2026-08-10) และ `deploy.yml` รันสำเร็จแล้ว (run 31484648125)
+> merge เข้า `main` = deploy prod อัตโนมัติ
 > ⚠️ แก้ `.env` ในเครื่องแล้วต้อง `gh secret set ENV_FILE < .env` ใหม่ทุกครั้ง ไม่งั้น prod กับเครื่องคนละค่า
 
 **ห้าม deploy จากเครื่อง** (`firebase deploy` ด้วยมือ) — merge เข้า `main` = deploy prod อัตโนมัติผ่าน `.github/workflows/deploy.yml`
