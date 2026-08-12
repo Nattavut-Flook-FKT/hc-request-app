@@ -14,8 +14,11 @@
  * @architecture
  * Sub-components (all defined in this file):
  *  - PipelineTrack   – horizontal progress dots for the 6-stage pipeline
- *  - ExpandedDetail  – collapsible detail panel (reason, requirements,
- *                      reject reason, JD/CV file buttons, status history)
+ *  - ExpandedDetail  – collapsible detail panel styled after the TA panel in
+ *                      RequestTable (/my-cases): read-only 4-column info card
+ *                      (HC, candidate, start date, LWD, reason, requirements,
+ *                      work-days/shift chips, requester + timestamp), JD/CV
+ *                      file cards, and the status history list
  *  - RequestRow      – single table row with expand/collapse, SLA counter,
  *                      candidate name, and start date
  *  - Scorecard       – 5-card summary strip (Open / Recruiting+Interviewing /
@@ -41,7 +44,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { collection, onSnapshot, orderBy, query, where, limit, getDoc, doc } from 'firebase/firestore'
 import { db } from '@/libs/firebase'
 import { getJDSignedUrl, getCVSignedUrl } from '@/libs/supabase'
-import { Loader2, FileText, File, UserCheck, Calendar, ChevronDown, ChevronUp, ChevronsUpDown, FilePlus, Eye, Pencil } from 'lucide-react'
+import { Loader2, FileText, File, UserCheck, Calendar, ChevronDown, ChevronUp, ChevronsUpDown, FilePlus, Eye, Pencil, Users, XCircle, AlignLeft, ClipboardList } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { getDepartments } from '@/config/orgStructure'
 import { resolveDeptNames } from '@/config/deptMapping'
@@ -248,88 +251,188 @@ function ExpandedDetail({ req, isAdmin, onOpenDetail }) {
     if (url) window.open(url, '_blank')
   }
 
+  /** fmtDate — แปลงวันที่เป็น d-MMM-yyyy (ลอก format จาก RequestTable ฝั่ง TA) */
+  function fmtDate(v) {
+    const d = new Date(v)
+    return isNaN(d) ? v : d.getDate() + '-' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + '-' + d.getFullYear()
+  }
+
   return (
-    <div className="px-6 pb-5 pt-2">
-      {/* ปุ่มเปิด modal ข้อมูลคำขอเต็ม (org structure / JG / headcount / LWD / กะ ฯลฯ ที่แผงนี้ไม่ได้โชว์)
-          stopPropagation เพราะ row header ทั้งแถบเป็น toggle พับ/กาง */}
-      <div className="border-t border-neutral-100 pt-4">
-        <button
-          onClick={(e) => { e.stopPropagation(); onOpenDetail() }}
-          className="flex items-center gap-1.5 rounded-lg border border-neutral-100 px-3 py-1.5 text-[11px] font-bold text-neutral-600 transition-colors hover:border-neutral-300"
-        >
-          {isAdmin
-            ? <Pencil size={12} strokeWidth={1} absoluteStrokeWidth className="shrink-0" />
-            : <Eye size={12} strokeWidth={1} absoluteStrokeWidth className="shrink-0" />
-          }
-          {isAdmin ? 'แก้ไขข้อมูลเคส' : 'ดูข้อมูลคำขอ'}
-        </button>
-      </div>
+    <div className="px-4 pb-4 pt-2">
+      {/* พื้น dark-green-50 ให้การ์ดขาวเด้งเหมือน expanded row ฝั่ง TA (/my-cases) */}
+      <div className="rounded-2xl bg-dark-green-50 p-4">
 
-      <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-4 border-t border-neutral-100 pt-4 sm:grid-cols-2">
-        {/* Section 1: Manager's stated reason for the headcount request */}
-        {req.reason && (
-          <div>
-            <p className="mb-1.5 text-[11px] font-bold text-neutral-300">เหตุผลในการขอ</p>
-            <p className="text-sm leading-relaxed text-neutral-600">"{req.reason}"</p>
-          </div>
-        )}
-        {/* Section 2: Free-text candidate requirements */}
-        {req.requirements && (
-          <div>
-            <p className="mb-1.5 text-[11px] font-bold text-neutral-300">Requirements</p>
-            <p className="text-sm leading-relaxed text-neutral-600">{req.requirements}</p>
-          </div>
-        )}
-        {/* Section 3: Rejection reason — full-width, red styling to signal terminal failure */}
-        {req.rejectReason && (
-          <div className="col-span-full">
-            <p className="mb-1.5 text-[11px] font-bold text-red-300">เหตุผลการ Reject</p>
-            <p className="text-sm text-red-600">{req.rejectReason}</p>
-          </div>
-        )}
-      </div>
+        {/* ปุ่มเปิด modal ข้อมูลคำขอเต็ม — ชิดขวาแบบ TA
+            stopPropagation เพราะ row header ทั้งแถบเป็น toggle พับ/กาง */}
+        <div className="mb-3 flex justify-end">
+          <button
+            onClick={(e) => { e.stopPropagation(); onOpenDetail() }}
+            className="flex items-center gap-1.5 rounded-lg border border-neutral-100 bg-white px-3 py-1.5 text-[11px] font-bold text-neutral-600 transition-colors hover:bg-neutral-50"
+          >
+            {isAdmin
+              ? <Pencil size={12} strokeWidth={1} absoluteStrokeWidth className="shrink-0" />
+              : <Eye size={12} strokeWidth={1} absoluteStrokeWidth className="shrink-0" />
+            }
+            {isAdmin ? 'แก้ไขข้อมูลเคส' : 'ดูข้อมูลคำขอ'}
+          </button>
+        </div>
 
-      {/* Section 4: File attachments — JD document and CV files (แยก section ชัดเจน) */}
-      {(req.jdFilePath || req.cvFiles?.length > 0) && (
-        <div className="mt-4 grid grid-cols-2 gap-6 border-t border-neutral-100 pt-4">
+        {/* ── Info card 4 คอลัมน์ — layout เดียวกับ TA panel แต่ read-only ทั้งหมด ── */}
+        <div className="grid grid-cols-1 gap-8 rounded-2xl border border-neutral-100 bg-white p-6 md:grid-cols-2 lg:grid-cols-4">
+
+          {/* จำนวน HC + วันที่ */}
+          <div className="flex flex-col gap-5">
+            <div>
+              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
+                <Users size={12} strokeWidth={1} absoluteStrokeWidth /> จำนวน HC
+              </p>
+              <p className="text-xl font-bold text-dark-green-700 tabular-nums">{req.headcount ?? 1} <span className="text-sm font-bold text-neutral-400">คน</span></p>
+            </div>
+            {req.candidateName && (
+              <div>
+                <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
+                  <UserCheck size={12} strokeWidth={1} absoluteStrokeWidth /> Candidate
+                </p>
+                <p className="text-sm font-bold text-purple-700">{req.candidateName}</p>
+              </div>
+            )}
+            {req.startDate && (
+              <div>
+                <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
+                  <Calendar size={12} strokeWidth={1} absoluteStrokeWidth /> วันเริ่มงาน
+                </p>
+                <p className="text-sm font-bold text-teal-700">{fmtDate(req.startDate)}</p>
+              </div>
+            )}
+            {req.rejectReason && (
+              <div>
+                <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-red-400">
+                  <XCircle size={12} strokeWidth={1} absoluteStrokeWidth /> เหตุผลการ Reject
+                </p>
+                <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2">
+                  <p className="text-sm leading-relaxed text-red-700">{req.rejectReason}</p>
+                </div>
+              </div>
+            )}
+            {req.requestType === 'Replacement' && (
+              <div>
+                <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
+                  <Calendar size={12} strokeWidth={1} absoluteStrokeWidth /> วันที่ลาออก (LWD)
+                </p>
+                <p className="text-sm font-bold text-neutral-700">{req.targetStartDate || '—'}</p>
+              </div>
+            )}
+            {req.requestType === 'Replacement' && req.replacementFor && (
+              <div>
+                <p className="mb-2 text-[11px] font-bold text-neutral-400">ทดแทนพนักงานเดิม</p>
+                <p className="text-sm font-bold text-dark-green-700">{req.replacementFor}</p>
+              </div>
+            )}
+          </div>
+
+          {/* เหตุผล */}
+          <div>
+            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
+              <AlignLeft size={12} strokeWidth={1} absoluteStrokeWidth /> เหตุผลในการขอ
+            </p>
+            <div className="rounded-xl border border-neutral-100 bg-neutral-50 p-3">
+              <p className="whitespace-pre-wrap text-sm italic leading-relaxed text-neutral-700">"{req.reason || '—'}"</p>
+            </div>
+          </div>
+
+          {/* Requirements + chips วันทำงาน/กะ */}
+          <div>
+            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
+              <ClipboardList size={12} strokeWidth={1} absoluteStrokeWidth /> Requirements
+            </p>
+            <div className="rounded-xl border border-neutral-100 bg-neutral-50 p-3">
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-neutral-700">{req.requirements || '—'}</p>
+            </div>
+            {(req.workDaysPerWeek || req.shift) && (
+              <div className="mt-4 flex gap-4">
+                {req.workDaysPerWeek && (
+                  <div className="flex-1 rounded-xl border border-purple-100 bg-purple-50 px-3 py-2">
+                    <p className="mb-1 text-[11px] font-bold text-purple-400">วัน/สัปดาห์</p>
+                    <p className="text-sm font-bold text-purple-900">{req.workDaysPerWeek} วัน</p>
+                  </div>
+                )}
+                {req.shift && (
+                  <div className="flex-1 rounded-xl border border-purple-100 bg-purple-50 px-3 py-2">
+                    <p className="mb-1 text-[11px] font-bold text-purple-400">กะ</p>
+                    <p className="text-sm font-bold text-purple-900">{req.shift}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Meta: ผู้ยื่น + Timestamp */}
+          <div className="flex flex-col gap-5">
+            <div>
+              <p className="mb-2 text-[11px] font-bold text-neutral-400">ข้อมูลผู้ยื่น</p>
+              <p className="text-sm font-bold text-neutral-900">{req.requesterName}</p>
+              <p className="text-[11px] font-bold text-neutral-400">{req.requesterEmail}</p>
+            </div>
+            <div>
+              <p className="mb-2 text-[11px] font-bold text-neutral-400">Timestamp</p>
+              <p className="font-mono text-sm font-bold text-neutral-500">
+                {req.createdAt?.toDate?.().toLocaleString('th-TH') ?? '—'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* ── การ์ดไฟล์ JD + CV — สไตล์การ์ด CV ของ TA แต่ read-only (ไม่มีอัพโหลด/ลบ) ── */}
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
 
           {/* JD */}
-          <div>
-            <p className="mb-2 text-[11px] font-bold text-neutral-400">Job Description (JD)</p>
+          <div className="rounded-2xl border border-neutral-100 bg-white p-4">
+            <p className="mb-3 flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
+              <FileText size={12} strokeWidth={1} absoluteStrokeWidth /> Job Description (JD)
+            </p>
             {req.jdFilePath ? (
               <button
-                onClick={() => openFile(req.jdFilePath, false)}
-                className="flex w-full items-center gap-1.5 rounded-lg border border-neutral-100 px-3 py-1.5 text-left text-[11px] font-bold text-neutral-600 transition-colors hover:border-neutral-300"
+                onClick={(e) => { e.stopPropagation(); openFile(req.jdFilePath, false) }}
+                className="flex w-full items-center gap-2 rounded-xl border border-neutral-100 bg-neutral-50 px-3 py-2 text-left text-xs font-bold text-neutral-700 transition-colors hover:text-dark-green-700"
+                title={req.jdFileName}
               >
-                <FileText size={12} strokeWidth={1} absoluteStrokeWidth className="shrink-0" />
+                <FileText size={13} strokeWidth={1} absoluteStrokeWidth className="shrink-0 text-dark-green-600" />
                 <span className="truncate">{req.jdFileName || 'JD File'}</span>
               </button>
             ) : (
-              <p className="text-[11px] italic text-neutral-400">ยังไม่มีไฟล์ JD</p>
+              <p className="text-xs italic text-neutral-400">ยังไม่มีไฟล์ JD</p>
             )}
           </div>
 
           {/* CV */}
-          <div>
-            <p className="mb-2 text-[11px] font-bold text-neutral-400">CV ผู้สมัคร</p>
+          <div className="rounded-2xl border border-neutral-100 bg-white p-4">
+            <p className="mb-3 flex items-center gap-1.5 text-[11px] font-bold text-neutral-400">
+              <File size={12} strokeWidth={1} absoluteStrokeWidth /> CV / Resume
+            </p>
             {req.cvFiles?.length > 0 ? (
               <div className="flex flex-col gap-1.5">
                 {req.cvFiles.map((cv, i) => (
-                  <button key={i} onClick={() => openFile(cv.path, true)}
-                    className="flex items-center gap-1.5 rounded-lg border border-neutral-100 px-3 py-1.5 text-left text-[11px] font-bold text-neutral-600 transition-colors hover:border-neutral-300"
-                  >
-                    <File size={12} strokeWidth={1} absoluteStrokeWidth className="shrink-0" />
-                    <span className="truncate">{cv.name}</span>
-                  </button>
+                  <div key={i} className="group flex items-center justify-between gap-2 rounded-xl border border-neutral-100 bg-neutral-50 px-3 py-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openFile(cv.path, true) }}
+                      className="flex items-center gap-2 truncate text-xs font-bold text-neutral-700 transition-colors hover:text-dark-green-700"
+                      title={cv.name}
+                    >
+                      <FileText size={13} strokeWidth={1} absoluteStrokeWidth className="shrink-0 text-dark-green-600" />
+                      <span className="max-w-[200px] truncate">{cv.name}</span>
+                    </button>
+                    {cv.uploadedBy && (
+                      <span className="hidden shrink-0 text-[11px] text-neutral-400 group-hover:inline">{cv.uploadedBy.split('@')[0]}</span>
+                    )}
+                  </div>
                 ))}
               </div>
             ) : (
-              <p className="text-[11px] italic text-neutral-400">ยังไม่มีไฟล์ CV</p>
+              <p className="text-xs italic text-neutral-400">ยังไม่มีไฟล์ CV</p>
             )}
           </div>
 
         </div>
-      )}
 
       {/* Section 5: Status history timeline — sorted ascending so the oldest event is at the top */}
       {req.statusHistory?.length > 0 && (
@@ -358,6 +461,8 @@ function ExpandedDetail({ req, isAdmin, onOpenDetail }) {
           </div>
         </div>
       )}
+
+      </div>
     </div>
   )
 }

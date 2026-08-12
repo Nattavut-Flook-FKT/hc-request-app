@@ -11,6 +11,8 @@ export default defineConfig({
   server: {
     // อนุญาต ngrok tunnel (subdomain สุ่มทุกครั้งที่รันใหม่) สำหรับเปิดให้คนนอกวงดูชั่วคราว
     allowedHosts: ['.ngrok-free.dev', '.ngrok-free.app', '.ngrok.io'],
+    // รับ port จาก env (เช่น preview harness จัดให้ตอน 5173 ไม่ว่าง) — default 5173 เหมือนเดิม
+    port: Number(process.env.PORT) || 5173,
   },
   build: {
     rollupOptions: {
