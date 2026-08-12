@@ -34,17 +34,20 @@
  * @param {{ email: string }} user – The currently authenticated user object.
  *   Only `user.email` is consumed; the Firestore query is skipped entirely
  *   when this prop is absent.
+ * @param {string} role – 'manager' | 'admin'. Admin gets the editable
+ *   EditCaseModal; everyone else gets it in read-only mode.
  */
 import { useEffect, useState, useMemo } from 'react'
 import { collection, onSnapshot, orderBy, query, where, limit, getDoc, doc } from 'firebase/firestore'
 import { db } from '@/libs/firebase'
 import { getJDSignedUrl, getCVSignedUrl } from '@/libs/supabase'
-import { Loader2, FileText, File, UserCheck, Calendar, ChevronDown, ChevronUp, ChevronsUpDown, FilePlus } from 'lucide-react'
+import { Loader2, FileText, File, UserCheck, Calendar, ChevronDown, ChevronUp, ChevronsUpDown, FilePlus, Eye, Pencil } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { getDepartments } from '@/config/orgStructure'
 import { resolveDeptNames } from '@/config/deptMapping'
 import { grantedKeys } from '@/utils/grants'
 import { slaLimit } from '@/features/dashboard/sla'
+import EditCaseModal from '@/features/dashboard/EditCaseModal'
 
 /**
  * STATUS — colour token map for every possible request status (DS tokens).
@@ -233,7 +236,7 @@ function PipelineTrack({ status }) {
  * @param {{ req: object }} props – The full Firestore request document.
  */
 // ─── Expandable detail section ─────────────────────────────
-function ExpandedDetail({ req }) {
+function ExpandedDetail({ req, isAdmin, onOpenDetail }) {
   /**
    * openFile — fetch a short-lived signed URL from Supabase Storage and open
    * it in a new tab. JD files use the JD bucket; CV files use the CV bucket.
@@ -247,7 +250,22 @@ function ExpandedDetail({ req }) {
 
   return (
     <div className="px-6 pb-5 pt-2">
-      <div className="grid grid-cols-1 gap-x-8 gap-y-4 border-t border-neutral-100 pt-4 sm:grid-cols-2">
+      {/* ปุ่มเปิด modal ข้อมูลคำขอเต็ม (org structure / JG / headcount / LWD / กะ ฯลฯ ที่แผงนี้ไม่ได้โชว์)
+          stopPropagation เพราะ row header ทั้งแถบเป็น toggle พับ/กาง */}
+      <div className="border-t border-neutral-100 pt-4">
+        <button
+          onClick={(e) => { e.stopPropagation(); onOpenDetail() }}
+          className="flex items-center gap-1.5 rounded-lg border border-neutral-100 px-3 py-1.5 text-[11px] font-bold text-neutral-600 transition-colors hover:border-neutral-300"
+        >
+          {isAdmin
+            ? <Pencil size={12} strokeWidth={1} absoluteStrokeWidth className="shrink-0" />
+            : <Eye size={12} strokeWidth={1} absoluteStrokeWidth className="shrink-0" />
+          }
+          {isAdmin ? 'แก้ไขข้อมูลเคส' : 'ดูข้อมูลคำขอ'}
+        </button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-4 border-t border-neutral-100 pt-4 sm:grid-cols-2">
         {/* Section 1: Manager's stated reason for the headcount request */}
         {req.reason && (
           <div>
@@ -374,8 +392,10 @@ function ExpandedDetail({ req }) {
  *   - index – Row position (currently unused, reserved for future striping)
  */
 // ─── Single Request Row ────────────────────────────────────
-function RequestRow({ req }) {
+function RequestRow({ req, user, role }) {
   const [open, setOpen] = useState(false)
+  const [detail, setDetail] = useState(false)   // modal ข้อมูลคำขอ (admin = แก้ได้, อื่นๆ = อ่านเท่านั้น)
+  const isAdmin  = role === 'admin'
   const sla      = computeSLA(req)
   // Only active requests show the live SLA counter; terminal ones are dimmed instead.
   const isActive = !['Closed','Cancelled','Rejected'].includes(req.status)
@@ -484,9 +504,14 @@ function RequestRow({ req }) {
       {/* ── Expanded ── */}
       <div className={`grid transition-all duration-300 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
         <div className="overflow-hidden">
-          <ExpandedDetail req={req} />
+          <ExpandedDetail req={req} isAdmin={isAdmin} onOpenDetail={() => setDetail(true)} />
         </div>
       </div>
+
+      {/* render นอก wrapper ที่ overflow-hidden — modal เป็น position:fixed จะได้ไม่เสี่ยงถูก clip */}
+      {detail && (
+        <EditCaseModal req={req} user={user} readOnly={!isAdmin} onClose={() => setDetail(false)} />
+      )}
     </div>
   )
 }
@@ -562,7 +587,7 @@ const HIDDEN_STATUSES = new Set(['OnHold', 'Cancelled', 'Rejected', 'NoShow'])
 const DEPT_ONLY_HIDDEN_STATUSES = new Set(['PendingApproval', 'RejectedByCEO'])
 
 // ─── Main ──────────────────────────────────────────────────
-export default function ManagerRequestsView({ user }) {
+export default function ManagerRequestsView({ user, role }) {
   const [requests, setRequests] = useState([])
   const [loading,  setLoading]  = useState(true)
   const [tab, setTab] = useState('active')
@@ -934,7 +959,7 @@ export default function ManagerRequestsView({ user }) {
       ) : (
         <div className="overflow-hidden rounded-2xl border border-neutral-100 bg-white">
           {displayed.map((req) => (
-            <RequestRow key={req.id} req={req} />
+            <RequestRow key={req.id} req={req} user={user} role={role} />
           ))}
         </div>
       )}

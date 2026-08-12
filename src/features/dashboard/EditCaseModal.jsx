@@ -1,9 +1,14 @@
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- * EditCaseModal — แก้ไขข้อมูลเคส (Admin เท่านั้น)
+ * EditCaseModal — แก้ไขข้อมูลเคส / ข้อมูลคำขอ
  *
  * เปิดจากแผงรายละเอียดใน RequestTable → แก้ field ของคำขอที่กรอกไว้ตอนยื่นฟอร์ม
  * (ประเภท, org structure, ตำแหน่ง/JG, จำนวน HC, เหตุผล, requirements ฯลฯ)
+ *
+ * 2 โหมด:
+ *   - default (Admin)   → แก้ได้ + บันทึก
+ *   - readOnly (Manager) → หัวข้อ "ข้อมูลคำขอ" ดูข้อมูลเท่านั้น ไม่มีปุ่มบันทึก
+ *     ใช้จากแผงรายละเอียดใน ManagerRequestsView (หน้า /my-requests)
  *
  * เขียนเฉพาะ field ที่เปลี่ยนจริง แล้วบันทึก audit log 1 entry ต่อการแก้ 1 ครั้ง
  * โดยเก็บ before → after ของทุก field ที่เปลี่ยนไว้ใน note
@@ -47,7 +52,10 @@ const LABELS = {
 }
 const FIELDS = Object.keys(LABELS)
 
-const INPUT_CLS = 'w-full rounded-lg border border-neutral-100 bg-white px-3 py-2 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none'
+// disabled = โหมด readOnly (ทุก field disabled พร้อมกันผ่าน fieldset)
+// [PROPOSED — deviation DS-#032] text ใช้ neutral-900 ไม่ใช่ neutral-300 เพราะโหมดนี้ disabled ทั้งฟอร์มเพื่อ "อ่านข้อมูล"
+// ถ้าเทาจางทั้งหน้าจะอ่านค่าไม่ออก ขัด Pillar 3 (Clear) — bg/border ยังตาม spec เป๊ะ
+const INPUT_CLS = 'w-full rounded-lg border border-neutral-100 bg-white px-3 py-2 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none disabled:cursor-default disabled:border-neutral-200 disabled:bg-neutral-50 disabled:text-neutral-900'
 
 function Field({ label, children }) {
   return (
@@ -58,7 +66,7 @@ function Field({ label, children }) {
   )
 }
 
-export default function EditCaseModal({ req, user, onClose }) {
+export default function EditCaseModal({ req, user, onClose, readOnly = false }) {
   // '' แทน undefined ทุก field เพื่อให้ input เป็น controlled ตลอด
   const [f, setF] = useState(() => Object.fromEntries(FIELDS.map((k) => [k, req[k] ?? ''])))
   const [saving, setSaving] = useState(false)
@@ -126,13 +134,18 @@ export default function EditCaseModal({ req, user, onClose }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/45 p-4">
       <div className="flex max-h-[90dvh] w-full max-w-2xl flex-col rounded-[24px] border border-neutral-100 bg-white shadow-xl">
         <div className="px-6 pt-6">
-          <h3 className="mb-1 text-lg font-bold text-neutral-900">แก้ไขข้อมูลเคส</h3>
+          <h3 className="mb-1 text-lg font-bold text-neutral-900">{readOnly ? 'ข้อมูลคำขอ' : 'แก้ไขข้อมูลเคส'}</h3>
           <p className="mb-5 text-sm text-neutral-500">
-            {req.hcId || req.id} — การแก้ไขจะถูกบันทึกใน Audit Log และ sync กลับ Google Sheets อัตโนมัติ
+            {req.hcId || req.id} — {readOnly
+              ? 'ดูข้อมูลเท่านั้น แก้ไขไม่ได้'
+              : 'การแก้ไขจะถูกบันทึกใน Audit Log และ sync กลับ Google Sheets อัตโนมัติ'}
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 overflow-y-auto px-6 pb-2 md:grid-cols-2">
+        {/* scroll container ต้องเป็น div — fieldset ไม่ clip content ให้ (footer จะถูกเนื้อหาทับ)
+            fieldset disabled = native HTML ปิดทุก control ข้างในทีเดียว ไม่ต้องใส่ disabled ทีละช่อง */}
+        <div className="overflow-y-auto px-6 pb-2">
+        <fieldset disabled={readOnly} className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
           <Field label={LABELS.requestType}>
             <select value={f.requestType} onChange={(e) => set('requestType', e.target.value)} className={INPUT_CLS}>
               {['Replacement', 'New HC'].map((v) => <option key={v} value={v}>{v}</option>)}
@@ -230,6 +243,7 @@ export default function EditCaseModal({ req, user, onClose }) {
               <textarea rows={3} value={f.requirements} onChange={(e) => set('requirements', e.target.value)} className={`${INPUT_CLS} resize-none`} />
             </Field>
           </div>
+        </fieldset>
         </div>
 
         {error && (
@@ -245,16 +259,18 @@ export default function EditCaseModal({ req, user, onClose }) {
             disabled={saving}
             className="flex-1 rounded-lg border border-neutral-100 px-4 py-2.5 text-sm font-bold text-neutral-600 transition-colors hover:bg-neutral-50 disabled:opacity-50"
           >
-            ยกเลิก
+            {readOnly ? 'ปิด' : 'ยกเลิก'}
           </button>
-          <button
-            onClick={save}
-            disabled={saving || !canSave}
-            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-dark-green-600 px-4 py-2.5 text-sm font-bold text-neutral-50 transition-colors hover:bg-dark-green-700 disabled:opacity-50"
-          >
-            {saving && <Loader2 size={14} strokeWidth={1} absoluteStrokeWidth className="animate-spin" />}
-            บันทึก
-          </button>
+          {!readOnly && (
+            <button
+              onClick={save}
+              disabled={saving || !canSave}
+              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-dark-green-600 px-4 py-2.5 text-sm font-bold text-neutral-50 transition-colors hover:bg-dark-green-700 disabled:opacity-50"
+            >
+              {saving && <Loader2 size={14} strokeWidth={1} absoluteStrokeWidth className="animate-spin" />}
+              บันทึก
+            </button>
+          )}
         </div>
       </div>
     </div>
