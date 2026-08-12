@@ -111,7 +111,8 @@ function downloadPivotCSV(rows, filename) {
 function downloadCSV(rows, filename) {
   const COLS = [
     { h: 'Open Jobs',              fn: r => fmtDate(r.createdAt?.toDate?.()) },
-    { h: 'Emp. Type',              fn: r => r.employmentType || 'Monthly' },
+    { h: 'Emp. Type',              fn: r => r.employmentType || 'Permanent' },
+    { h: 'Payroll',                fn: r => r.payrollType    || '' },
     { h: 'Job Type',               fn: r => r.requestType === 'New HC' ? 'New HC' : r.requestType === 'Replacement' ? 'Replace' : (r.requestType || '') },
     { h: 'HCID',                   fn: r => r.hcId || r.id },
     { h: 'Position',               fn: r => r.position },
