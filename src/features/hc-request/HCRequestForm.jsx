@@ -45,7 +45,8 @@ import { toOrgDepts, toOrgSection } from '@/config/deptMapping'
 // (division/department/section จะถูก preserve แยกต่างหาก)
 const INITIAL_FORM = {
   requestType:    'Replacement', // ประเภทคำขอ: 'Replacement' หรือ 'New HC'
-  employmentType: 'Monthly',     // ประเภทการจ้าง: Monthly | Daily | Contract | Intern
+  employmentType: 'Permanent',   // ประเภทการจ้าง: Permanent | Contract | Intern
+  payrollType:    'Monthly',     // รอบการจ่าย: Monthly | Daily (อิสระจาก employmentType)
   division: '',                  // สายงานหลัก (เลือกจาก DIVISIONS)
   department: '',                // แผนก (cascade จาก division)
   section: '',                   // หน่วยงานย่อย (cascade จาก department)
@@ -300,7 +301,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   // ─── Preset State ─────────────────────────────────────────────────────────
   // บันทึก/โหลด template fields ที่ใช้บ่อยใน localStorage (per user)
   const PRESET_KEY    = `hc_presets_${user.email}`
-  const PRESET_FIELDS = ['requestType','employmentType','division','department','section','businessUnit','orgTrack','jg','position','requirements']
+  const PRESET_FIELDS = ['requestType','employmentType','payrollType','division','department','section','businessUnit','orgTrack','jg','position','requirements']
   const [presets,       setPresets]       = useState(() => { try { return JSON.parse(localStorage.getItem(`hc_presets_${user.email}`) || '[]') } catch(_) { return [] } })
   const [showSaveInput, setShowSaveInput] = useState(false)   // แสดง input ตั้งชื่อ preset
   const [presetName,    setPresetName]    = useState('')       // ชื่อ preset ที่กำลังตั้ง
@@ -946,23 +947,44 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
             </div>
           </div>
 
-          {/* ── Emp. Type ──────────────────────────────────────────────────── */}
-          <div>
-            <label className="block text-[13px] font-bold text-neutral-900 ml-1 mb-1">Emp. Type *</label>
-            <div className="flex gap-5">
-              {['Monthly', 'Daily', 'Contract', 'Intern'].map((t) => (
-                <label key={t} className="flex items-center gap-2 cursor-pointer group">
-                  <input
-                    type="radio"
-                    name="employmentType"
-                    value={t}
-                    checked={form.employmentType === t}
-                    onChange={handleChange}
-                    className="w-4 h-4 accent-dark-green-600 cursor-pointer"
-                  />
-                  <span className={`text-sm font-bold transition-colors ${form.employmentType === t ? 'text-neutral-900' : 'text-neutral-400 group-hover:text-neutral-600'}`}>{t}</span>
-                </label>
-              ))}
+          {/* ── Emp. Type + รอบการจ่าย ─────────────────────────────────────
+           * 2 มิติแยกกัน: ประเภทการจ้าง (radio) กับ รอบการจ่าย (dropdown)
+           * รอบการจ่ายแสดงตลอดทุก type — ไม่ผูกกับ employmentType
+           */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[13px] font-bold text-neutral-900 ml-1 mb-1">Emp. Type *</label>
+              <div className="flex gap-5 h-10 items-center">
+                {['Permanent', 'Contract', 'Intern'].map((t) => (
+                  <label key={t} className="flex items-center gap-2 cursor-pointer group">
+                    <input
+                      type="radio"
+                      name="employmentType"
+                      value={t}
+                      checked={form.employmentType === t}
+                      onChange={handleChange}
+                      className="w-4 h-4 accent-dark-green-600 cursor-pointer"
+                    />
+                    <span className={`text-sm font-bold transition-colors ${form.employmentType === t ? 'text-neutral-900' : 'text-neutral-400 group-hover:text-neutral-600'}`}>{t}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* รอบการจ่าย: ไม่มี option ว่าง เพราะมี default ('Monthly') เสมอ */}
+            <div>
+              <label className="block text-[13px] font-bold text-neutral-900 ml-1 mb-1">รอบการจ่าย *</label>
+              <select
+                name="payrollType"
+                value={form.payrollType}
+                onChange={handleChange}
+                required
+                className="w-full h-10 rounded-lg border border-neutral-100 bg-white px-4 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none"
+              >
+                {['Monthly', 'Daily'].map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
             </div>
           </div>
 

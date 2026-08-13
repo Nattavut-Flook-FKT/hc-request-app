@@ -293,6 +293,7 @@ export default function RequestTable({
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [activeTab, setActiveTab] = useState('ทั้งหมด')
   const [filterEmpType,  setFilterEmpType]  = useState('')
+  const [filterPayroll,  setFilterPayroll]  = useState('')
   const [filterJobType,  setFilterJobType]  = useState('')
   const [filterRank,     setFilterRank]     = useState('')
   const [filterDept,     setFilterDept]     = useState('')
@@ -728,7 +729,8 @@ export default function RequestTable({
       // copy เฉพาะ field นิยามงาน — reset field วงจรชีวิต/ผู้สมัครทั้งหมด
       const payload = {
         requestType:     req.requestType || 'Replacement',
-        employmentType:  req.employmentType || 'Monthly',
+        employmentType:  req.employmentType || 'Permanent',
+        payrollType:     req.payrollType    || 'Monthly',
         division:        req.division || '',
         department:      req.department || '',
         section:         req.section || '',
@@ -951,6 +953,10 @@ export default function RequestTable({
   const assignees     = useMemo(() => [...new Set(requests.map((r) => r.assignedToName).filter(Boolean))].sort(), [requests])
   const businessUnits = useMemo(() => [...new Set(requests.map((r) => r.businessUnit).filter(Boolean))].sort(), [requests])
   const ranks         = useMemo(() => [...new Set(requests.map((r) => r.jg).filter(Boolean))].sort(), [requests])
+  // ดึงจากข้อมูลจริง ไม่ hardcode — เคสเก่าไม่ได้ migrate จึงยังมีค่าเดิม (Monthly/Daily)
+  // ปนกับค่าใหม่ (Permanent/Contract/Intern) และจะหายไปเองเมื่อไม่มีเคสเก่าเหลือ
+  const empTypes      = useMemo(() => [...new Set(requests.map((r) => r.employmentType).filter(Boolean))].sort(), [requests])
+  const payrollTypes  = useMemo(() => [...new Set(requests.map((r) => r.payrollType).filter(Boolean))].sort(), [requests])
   const years         = useMemo(() => {
     const yrs = [...new Set(requests.map((r) => r.createdAt?.toDate?.()?.getFullYear()).filter(Boolean))]
     return yrs.sort((a, b) => b - a).map(String) // เรียงจากใหม่→เก่า
@@ -1009,6 +1015,7 @@ export default function RequestTable({
     else if (activeTab !== 'ทั้งหมด') list = list.filter((r) => r.status === activeTab)
     if (filterYear)     list = list.filter((r) => r.createdAt?.toDate?.()?.getFullYear() === Number(filterYear))
     if (filterEmpType)  list = list.filter((r) => r.employmentType === filterEmpType)
+    if (filterPayroll)  list = list.filter((r) => r.payrollType === filterPayroll)
     if (filterJobType)  list = list.filter((r) => r.requestType === filterJobType)
     if (filterRank)     list = list.filter((r) => r.jg === filterRank)
     if (filterDept)     list = list.filter((r) => r.department === filterDept)
@@ -1038,6 +1045,7 @@ export default function RequestTable({
         r.jg?.toLowerCase().includes(q) ||
         r.requestType?.toLowerCase().includes(q) ||
         r.employmentType?.toLowerCase().includes(q) ||
+        r.payrollType?.toLowerCase().includes(q) ||
         (STATUS_CONFIG[r.status]?.label ?? r.status)?.toLowerCase().includes(q)
       )
     }
@@ -1059,15 +1067,15 @@ export default function RequestTable({
       return 0
     })
     return list
-  }, [requests, filterMine, filterMyCases, activeTab, filterYear, filterEmpType, filterJobType, filterRank, filterDept, filterBU, filterAssigned, filterDateFrom, filterDateTo, debouncedSearch, focusMonth, sortField, sortDir, user.email, user.displayName, role, department, allTAs])
+  }, [requests, filterMine, filterMyCases, activeTab, filterYear, filterEmpType, filterPayroll, filterJobType, filterRank, filterDept, filterBU, filterAssigned, filterDateFrom, filterDateTo, debouncedSearch, focusMonth, sortField, sortDir, user.email, user.displayName, role, department, allTAs])
 
-  const hasChipFilters     = filterYear || filterEmpType || filterJobType || filterRank || filterDept || filterBU || filterAssigned
+  const hasChipFilters     = filterYear || filterEmpType || filterPayroll || filterJobType || filterRank || filterDept || filterBU || filterAssigned
   const hasAdvancedFilters = hasChipFilters || filterDateFrom || filterDateTo
 
-  function clearChips()    { setFilterYear(''); setFilterEmpType(''); setFilterJobType(''); setFilterRank(''); setFilterDept(''); setFilterBU(''); setFilterAssigned('') }
+  function clearChips()    { setFilterYear(''); setFilterEmpType(''); setFilterPayroll(''); setFilterJobType(''); setFilterRank(''); setFilterDept(''); setFilterBU(''); setFilterAssigned('') }
   function clearAdvanced() { clearChips(); setFilterDateFrom(''); setFilterDateTo('') }
 
-  useEffect(() => { setPage(1) }, [activeTab, filterYear, filterEmpType, filterJobType, filterRank, filterDept, filterBU, filterAssigned, filterDateFrom, filterDateTo, debouncedSearch, focusMonth, filterMine, filterMyCases])
+  useEffect(() => { setPage(1) }, [activeTab, filterYear, filterEmpType, filterPayroll, filterJobType, filterRank, filterDept, filterBU, filterAssigned, filterDateFrom, filterDateTo, debouncedSearch, focusMonth, filterMine, filterMyCases])
 
   // ปิด chip dropdown เมื่อคลิกนอก
   useEffect(() => {
@@ -1205,7 +1213,8 @@ export default function RequestTable({
           <div className="flex flex-wrap items-center gap-2">
             <ChipSelect id="year"     label="ปี"             value={filterYear}     onChange={setFilterYear}     options={years} />
             <div className="h-4 w-px bg-neutral-100" />
-            <ChipSelect id="empType"  label="Emp. Type"      value={filterEmpType}  onChange={setFilterEmpType}  options={['Monthly','Daily','Contract','Intern']} />
+            <ChipSelect id="empType"  label="Emp. Type"      value={filterEmpType}  onChange={setFilterEmpType}  options={empTypes} />
+            <ChipSelect id="payroll"  label="รอบจ่าย"        value={filterPayroll}  onChange={setFilterPayroll}  options={payrollTypes} />
             <ChipSelect id="jobType"  label="Job Type"       value={filterJobType}  onChange={setFilterJobType}  options={['New HC','Replace']} />
             <ChipSelect id="rank"     label="Rank"           value={filterRank}     onChange={setFilterRank}     options={ranks} />
             <ChipSelect id="dept"     label="Department"     value={filterDept}     onChange={setFilterDept}     options={departments} />
