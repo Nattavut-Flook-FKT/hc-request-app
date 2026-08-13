@@ -35,6 +35,7 @@ import { Loader2, AlertTriangle } from 'lucide-react'
 const LABELS = {
   requestType:     'ประเภทคำขอ',
   employmentType:  'ประเภทการจ้าง',
+  payrollType:     'รอบการจ่าย',
   division:        'Division',
   department:      'แผนก',
   section:         'Section',
@@ -154,7 +155,18 @@ export default function EditCaseModal({ req, user, onClose, readOnly = false }) 
 
           <Field label={LABELS.employmentType}>
             <select value={f.employmentType} onChange={(e) => set('employmentType', e.target.value)} className={INPUT_CLS}>
-              {['Monthly', 'Daily', 'Contract', 'Intern'].map((v) => <option key={v} value={v}>{v}</option>)}
+              <option value="">— เลือก —</option>
+              {/* เคสเก่ายังเป็น Monthly/Daily ซึ่งไม่อยู่ใน list ใหม่แล้ว → ต่อค่าปัจจุบันเข้าไปด้วย
+                  (pattern เดียวกับ department ข้างล่าง) ไม่งั้น select โชว์ค่าไม่ตรงกับที่เก็บจริง */}
+              {[...new Set(['Permanent', 'Contract', 'Intern', f.employmentType].filter(Boolean))].map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </Field>
+
+          {/* เคสเก่าไม่มี payrollType → ต้องมี option รองรับค่าว่าง ไม่งั้น state กับที่เห็นไม่ตรงกัน */}
+          <Field label={LABELS.payrollType}>
+            <select value={f.payrollType} onChange={(e) => set('payrollType', e.target.value)} className={INPUT_CLS}>
+              <option value="">— ไม่ระบุ —</option>
+              {['Monthly', 'Daily'].map((v) => <option key={v} value={v}>{v}</option>)}
             </select>
           </Field>
 
