@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from 'node:url'
+import process from 'node:process'   // import ตรงๆ ไม่งั้น eslint ฟ้อง no-undef (config นี้ไม่ได้ประกาศ node globals)
 
 // https://vite.dev/config/
 export default defineConfig({
