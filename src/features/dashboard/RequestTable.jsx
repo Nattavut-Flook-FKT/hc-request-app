@@ -1314,8 +1314,8 @@ export default function RequestTable({
                           }`}>
                           {req.requestType === 'New HC' ? 'New HC' : 'Replace'}
                         </span>
-                        {/* ประเภทการจ้าง + รอบจ่าย — เคสเก่าไม่มี payrollType ก็โชว์ตัวเดียว */}
-                        <p className="mt-0.5 text-[11px] font-bold text-neutral-400">{[req.employmentType || 'Permanent', req.payrollType].filter(Boolean).join(' · ')}</p>
+                        {/* ประเภทการจ้าง — รอบจ่ายไม่โชว์ในแถว (กรองได้จาก chip "รอบจ่าย" ด้านบน) */}
+                        <p className="mt-0.5 text-[11px] font-bold text-neutral-400">{req.employmentType || 'Permanent'}</p>
                       </td>
                       <td className="px-4 py-3">
                         <p className="font-bold leading-tight text-neutral-900">{req.position}</p>
