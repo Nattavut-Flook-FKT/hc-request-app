@@ -144,6 +144,7 @@ export const ROW_DIMENSIONS = [
   { value: 'requestType',    label: 'ประเภท (New/Replace)' },
   { value: 'jg',             label: 'Job Grade' },
   { value: 'employmentType', label: 'ประเภทจ้าง' },
+  { value: 'payrollType',    label: 'รอบจ่าย' },
 ]
 
 export const COLUMN_DIMENSIONS = [
@@ -166,7 +167,9 @@ export function getDimensionValue(r, dim) {
     case 'assignedToName': return r.assignedToName || '— ยังไม่ assign —'
     case 'status':         return r.status         || 'ไม่ระบุ'
     case 'jg':             return r.jg             || 'ไม่ระบุ'
-    case 'employmentType': return r.employmentType || 'Monthly'
+    case 'employmentType': return r.employmentType || 'Permanent'
+    // เคสเก่าไม่มี payrollType จริงๆ → 'ไม่ระบุ' ไม่ใช่เดาเป็น Monthly
+    case 'payrollType':    return r.payrollType    || 'ไม่ระบุ'
     case 'requestType':    return requestTypeLabel(r)
     case 'month': {
       const d = toDate(r.createdAt)
