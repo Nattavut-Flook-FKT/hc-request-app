@@ -33,7 +33,7 @@ export default function MyRequestsPage({ user, role, department, isDarkMode, tog
 
         {/* Manager/Admin ใช้ ManagerRequestsView (Scorecard + ประวัติ), TA ใช้ RequestTable */}
         {useManagerView
-          ? <ManagerRequestsView user={user} role={role} />
+          ? <ManagerRequestsView user={user} />
           : <RequestTable user={user} role={role} department={department} filterMine />
         }
       </div>
