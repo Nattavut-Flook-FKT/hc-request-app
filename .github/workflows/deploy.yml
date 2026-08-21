@@ -39,6 +39,29 @@ jobs:
 
       - run: npm run build
 
+      # ── Firestore rules ─────────────────────────────────────────────────────
+      # เดิม workflow นี้ดัน hosting อย่างเดียว firestore.rules ไม่เคยถูก deploy เลย
+      # ไฟล์ใน repo จึงเป็นแค่เอกสาร ต้องมีคนรัน firebase deploy ด้วยมือ ซึ่ง CLAUDE.md ห้าม
+      #
+      # วางไว้ "ก่อน" hosting เพราะ rules ที่พังมักพังตอน validate (syntax) — ให้ล้มตรงนี้
+      # ตอนที่ hosting ยังไม่ถูกแตะ prod จะไม่ค้างครึ่งทางแบบโค้ดใหม่+rules เก่า
+      #
+      # ⚠️ ตั้งแต่นี้ merge เข้า main = ทับ rules บน prod ด้วย
+      #    แก้ firestore.rules = แก้ prod โดยตรง ต้องรอบคอบกว่าแก้ UI
+      #    (ตอนเปิดใช้ครั้งแรกเทียบแล้วว่า repo กับ rules ที่ live ตรงกันเป๊ะทุกบรรทัด)
+
+      # firebase-tools อ่าน credential จากไฟล์ ไม่รับ JSON ทาง env ตรงๆ
+      # เขียนลง RUNNER_TEMP (นอก workspace) กัน checkout/build เผลอเก็บไปกับ artifact
+      - name: Write service account for firebase-tools
+        run: printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Deploy Firestore rules
+        run: npx --yes firebase-tools@14 deploy --only firestore:rules --project hcrequest --non-interactive
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
+
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
