@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from 'node:url'
+import process from 'node:process'   // import ตรงๆ ไม่งั้น eslint ฟ้อง no-undef (config นี้ไม่ได้ประกาศ node globals)
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -11,6 +12,8 @@ export default defineConfig({
   server: {
     // อนุญาต ngrok tunnel (subdomain สุ่มทุกครั้งที่รันใหม่) สำหรับเปิดให้คนนอกวงดูชั่วคราว
     allowedHosts: ['.ngrok-free.dev', '.ngrok-free.app', '.ngrok.io'],
+    // รับ port จาก env (เช่น preview harness จัดให้ตอน 5173 ไม่ว่าง) — default 5173 เหมือนเดิม
+    port: Number(process.env.PORT) || 5173,
   },
   build: {
     rollupOptions: {
