@@ -75,15 +75,6 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ── Audit Logs ─────────────────────────────────────────────────────────────
-    // อ่านได้ admin + TA, เขียน (append only) ได้ freshket user
-    // ป้องกัน update/delete เพื่อรักษา audit trail
-    match /audit_logs/{logId} {
-      allow read:   if isTA();
-      allow create: if isFreshket();
-      allow update, delete: if false;
-    }
-
     // ── Custom Positions ───────────────────────────────────────────────────────
     match /custom_positions/{docId} {
       allow read:           if isFreshket();
@@ -100,9 +91,14 @@ service cloud.firestore {
     }
 
     // ── Settings (Maintenance Mode etc.) ──────────────────────────────────────
-    // อ่านได้เฉพาะ user ที่ login แล้ว (Firebase Auth), admin เท่านั้นเขียนได้
+    // อ่านได้เฉพาะ freshket user, admin เท่านั้นเขียนได้
+    // เดิมเป็น `request.auth != null` ซึ่งกว้างกว่าทุก block ในไฟล์นี้ — การกันโดเมน
+    // อยู่ที่ Login.jsx (signOut ฝั่ง client หลัง sign-in สำเร็จ) แปลว่า token ของบัญชี
+    // นอกโดเมนเกิดขึ้นจริงและยิง Firestore ได้ก่อนถูกเตะออก จึงต้องปิดที่ rules ด้วย
+    // ปลอดภัยกับแอป: App.jsx subscribe settings/maintenance หลัง auth (`if (!user) return`)
+    // ไม่มี path ไหนอ่าน settings ก่อน login
     match /settings/{docId} {
-      allow read:  if request.auth != null;
+      allow read:  if isFreshket();
       allow write: if isAdmin();
     }
 
