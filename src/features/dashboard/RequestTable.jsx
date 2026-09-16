@@ -85,6 +85,7 @@ import { generateHCID } from '@/features/hc-request/hcId'
 import { sendStatusUpdate, sendToWebhook, sendDeleteToSheets, updateOpenDateInSheets, updateStartDateInSheets, reportClientError } from '@/libs/webhook'
 import { getJGLabel } from '@/config/jobGrades'
 import { slaLimit } from '@/features/dashboard/sla'
+import { computeSLADays } from '@/features/reports/reportUtils'
 import { isEnglishName, generateFreshketEmail } from '@/utils/email'
 import { logAudit } from '@/features/audit-log/auditLog'
 import { Loader2, UserCheck, XCircle, ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, X, FileText, Search, ChevronRight, Users, Calendar, AlignLeft, ClipboardList, Pencil, Trash2, Upload, File } from 'lucide-react'
@@ -180,51 +181,14 @@ function getDaysOpen(req) {
     return Math.max(0, Math.floor((end - start) / (1000 * 60 * 60 * 24)))
   }
 
-  // auto mode — ใช้ createdAt (2026+ เท่านั้น) พร้อม pause/reset logic เดิม
+  // auto mode — ใช้ createdAt (2026+ เท่านั้น)
   const effectiveStart = req.createdAt?.toDate?.() ?? null
   if (!effectiveStart || effectiveStart.getFullYear() < 2026) return null
 
-  const createdAt = effectiveStart   // alias ให้ logic เดิมใช้ได้ต่อ
-  const DONE = new Set(['Closed', 'Cancelled'])
-
-  const history = [...(req.statusHistory ?? [])]
-    .map(e => ({ status: e.status, t: new Date(e.changedAt) }))
-    .filter(e => !isNaN(e.t))
-    .sort((a, b) => a.t - b.t)
-
-  let accumulated = 0        // ms สะสม
-  let activeStart = createdAt
-  // flag: ครั้งล่าสุดที่หยุดนับเป็นเพราะ Onboarding (ไม่ใช่ Offering)
-  // ใช้ detect reset แม้ว่าจะผ่าน Rejected ก่อนกลับมา Recruiting
-  let lastPauseWasOnboarding = false
-
-  for (const { status, t } of history) {
-    if (status === 'Offering') {
-      if (activeStart) { accumulated += t - activeStart; activeStart = null }
-      lastPauseWasOnboarding = false
-    } else if (status === 'Onboarding') {
-      if (activeStart) { accumulated += t - activeStart; activeStart = null }
-      lastPauseWasOnboarding = true   // mark: pause เพราะ Onboarding
-    } else if (status === 'Recruiting' || status === 'Interviewing') {
-      if (lastPauseWasOnboarding) {
-        // RESET: Onboarding → (Rejected?) → Recruiting → เริ่มนับใหม่
-        accumulated = 0
-        activeStart = t
-        lastPauseWasOnboarding = false
-      } else if (!activeStart) {
-        // RESUME: กลับจาก Offering reject
-        activeStart = t
-      }
-      // activeStart มีอยู่แล้ว → นับต่อ
-    } else if (DONE.has(status)) {
-      if (activeStart) { accumulated += t - activeStart; activeStart = null }
-      lastPauseWasOnboarding = false
-    }
-    // Rejected / Open: ไม่ทำอะไร — ปล่อย state เดิมดำเนินต่อ
-  }
-
-  if (activeStart) accumulated += new Date() - activeStart
-  return Math.floor(accumulated / (1000 * 60 * 60 * 24))
+  // pause/reset logic ใช้ตัวเดียวกับหน้า Reports — เดิมไฟล์นี้ copy ไว้เองแล้ว drift
+  // จนตารางกับรายงานให้เลขคนละอันในเคสที่กด On hold
+  const d = computeSLADays(req)
+  return d === '' ? null : d
 }
 
 // แสดงป้าย SLA: dot สีตามสถานะ — pause / เกิน limit / เกินครึ่ง limit / ปกติ
@@ -232,8 +196,10 @@ function getDaysOpen(req) {
 function SLABadge({ req }) {
   const days = getDaysOpen(req)
   if (days === null) return null
-  const done   = ['Closed', 'Cancelled', 'NoShow'].includes(req.status)
-  const paused = ['Offering', 'Onboarding'].includes(req.status)
+  // สองชุดนี้ต้องตรงกับ SLA_STOP ใน reportUtils — ไม่งั้นเคสที่นาฬิกาหยุดแล้ว
+  // จะยังขึ้นป้ายแดง "เกิน SLA" ทั้งที่ไม่มีใครต้องทำอะไรต่อ
+  const done   = ['Closed', 'Cancelled', 'NoShow', 'Rejected', 'InternalTransfer', 'RejectedByCEO'].includes(req.status)
+  const paused = ['Offering', 'Onboarding', 'OnHold'].includes(req.status)
   if (done) return <span className="text-[11px] font-bold text-neutral-400 tabular-nums">{days}d</span>
   if (paused) return (
     <span className="inline-flex items-center gap-1 rounded-lg border border-neutral-100 bg-neutral-50 px-1.5 py-0.5 text-[11px] font-bold text-neutral-500">
