@@ -61,13 +61,24 @@ export function monthKey(d) {
 }
 
 // ─── SLA days ─────────────────────────────────────────────────────────────────
-// state machine: นับเวลาตั้งแต่ Open (createdAt) จนถึง Offering/Onboarding
+// state machine: นาฬิกาเดินเฉพาะตอน TA ทำงานได้จริง (Open/Recruiting/Interviewing)
+// หยุดเมื่อเข้า Offering/Onboarding, พักไว้ (OnHold) หรือจบเคส
 // reset เมื่อกลับไป Recruiting/Interviewing หลัง Onboarding (เคสถูกเปิดใหม่)
 // logic เดียวกับที่เคยอยู่ใน ReportPanel.computeSLADays / RequestTable
+
+/** สถานะที่ TA ทำงานอยู่ → นาฬิกาเดิน */
+const SLA_ACTIVE = new Set(['Open', 'Recruiting', 'Interviewing'])
+
+/** สถานะที่นาฬิกาต้องหยุด — เก็บเวลาที่สะสมไว้แล้วรอ resume หรือจบเลย
+ *  Offering/Onboarding = ส่งไม้ต่อแล้ว · OnHold = พักไว้ · ที่เหลือ = เคสจบ */
+const SLA_STOP = new Set([
+  'Offering', 'Onboarding', 'OnHold',
+  'Closed', 'Cancelled', 'Rejected', 'NoShow', 'InternalTransfer', 'RejectedByCEO',
+])
+
 export function computeSLADays(req) {
   const createdAt = toDate(req.createdAt)
   if (!createdAt) return ''
-  const DONE = new Set(['Closed', 'Cancelled'])
   const history = [...(req.statusHistory ?? [])]
     .map(e => ({ status: e.status, t: toDate(e.changedAt) }))
     .filter(e => e.t)
@@ -75,12 +86,16 @@ export function computeSLADays(req) {
 
   let acc = 0, start = createdAt, lastOnboarding = false
   for (const { status, t } of history) {
-    if (status === 'Offering')          { if (start) { acc += t - start; start = null }; lastOnboarding = false }
-    else if (status === 'Onboarding')   { if (start) { acc += t - start; start = null }; lastOnboarding = true  }
-    else if (status === 'Recruiting' || status === 'Interviewing') {
-      if (lastOnboarding) { acc = 0; start = t; lastOnboarding = false }
-      else if (!start) start = t
-    } else if (DONE.has(status))        { if (start) { acc += t - start; start = null }; lastOnboarding = false }
+    if (SLA_ACTIVE.has(status)) {
+      // กลับมาหาผู้สมัครใหม่หลัง Onboarding = เริ่มรอบใหม่ ทิ้งเวลารอบก่อนทั้งหมด
+      if (lastOnboarding) { acc = 0; lastOnboarding = false; start = null }
+      if (!start) start = t
+    } else if (SLA_STOP.has(status)) {
+      if (start) { acc += t - start; start = null }
+      lastOnboarding = status === 'Onboarding'
+    }
+    // ponytail: สถานะนอกสองชุดนี้ (PendingApproval, Confidential) ปล่อยให้นาฬิกาเดินต่อตามเดิม
+    // ถ้าธุรกิจอยากให้หยุดด้วย ย้ายเข้า SLA_STOP ได้เลย
   }
   if (start) acc += new Date() - start
   return Math.floor(acc / 86400000)
