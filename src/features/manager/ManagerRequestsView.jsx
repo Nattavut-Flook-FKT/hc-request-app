@@ -51,6 +51,7 @@ import { getDepartments } from '@/config/orgStructure'
 import { resolveDeptNames } from '@/config/deptMapping'
 import { grantedKeys } from '@/utils/grants'
 import { slaLimit } from '@/features/dashboard/sla'
+import { computeSLADays } from '@/features/reports/reportUtils'
 import EditCaseModal from '@/features/dashboard/EditCaseModal'
 
 /**
@@ -92,57 +93,18 @@ function getPipelineIndex(status) {
 }
 
 /**
- * computeSLA — calculate the number of "active" calendar days for a request.
+ * computeSLA — จำนวนวันที่นาฬิกา SLA เดินจริงของเคสนี้
  *
- * The SLA clock only ticks while the pipeline is in a "working" state
- * (Open → Recruiting → Interviewing). It is deliberately paused and later
- * reset under two specific conditions:
+ * ใช้ตัวคำนวณตัวเดียวกับหน้า Reports (reportUtils.computeSLADays) — เดิมไฟล์นี้
+ * copy logic มาไว้เอง แล้ว drift กัน แก้ที่เดียวไม่ครบทั้งสองหน้า
  *
- * Pause logic:
- *   When a request moves to Offering or Onboarding the clock stops — the
- *   recruiting team is no longer actively working a new candidate. Any time
- *   already accumulated is banked into `acc` and `start` is set to null.
- *
- * Reset logic (pipeline loop):
- *   If, after an Onboarding transition, the request drops back to Recruiting
- *   or Interviewing (e.g. the candidate fell through and recruitment restarts),
- *   the entire accumulated counter is wiped to zero (`acc = 0`) and the clock
- *   restarts from that moment. This means only the current recruitment attempt
- *   is measured — previous failed cycles do not inflate the SLA.
- *
- * Terminal states (Closed / Cancelled):
- *   The clock is stopped and the remaining open interval is banked. No further
- *   accumulation occurs.
- *
- * If the history contains no terminal event and `start` is still set at the
- * end of the loop, the interval from `start` to right now is added, giving a
- * live "elapsed so far" figure for in-flight requests.
- *
- * @param {object} req – Firestore request document (with Timestamp `createdAt`
- *   and optional `statusHistory` array of `{ status, changedAt }` entries).
- * @returns {number|null} Elapsed days (integer, floored), or null if
- *   `createdAt` is missing.
+ * @param {object} req – Firestore request document
+ * @returns {number|null} จำนวนวัน (ปัดลง) หรือ null ถ้าไม่มี createdAt
  */
 // ─── SLA calculation ──────────────────────────────────────
 function computeSLA(req) {
-  const createdAt = req.createdAt?.toDate?.()
-  if (!createdAt) return null
-  const DONE = new Set(['Closed', 'Cancelled'])
-  const history = [...(req.statusHistory ?? [])]
-    .map(e => ({ status: e.status, t: new Date(e.changedAt) }))
-    .filter(e => !isNaN(e.t))
-    .sort((a, b) => a.t - b.t)
-  let acc = 0, start = createdAt, lastOnboarding = false
-  for (const { status, t } of history) {
-    if (status === 'Offering')    { if (start) { acc += t - start; start = null }; lastOnboarding = false }
-    else if (status === 'Onboarding') { if (start) { acc += t - start; start = null }; lastOnboarding = true }
-    else if (status === 'Recruiting' || status === 'Interviewing') {
-      if (lastOnboarding) { acc = 0; start = t; lastOnboarding = false }
-      else if (!start) start = t
-    } else if (DONE.has(status)) { if (start) { acc += t - start; start = null }; lastOnboarding = false }
-  }
-  if (start) acc += new Date() - start
-  return Math.floor(acc / 86400000)
+  const d = computeSLADays(req)
+  return d === '' ? null : d
 }
 
 /**
