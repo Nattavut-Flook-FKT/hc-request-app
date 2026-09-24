@@ -395,11 +395,8 @@ var SLACK_ALERT         = _props.getProperty('SLACK_ALERT')         || SLACK_UPD
 // SLACK_IT — webhook ของห้อง IT สำหรับแจ้งเตรียมบัญชี/อุปกรณ์พนักงานใหม่ตอนเข้า Onboarding
 // ถ้ายังไม่ตั้งค่า property จะ fallback ไปห้อง SLACK_UPDATES (ไม่หายเงียบ แต่ไปผิดห้อง — ต้องตั้งค่าเอง)
 var SLACK_IT            = _props.getProperty('SLACK_IT')            || SLACK_UPDATES
-// SLACK_CEO_APPROVAL — webhook ของห้อง/DM ที่ CEO เห็น สำหรับแจ้งคำขอ New HC รออนุมัติ (beta)
-// ถ้ายังไม่ตั้งค่า property จะ fallback ไปห้อง SLACK_UPDATES (ไม่หายเงียบ แต่ไปผิดห้อง — ต้องตั้งค่าเอง)
-var SLACK_CEO_APPROVAL  = _props.getProperty('SLACK_CEO_APPROVAL')  || SLACK_UPDATES
-// CEO_EMAIL — อีเมลแจ้งเตือน CEO Approval คู่กับ Slack (comma-separated ได้ถ้าหลายคน)
-// ว่างเปล่า = ไม่ส่งอีเมล (fallback ปลอดภัย ไม่ error)
+// CEO_EMAIL — อีเมลผู้อนุมัติ New HC (comma-separated ได้ถ้าหลายคน) — ช่องทางเดียวที่แจ้ง CEO (ไม่ใช้ Slack)
+// ว่างเปล่า = ไม่ส่งอีเมล (ใบยังรอใน /pending-approvals แต่ไม่มีใครรู้ → ต้องตั้งก่อนใช้จริง)
 var CEO_EMAIL           = _props.getProperty('CEO_EMAIL')           || ''
 var APP_URL             = _props.getProperty('APP_URL')             || 'https://hcrequest.web.app'
 // HR Spreadsheet (MainData + Manager_Access) — ต้องตั้งค่าใน Script Properties
@@ -430,31 +427,36 @@ function getHrSpreadsheet_() {
   return SpreadsheetApp.openById(HR_SPREADSHEET_ID)
 }
 
-// slackCeoApprovalRequest — แจ้ง CEO ให้ approve/reject คำขอ New HC (beta) พร้อมลิงก์เดียว
-// (ไม่แยกลิงก์ approve/reject กันเผลอกดผิดจากอีเมล — เปิดหน้าเดียวแล้วเลือกปุ่มเอง)
-function slackCeoApprovalRequest(id, token, data) {
+// emailCeoApprovalRequest — ส่งอีเมล CEO (CEO_EMAIL) ว่ามีคำขอ New HC รออนุมัติ พร้อมปุ่มเปิดหน้า /approve/{id}/{token}
+// อีเมลอย่างเดียวตามที่ทีมตกลง (ไม่ยิง Slack) · ลิงก์เดียวไม่แยกปุ่ม approve/reject ในอีเมล —
+// กัน link scanner ของระบบเมลเปิดลิงก์แล้วอนุมัติแทน (หน้า /approve ต้องกดปุ่มเองอีกครั้ง)
+// CEO_EMAIL ว่าง = ไม่ส่งอะไรเลย (ใบยังรออยู่ที่ /pending-approvals ในแอพ) → ต้องตั้ง Script Property ก่อนใช้จริง
+function emailCeoApprovalRequest(id, token, data) {
+  if (!CEO_EMAIL) { Logger.log('[ceoApprovalRequest] CEO_EMAIL not set — email skipped for ' + id); return false }
   var link = APP_URL + '/approve/' + id + '/' + token
-  var text = '📝 *มีคำขอ New HC รออนุมัติ*\n' +
-    '*ตำแหน่ง:* ' + data.position + '  |  *จำนวน:* ' + data.headcount + '\n' +
-    '*แผนก:* ' + data.department + '\n' +
-    '*ผู้ยื่น:* ' + data.requesterName + '\n' +
-    (data.reason ? '*เหตุผล:* ' + String(data.reason).substring(0, 200) + '\n' : '') +
-    '🔗 ' + link
-  sendSlack_(SLACK_CEO_APPROVAL, text)
-
-  if (CEO_EMAIL) {
-    var subject = 'New HC รออนุมัติ: ' + data.position + ' (' + data.department + ')'
-    var body = 'มีคำขอ New HC รออนุมัติ\n\n' +
-      'ตำแหน่ง: ' + data.position + '\n' +
-      'จำนวน: ' + data.headcount + '\n' +
-      'แผนก: ' + data.department + '\n' +
-      'ผู้ยื่น: ' + data.requesterName + '\n' +
-      (data.reason ? 'เหตุผล: ' + data.reason + '\n' : '') +
-      '\nกดลิงก์เพื่ออนุมัติ/ไม่อนุมัติ:\n' + link
-    CEO_EMAIL.split(',').forEach(function (addr) {
-      MailApp.sendEmail(addr.trim(), subject, body)
-    })
-  }
+  var esc = function (s) { return String(s || '').replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] }) }
+  var rows = [['ตำแหน่ง', data.position], ['จำนวน', data.headcount + ' คน'], ['แผนก', data.department], ['ผู้ยื่น', data.requesterName]]
+  if (data.reason) rows.push(['เหตุผล', data.reason])
+  var subject = 'New HC รออนุมัติ: ' + data.position + ' (' + data.department + ')'
+  // สี = token จาก 01-colors.md (neutral-900 #26292C · neutral-600 #565E64 · dark-green-600 #008065 · neutral-50 #F8F9FA)
+  // อีเมลไม่มี Tailwind ต้อง inline hex
+  var htmlBody = '<div style="font-family:\'Noto Sans Thai\',Arial,sans-serif;font-size:14px;color:#26292C;max-width:520px">' +
+    '<p style="font-size:16px;font-weight:700;margin:0 0 16px">มีคำขอ New HC รออนุมัติ</p>' +
+    '<table style="border-collapse:collapse;margin:0 0 24px">' +
+    rows.map(function (r) {
+      return '<tr><td style="padding:4px 16px 4px 0;color:#565E64;font-weight:700;vertical-align:top;white-space:nowrap">' + esc(r[0]) +
+        '</td><td style="padding:4px 0">' + esc(r[1]) + '</td></tr>'
+    }).join('') +
+    '</table>' +
+    '<a href="' + link + '" style="display:inline-block;background:#008065;color:#F8F9FA;font-weight:700;padding:10px 20px;border-radius:8px;text-decoration:none">เปิดหน้าอนุมัติ / ไม่อนุมัติ</a>' +
+    '<p style="font-size:12px;color:#565E64;margin:16px 0 0">ไม่ต้อง login · ลิงก์ใช้ได้ครั้งเดียว — หลังตัดสินแล้วจะเปิดไม่ได้อีก</p>' +
+    '</div>'
+  var body = 'มีคำขอ New HC รออนุมัติ\n\n' + rows.map(function (r) { return r[0] + ': ' + r[1] }).join('\n') +
+    '\n\nเปิดหน้าอนุมัติ/ไม่อนุมัติ (ไม่ต้อง login):\n' + link
+  CEO_EMAIL.split(',').forEach(function (addr) {
+    MailApp.sendEmail({ to: addr.trim(), subject: subject, body: body, htmlBody: htmlBody })
+  })
+  return true
 }
 
 function slackNewRequest(data) {
@@ -754,23 +756,23 @@ function doGet_(e) {
     return responseJson_({ success: true })
   }
 
-  // ── CEO APPROVAL REQUEST: แจ้ง CEO ให้ approve/reject คำขอ New HC (beta) ─────
+  // ── CEO APPROVAL REQUEST: อีเมล CEO ว่ามีคำขอ New HC รออนุมัติ ─────
   // เรียกด้วย ?action=ceoApprovalRequest&id=...&token=...&position=...&department=...
   //   &headcount=...&requesterName=...&reason=...&secret=XXX
-  // ไม่แตะ Firestore/Sheets เลย — แค่ส่ง Slack พร้อมลิงก์ /approve/{id}/{token}
+  // ไม่แตะ Firestore/Sheets เลย — แค่ส่งอีเมลพร้อมลิงก์ /approve/{id}/{token} (token ดิบอยู่ในอีเมลเท่านั้น)
   if (e.parameter.action === 'ceoApprovalRequest') {
     if (!isValidSecret_(e)) return responseJson_({ error: 'Unauthorized' })
     var caId = e.parameter.id || ''
     var caToken = e.parameter.token || ''
     if (!caId || !caToken) return responseJson_({ success: false, error: 'missing id or token' })
-    slackCeoApprovalRequest(caId, caToken, {
+    var caSent = emailCeoApprovalRequest(caId, caToken, {
       position: e.parameter.position || '',
       department: e.parameter.department || '',
       headcount: e.parameter.headcount || '',
       requesterName: e.parameter.requesterName || '',
       reason: e.parameter.reason || '',
     })
-    return responseJson_({ success: true })
+    return responseJson_(caSent ? { success: true } : { success: false, error: 'CEO_EMAIL not set' })
   }
 
   // ── PENDING APPROVAL: แจ้ง #hc-alert เมื่อมี user ใหม่ login ครั้งแรกแล้วรออนุมัติ ──

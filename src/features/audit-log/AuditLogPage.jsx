@@ -37,6 +37,9 @@ const STATUS_CONFIG = {
   StatusChange: { label: 'เปลี่ยนสถานะ', bg: 'bg-banana-50', text: 'text-banana-900', border: 'border-banana-100' },
   Cancel: { label: 'ยกเลิก', bg: 'bg-pink-50', text: 'text-pink-900', border: 'border-pink-100' },
   EditCase: { label: 'แก้ไขข้อมูล', bg: 'bg-teal-50', text: 'text-teal-900', border: 'border-teal-100' },
+  SubmitPendingApproval: { label: 'ยื่นรอ CEO', bg: 'bg-purple-50', text: 'text-purple-900', border: 'border-purple-100' },
+  CeoApprove: { label: 'CEO อนุมัติ', bg: 'bg-green-fresh-50', text: 'text-green-fresh-900', border: 'border-green-fresh-100' },
+  CeoReject: { label: 'CEO ไม่อนุมัติ', bg: 'bg-red-50', text: 'text-red-900', border: 'border-red-100' },
 }
 
 const INPUT_CLS = 'h-10 rounded-lg border border-neutral-100 bg-white px-3 text-sm text-neutral-900 transition-colors focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none'

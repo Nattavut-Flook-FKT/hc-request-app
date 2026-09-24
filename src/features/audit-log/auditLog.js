@@ -22,8 +22,8 @@ import { db } from '@/libs/firebase'
  *
  * @param {Object} params              - พารามิเตอร์ทั้งหมดสำหรับ audit entry
  * @param {string} params.requestId    - Firestore doc ID ของ HC Request / The Firestore document ID of the HC Request
- * @param {string} params.action       - ประเภทการดำเนินการ: 'Submit' | 'StatusChange' | 'Assign' | 'Cancel'
- *                                       Action type: 'Submit' | 'StatusChange' | 'Assign' | 'Cancel'
+ * @param {string} params.action       - ประเภทการดำเนินการ: 'Submit' | 'SubmitPendingApproval' | 'CeoApprove' | 'CeoReject' | 'StatusChange' | 'Assign' | 'Cancel' | 'EditCase'
+ *                                       Action type: 'Submit' | 'SubmitPendingApproval' | 'CeoApprove' | 'CeoReject' | 'StatusChange' | 'Assign' | 'Cancel' | 'EditCase'
  * @param {string} params.by           - email ของผู้ดำเนินการ / Email of the user who performed the action
  * @param {string} params.byName       - ชื่อของผู้ดำเนินการ / Display name of the user who performed the action
  * @param {string} [params.fromStatus] - สถานะก่อนเปลี่ยน (เฉพาะ StatusChange) / Status before the change (StatusChange only)
