@@ -139,7 +139,7 @@ export default function ApproveNewHcPage() {
 
         {!loading && !notFound && !decision && (
           <>
-            <h1 className="mb-4 text-lg font-bold text-neutral-900">คำขอ New HC รออนุมัติ</h1>
+            <h1 className="mb-4 text-lg font-bold text-neutral-900">คำขอ New Headcount รออนุมัติ</h1>
             <RequestSummary req={reqData} />
 
             {errorMsg && <p className="mb-4 text-sm font-bold text-red-700">{errorMsg}</p>}

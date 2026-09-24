@@ -132,7 +132,7 @@ export default function PendingApprovalsPage({ user, role, isDarkMode, toggleDar
       <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-xl font-bold text-neutral-900">Pending Approvals</h1>
-          <p className="mt-0.5 text-sm text-neutral-500">คำขอ New HC ที่รออนุมัติ — {pending.length} รายการ</p>
+          <p className="mt-0.5 text-sm text-neutral-500">คำขอ New Headcount ที่รออนุมัติ — {pending.length} รายการ</p>
         </div>
 
         {/* Tabs — pattern เดียวกับ RequestTable */}
