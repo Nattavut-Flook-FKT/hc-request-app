@@ -398,6 +398,8 @@ var SLACK_IT            = _props.getProperty('SLACK_IT')            || SLACK_UPD
 // CEO_EMAIL — อีเมลผู้อนุมัติ New HC (comma-separated ได้ถ้าหลายคน) — ช่องทางเดียวที่แจ้ง CEO (ไม่ใช้ Slack)
 // ว่างเปล่า = ไม่ส่งอีเมล (ใบยังรอใน /pending-approvals แต่ไม่มีใครรู้ → ต้องตั้งก่อนใช้จริง)
 var CEO_EMAIL           = _props.getProperty('CEO_EMAIL')           || ''
+// ชื่อผู้ส่งที่โชว์ในกล่องเมลผู้อนุมัติ (ที่อยู่จริงเป็น no-reply ของโดเมนผ่าน noReply: true)
+var MAIL_SENDER_NAME    = 'HC Request System'
 var APP_URL             = _props.getProperty('APP_URL')             || 'https://hcrequest.web.app'
 // HR Spreadsheet (MainData + Manager_Access) — ต้องตั้งค่าใน Script Properties
 // key: HR_SPREADSHEET_ID  (ไม่มี fallback เพื่อป้องกัน spreadsheet ID หลุดในโค้ด)
@@ -435,7 +437,7 @@ function getHrSpreadsheet_() {
 // ถ้าเจ้าของยังไม่เคย consent scope นี้ MailApp.sendEmail จะพัง "You do not have permission") — ส่งเมลทดสอบไป CEO_EMAIL
 function authorizeMail() {
   if (!CEO_EMAIL) throw new Error('CEO_EMAIL not set')
-  MailApp.sendEmail(CEO_EMAIL.split(',')[0].trim(), 'HC Request — ทดสอบสิทธิ์ส่งอีเมล', 'ถ้าได้รับอีเมลนี้ = GAS ส่งอีเมลได้แล้ว')
+  MailApp.sendEmail({ to: CEO_EMAIL.split(',')[0].trim(), subject: 'HC Request — ทดสอบสิทธิ์ส่งอีเมล', body: 'ถ้าได้รับอีเมลนี้ = GAS ส่งอีเมลได้แล้ว', name: MAIL_SENDER_NAME, noReply: true })
   Logger.log('sent test mail to CEO_EMAIL')
 }
 
@@ -462,7 +464,9 @@ function emailCeoApprovalRequest(id, token, data) {
   var body = 'มีคำขอ New HC รออนุมัติ\n\n' + rows.map(function (r) { return r[0] + ': ' + r[1] }).join('\n') +
     '\n\nเปิดหน้าอนุมัติ/ไม่อนุมัติ (ไม่ต้อง login):\n' + link
   CEO_EMAIL.split(',').forEach(function (addr) {
-    MailApp.sendEmail({ to: addr.trim(), subject: subject, body: body, htmlBody: htmlBody })
+    // MailApp ส่งจากบัญชีเจ้าของ project เสมอ → ตั้งชื่อผู้ส่งเป็นระบบ + noReply ให้ที่อยู่เป็น no-reply ของโดเมน (Workspace)
+    // ไม่งั้นผู้อนุมัติเห็นเป็นอีเมลส่วนตัวของคนที่ deploy GAS
+    MailApp.sendEmail({ to: addr.trim(), subject: subject, body: body, htmlBody: htmlBody, name: MAIL_SENDER_NAME, noReply: true })
   })
   return true
 }
