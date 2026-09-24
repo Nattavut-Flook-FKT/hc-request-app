@@ -111,6 +111,7 @@ export async function sendCeoApprovalRequest(docId, token, data) {
       action: 'ceoApprovalRequest',
       id: docId,
       token,
+      hcId: data.hcId || '', // ใส่ในหัวเรื่อง — ไม่งั้น Gmail จับทุกใบเป็น thread เดียวแล้วซ่อนปุ่มของใบหลังเป็น "ข้อความซ้ำ"
       position: data.position || '',
       jg: getJGLabel(data.jg, data.orgTrack), // "JG9 — Manager / Lead" — GAS ไม่มีตาราง JG แปลงฝั่งนี้
       department: data.department || '',

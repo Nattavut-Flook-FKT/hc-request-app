@@ -445,15 +445,18 @@ function emailCeoApprovalRequest(id, token, data) {
   if (!CEO_EMAIL) { Logger.log('[ceoApprovalRequest] CEO_EMAIL not set — email skipped for ' + id); return false }
   var link = APP_URL + '/approve/' + id + '/' + token
   var esc = function (s) { return String(s || '').replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] }) }
-  var rows = [['ตำแหน่ง', data.position]]
+  var rows = []
+  if (data.hcId) rows.push(['เลขที่', data.hcId])
+  rows.push(['ตำแหน่ง', data.position])
   if (data.jg) rows.push(['ระดับ', data.jg]) // "JG9 — Manager / Lead" แปลงมาจากฝั่งเว็บแล้ว
   rows.push(['จำนวน', data.headcount + ' คน'], ['แผนก', data.department], ['ผู้ยื่น', data.requesterName])
   if (data.reason) rows.push(['เหตุผล', data.reason])
-  var subject = 'New HC รออนุมัติ: ' + data.position + ' (' + data.department + ')'
+  // หัวเรื่องต้องไม่ซ้ำกันข้ามใบ — ใบเดียวกัน (ตำแหน่ง/แผนกเดิม) Gmail จะรวม thread แล้วซ่อนปุ่มของใบหลังเป็น "ข้อความซ้ำ"
+  var subject = (data.hcId ? '[' + data.hcId + '] ' : '') + 'New HC รออนุมัติ: ' + data.position + ' (' + data.department + ')'
   // สี = token จาก 01-colors.md (neutral-900 #26292C · neutral-600 #565E64 · dark-green-600 #008065 · neutral-50 #F8F9FA)
   // อีเมลไม่มี Tailwind ต้อง inline hex
   var htmlBody = '<div style="font-family:\'Noto Sans Thai\',Arial,sans-serif;font-size:14px;color:#26292C;max-width:520px">' +
-    '<p style="font-size:16px;font-weight:700;margin:0 0 16px">มีคำขอ New HC รออนุมัติ</p>' +
+    '<p style="font-size:16px;font-weight:700;margin:0 0 16px">มีคำขอ New HC รออนุมัติ' + (data.hcId ? ' · ' + esc(data.hcId) : '') + '</p>' +
     '<table style="border-collapse:collapse;margin:0 0 24px">' +
     rows.map(function (r) {
       return '<tr><td style="padding:4px 16px 4px 0;color:#565E64;font-weight:700;vertical-align:top;white-space:nowrap">' + esc(r[0]) +
@@ -461,7 +464,7 @@ function emailCeoApprovalRequest(id, token, data) {
     }).join('') +
     '</table>' +
     '<a href="' + link + '" style="display:inline-block;background:#008065;color:#F8F9FA;font-weight:700;padding:10px 20px;border-radius:8px;text-decoration:none">เปิดหน้าอนุมัติ / ไม่อนุมัติ</a>' +
-    '<p style="font-size:12px;color:#565E64;margin:16px 0 0">ไม่ต้อง login · ลิงก์ใช้ได้ครั้งเดียว — หลังตัดสินแล้วจะเปิดไม่ได้อีก</p>' +
+    '<p style="font-size:12px;color:#565E64;margin:16px 0 0">ไม่ต้อง login · ลิงก์นี้ใช้กับ' + (data.hcId ? ' ' + esc(data.hcId) : 'ใบนี้') + 'เท่านั้น ใช้ได้ครั้งเดียว — หลังตัดสินแล้วจะเปิดไม่ได้อีก</p>' +
     '</div>'
   var body = 'มีคำขอ New HC รออนุมัติ\n\n' + rows.map(function (r) { return r[0] + ': ' + r[1] }).join('\n') +
     '\n\nเปิดหน้าอนุมัติ/ไม่อนุมัติ (ไม่ต้อง login):\n' + link
@@ -771,7 +774,7 @@ function doGet_(e) {
   }
 
   // ── CEO APPROVAL REQUEST: อีเมล CEO ว่ามีคำขอ New HC รออนุมัติ ─────
-  // เรียกด้วย ?action=ceoApprovalRequest&id=...&token=...&position=...&jg=...&department=...
+  // เรียกด้วย ?action=ceoApprovalRequest&id=...&token=...&hcId=...&position=...&jg=...&department=...
   //   &headcount=...&requesterName=...&reason=...&secret=XXX
   // ไม่แตะ Firestore/Sheets เลย — แค่ส่งอีเมลพร้อมลิงก์ /approve/{id}/{token} (token ดิบอยู่ในอีเมลเท่านั้น)
   if (e.parameter.action === 'ceoApprovalRequest') {
@@ -780,6 +783,7 @@ function doGet_(e) {
     var caToken = e.parameter.token || ''
     if (!caId || !caToken) return responseJson_({ success: false, error: 'missing id or token' })
     var caSent = emailCeoApprovalRequest(caId, caToken, {
+      hcId: e.parameter.hcId || '',
       position: e.parameter.position || '',
       jg: e.parameter.jg || '',
       department: e.parameter.department || '',
