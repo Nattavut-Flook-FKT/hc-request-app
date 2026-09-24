@@ -6,6 +6,7 @@
 import { FileText } from 'lucide-react'
 import { getJDSignedUrl } from '@/libs/supabase'
 import { fmtDate } from '@/utils/dates'
+import { getJGLabel } from '@/config/jobGrades'
 
 async function openJD(path) {
   const url = await getJDSignedUrl(path)
@@ -32,7 +33,8 @@ export default function RequestSummary({ req }) {
       {/* ข้อมูลประกอบการตัดสินใจ */}
       <dl className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Fact label="จำนวน HC" value={`${req.headcount ?? 1} คน`} strong />
-        <Fact label="Job grade" value={req.jg} />
+        {/* JG พร้อมระดับ เช่น "JG9 — Manager / Lead" — ผู้อนุมัติขอเห็นระดับ ไม่ใช่แค่เลข */}
+        <Fact label="ระดับ (JG)" value={getJGLabel(req.jg, req.orgTrack)} />
         <Fact label="ประเภทการจ้าง" value={[req.employmentType, req.payrollType].filter(Boolean).join(' · ')} />
         <Fact label="ต้องการเริ่มงาน" value={req.targetStartDate} />
       </dl>

@@ -14,6 +14,7 @@
 
 import { toast } from '@/components/ui/Toast'
 import { auth } from '@/libs/firebase'
+import { getJGLabel } from '@/config/jobGrades'
 
 const WEBHOOK_URL = import.meta.env.VITE_GAS_WEBHOOK_URL
 const DATA_URL    = import.meta.env.VITE_GAS_DATA_URL
@@ -101,7 +102,7 @@ export async function sendPendingApprovalAlert(email, name) {
  * ไม่แตะ Sheets เลย (คำขอยังไม่ sync จนกว่าจะ approve) · ไม่ยิง Slack — ทีมตกลงใช้อีเมลอย่างเดียว
  * @param {string} docId  Firestore doc id
  * @param {string} token  approval token ดิบ (doc เก็บแค่ sha256 — ตรวจใน firestore.rules ตอน CEO กดจากลิงก์)
- * @param {object} data   payload ของคำขอ (position/department/headcount/requesterName/reason)
+ * @param {object} data   payload ของคำขอ (position/jg/orgTrack/department/headcount/requesterName/reason)
  */
 export async function sendCeoApprovalRequest(docId, token, data) {
   if (!DATA_URL || !docId || !token) return { success: false, error: 'missing docId/token or GAS URL' }
@@ -111,6 +112,7 @@ export async function sendCeoApprovalRequest(docId, token, data) {
       id: docId,
       token,
       position: data.position || '',
+      jg: getJGLabel(data.jg, data.orgTrack), // "JG9 — Manager / Lead" — GAS ไม่มีตาราง JG แปลงฝั่งนี้
       department: data.department || '',
       headcount: String(data.headcount ?? ''),
       requesterName: data.requesterName || '',
