@@ -431,6 +431,14 @@ function getHrSpreadsheet_() {
 // อีเมลอย่างเดียวตามที่ทีมตกลง (ไม่ยิง Slack) · ลิงก์เดียวไม่แยกปุ่ม approve/reject ในอีเมล —
 // กัน link scanner ของระบบเมลเปิดลิงก์แล้วอนุมัติแทน (หน้า /approve ต้องกดปุ่มเองอีกครั้ง)
 // CEO_EMAIL ว่าง = ไม่ส่งอะไรเลย (ใบยังรออยู่ที่ /pending-approvals ในแอพ) → ต้องตั้ง Script Property ก่อนใช้จริง
+// authorizeMail — รันจาก GAS editor ครั้งเดียวเพื่อกดยอมรับสิทธิ์ script.send_mail (web app รันในนามเจ้าของ project
+// ถ้าเจ้าของยังไม่เคย consent scope นี้ MailApp.sendEmail จะพัง "You do not have permission") — ส่งเมลทดสอบไป CEO_EMAIL
+function authorizeMail() {
+  if (!CEO_EMAIL) throw new Error('CEO_EMAIL not set')
+  MailApp.sendEmail(CEO_EMAIL.split(',')[0].trim(), 'HC Request — ทดสอบสิทธิ์ส่งอีเมล', 'ถ้าได้รับอีเมลนี้ = GAS ส่งอีเมลได้แล้ว')
+  Logger.log('sent test mail to CEO_EMAIL')
+}
+
 function emailCeoApprovalRequest(id, token, data) {
   if (!CEO_EMAIL) { Logger.log('[ceoApprovalRequest] CEO_EMAIL not set — email skipped for ' + id); return false }
   var link = APP_URL + '/approve/' + id + '/' + token
@@ -536,7 +544,7 @@ function slackNotifyIT_(position, department, hcId, candidateName, email, startD
  * alertError_ — รายงานบั๊คแบบละเอียดเข้า #hc-alert
  * @param where ชื่อจุดที่พัง เช่น 'updateStatus', 'doGet:deleteRow'
  * @param err   Error object (เอา message + stack)
- * @param e     request event (เอา parameters มาแสดง — ตัด secret ออก)
+ * @param e     request event (เอา parameters มาแสดง — ตัด secret และ token ออก: token = ลิงก์อนุมัติ ห้ามหลุดลง Slack)
  * @param ctx   object ข้อมูลแวดล้อมเพิ่มเติม เช่น { tab: 'Job Openings 2026' }
  */
 function alertError_(where, err, e, ctx) {
@@ -549,7 +557,7 @@ function alertError_(where, err, e, ctx) {
     if (e && e.parameter) {
       var ps = []
       for (var k in e.parameter) {
-        if (k === 'secret') continue
+        if (k === 'secret' || k === 'token') continue
         ps.push(k + '=' + String(e.parameter[k]).substring(0, 80))
       }
       if (ps.length) lines.push('*Request:* `' + ps.join(' · ') + '`')
