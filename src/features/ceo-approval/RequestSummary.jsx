@@ -1,7 +1,7 @@
 /**
  * RequestSummary.jsx — สรุปคำขอ New HC สำหรับผู้อนุมัติ (อ่านอย่างเดียว)
  * ใช้ร่วมกันทั้งหน้า /approve/:id/:token (public จากอีเมล) และ /pending-approvals (ในแอพ)
- * โชว์เท่าที่ CEO ต้องใช้ตัดสิน: ตำแหน่ง · สายงาน · จำนวน · JG · ประเภทจ้าง · วันเริ่ม · เหตุผล · คุณสมบัติ · ไฟล์ JD
+ * โชว์เท่าที่ CEO ต้องใช้ตัดสิน: ตำแหน่ง · สายงาน · จำนวน · ระดับ JG · ประเภทจ้าง · เหตุผล · คุณสมบัติ · ไฟล์ JD
  */
 import { FileText } from 'lucide-react'
 import { getJDSignedUrl } from '@/libs/supabase'
@@ -31,12 +31,12 @@ export default function RequestSummary({ req }) {
       </div>
 
       {/* ข้อมูลประกอบการตัดสินใจ */}
-      <dl className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      {/* ไม่มี "วันที่ต้องการเริ่มงาน" — ฟอร์ม New HC ไม่ถามช่องนี้ (targetStartDate ใช้เฉพาะ Replacement = LWD) */}
+      <dl className="mb-4 grid grid-cols-3 gap-4">
         <Fact label="จำนวน HC" value={`${req.headcount ?? 1} คน`} strong />
         {/* JG พร้อมระดับ เช่น "JG9 — Manager / Lead" — ผู้อนุมัติขอเห็นระดับ ไม่ใช่แค่เลข */}
         <Fact label="ระดับ (JG)" value={getJGLabel(req.jg, req.orgTrack)} />
         <Fact label="ประเภทการจ้าง" value={[req.employmentType, req.payrollType].filter(Boolean).join(' · ')} />
-        <Fact label="ต้องการเริ่มงาน" value={req.targetStartDate} />
       </dl>
 
       <div className="mb-4 rounded-xl border border-neutral-100 bg-neutral-50 p-3">
