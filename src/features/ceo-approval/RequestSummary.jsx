@@ -33,7 +33,7 @@ export default function RequestSummary({ req }) {
       {/* ข้อมูลประกอบการตัดสินใจ */}
       {/* ไม่มี "วันที่ต้องการเริ่มงาน" — ฟอร์ม New HC ไม่ถามช่องนี้ (targetStartDate ใช้เฉพาะ Replacement = LWD) */}
       <dl className="mb-4 grid grid-cols-3 gap-4">
-        <Fact label="จำนวน HC" value={`${req.headcount ?? 1} คน`} strong />
+        <Fact label="จำนวน Headcount" value={`${req.headcount ?? 1} คน`} strong />
         {/* JG พร้อมระดับ เช่น "JG9 — Manager / Lead" — ผู้อนุมัติขอเห็นระดับ ไม่ใช่แค่เลข */}
         <Fact label="ระดับ (JG)" value={getJGLabel(req.jg, req.orgTrack)} />
         <Fact label="ประเภทการจ้าง" value={[req.employmentType, req.payrollType].filter(Boolean).join(' · ')} />
