@@ -452,7 +452,7 @@ function emailCeoApprovalRequest(id, token, data) {
   rows.push(['จำนวน', data.headcount + ' คน'], ['แผนก', data.department], ['ผู้ยื่น', data.requesterName])
   if (data.reason) rows.push(['เหตุผล', data.reason])
   // หัวเรื่องต้องไม่ซ้ำกันข้ามใบ — ใบเดียวกัน (ตำแหน่ง/แผนกเดิม) Gmail จะรวม thread แล้วซ่อนปุ่มของใบหลังเป็น "ข้อความซ้ำ"
-  var subject = (data.hcId ? '[' + data.hcId + '] ' : '') + 'New HC รออนุมัติ: ' + data.position + ' (' + data.department + ')'
+  var subject = 'New HC รออนุมัติ: ' + data.position + ' (' + data.department + ')' + (data.hcId ? ' · ' + data.hcId : '')
   // สี = token จาก 01-colors.md (neutral-900 #26292C · neutral-600 #565E64 · dark-green-600 #008065 · neutral-50 #F8F9FA)
   // อีเมลไม่มี Tailwind ต้อง inline hex
   var htmlBody = '<div style="font-family:\'Noto Sans Thai\',Arial,sans-serif;font-size:14px;color:#26292C;max-width:520px">' +
