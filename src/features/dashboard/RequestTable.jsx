@@ -81,6 +81,8 @@
 import { useEffect, useState, useMemo, useCallback, Fragment } from 'react'
 import { collection, onSnapshot, orderBy, query, doc, updateDoc, addDoc, getDocs, where, deleteDoc, serverTimestamp, arrayUnion, arrayRemove, limit, Timestamp } from 'firebase/firestore'
 import { db } from '@/libs/firebase'
+import { shortName, buildHistoryEntry } from '@/utils/statusHistory'
+import { STATUS_CONFIG } from '@/config/statusConfig'
 import { generateHCID } from '@/features/hc-request/hcId'
 import { sendStatusUpdate, sendToWebhook, sendDeleteToSheets, updateOpenDateInSheets, updateStartDateInSheets, reportClientError } from '@/libs/webhook'
 import { getJGLabel } from '@/config/jobGrades'
@@ -93,23 +95,6 @@ import { getJDSignedUrl, deleteJDFile, uploadCVFile, getCVSignedUrl, deleteCVFil
 import ConfirmModal from '@/components/ui/ConfirmModal'
 import EditCaseModal from '@/features/dashboard/EditCaseModal'
 
-// ─── สี Badge ของแต่ละสถานะ — DS Light-variant recipe (functional color-coding, DS-#010) ───
-const STATUS_CONFIG = {
-  Open:             { label: 'Open',              bg: 'bg-yellow-50',      text: 'text-yellow-900',      border: 'border-yellow-100' },
-  Recruiting:       { label: 'Recruiting',        bg: 'bg-blue-50',        text: 'text-blue-900',        border: 'border-blue-100' },
-  Interviewing:     { label: 'Interviewing',      bg: 'bg-orange-50',      text: 'text-orange-900',      border: 'border-orange-100' },
-  Offering:         { label: 'Offering',          bg: 'bg-purple-50',     text: 'text-purple-900',      border: 'border-purple-100' },
-  Onboarding:       { label: 'W.Onboarding',      bg: 'bg-teal-50',        text: 'text-teal-900',        border: 'border-teal-100' },
-  Rejected:         { label: 'Rejected',          bg: 'bg-red-50',         text: 'text-red-700',         border: 'border-red-100' },
-  NoShow:           { label: 'No Show',           bg: 'bg-pink-50',        text: 'text-pink-900',        border: 'border-pink-100' },
-  Closed:           { label: 'Closed',            bg: 'bg-green-fresh-50', text: 'text-green-fresh-900', border: 'border-green-fresh-100' },
-  Cancelled:        { label: 'Cancelled',         bg: 'bg-neutral-50',     text: 'text-neutral-500',     border: 'border-neutral-100' },
-  OnHold:           { label: 'On Hold',           bg: 'bg-banana-50',      text: 'text-banana-900',      border: 'border-banana-100' },
-  Confidential:     { label: 'Confidential',      bg: 'bg-neutral-900',    text: 'text-neutral-50',      border: 'border-neutral-900' },
-  InternalTransfer: { label: 'Internal Transfer', bg: 'bg-blue-600',       text: 'text-neutral-50',      border: 'border-blue-600' },
-  PendingApproval:  { label: 'รออนุมัติ',          bg: 'bg-purple-50',      text: 'text-purple-900',      border: 'border-purple-100' },
-  RejectedByCEO:    { label: 'ไม่อนุมัติ',          bg: 'bg-red-50',         text: 'text-red-700',         border: 'border-red-100' },
-}
 
 // ─── Tab list และสถานะที่ TA สามารถเปลี่ยนได้ (ยกเว้น Open) ───
 const STATUS_TABS = ['ทั้งหมด', 'Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Rejected', 'NoShow', 'Closed', 'Cancelled', 'OnHold', 'Confidential', 'InternalTransfer']
@@ -218,22 +203,6 @@ function SLABadge({ req }) {
       <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} /> {days}d
     </span>
   )
-}
-
-// สร้าง entry สำหรับ statusHistory array
-/**
- * shortName — ตัดนามสกุลออก เหลือแค่ชื่อ + nickname ในวงเล็บ
- * "Jitlada (Mo) Mooltha" → "Jitlada (Mo)"
- * "Somchai Smith"        → "Somchai Smith"  (ไม่มีวงเล็บ → คงเดิม)
- */
-function shortName(fullName) {
-  if (!fullName) return fullName
-  const match = fullName.match(/^.+?\)/)
-  return match ? match[0].trim() : fullName
-}
-
-function buildHistoryEntry(status, user) {
-  return { status, changedAt: new Date().toISOString(), changedBy: user.email, changedByName: shortName(user.displayName) }
 }
 
 function SortIcon({ field, sortField, sortDir }) {

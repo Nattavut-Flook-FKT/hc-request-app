@@ -77,7 +77,8 @@ const SLA_STOP = new Set([
 ])
 
 export function computeSLADays(req) {
-  const createdAt = toDate(req.createdAt)
+  // New HC ที่ผ่าน CEO: นาฬิกา TA เริ่มที่วันอนุมัติ ไม่ใช่วันยื่น (เวลารอ CEO ไม่ใช่ความช้าของ TA)
+  const createdAt = toDate(req.approvedAt) || toDate(req.createdAt)
   if (!createdAt) return ''
   const history = [...(req.statusHistory ?? [])]
     .map(e => ({ status: e.status, t: toDate(e.changedAt) }))

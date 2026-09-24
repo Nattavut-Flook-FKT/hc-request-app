@@ -91,8 +91,6 @@ const DEV_EMAIL = import.meta.env.VITE_DEV_EMAIL
 // Dark mode: เก็บใน localStorage → ใส่ class 'dark' ที่ <html> element
 // ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
-  // location — ใช้เช็ค public route (/approve/:id/:token) ก่อน auth gate ด้านล่าง
-  const location = useLocation()
 
   // user — Firebase user object หลังจาก login สำเร็จ, null = ยังไม่ได้ login
   const [user, setUser] = useState(null)
@@ -268,8 +266,11 @@ export default function App() {
     return () => unsubscribe()
   }, [])
 
+  // location — ใช้เช็ค public route (/approve/:id/:token) ก่อน auth gate ด้านล่าง (hook ต้องอยู่ก่อน early return ทุกจุด)
+  const location = useLocation()
+
   // ─── Public route carve-out: /approve/:id/:token ────────────────────────────
-  // CEO approve/reject คำขอ New HC ผ่านลิงก์ Slack โดยไม่ต้อง login — ต้องอยู่ก่อน
+  // CEO approve/reject คำขอ New HC ผ่านลิงก์ในอีเมลโดยไม่ต้อง login — ต้องอยู่ก่อน
   // auth gate ทุกจุดด้านล่าง (authLoading/!user/pending/maintenance) ไม่งั้นจะโดนเด้งไป Login
   if (location.pathname.startsWith('/approve/')) {
     return (
@@ -351,9 +352,16 @@ export default function App() {
           }
         />
 
-        {/* /my-requests — รายการ request ของตัวเอง
-            เข้าถึงได้ทุก role (ไม่มี RoleGuard) */}
-        <Route path="/my-requests" element={<MyRequestsPage {...pageProps} />} />
+        {/* /my-requests — รายการ request ของตัวเอง (manager/ta/admin)
+            redirect: ceo → /pending-approvals (ไม่ยื่นเอง ไม่มีคำขอของตัวเอง) */}
+        <Route
+          path="/my-requests"
+          element={
+            <RoleGuard role={role} allowed={['manager', 'ta', 'admin']} redirectTo={defaultRoute}>
+              <MyRequestsPage {...pageProps} />
+            </RoleGuard>
+          }
+        />
 
         {/* /jd-files — ไฟล์ Job Description
             อนุญาต: ta, admin
@@ -387,7 +395,7 @@ export default function App() {
         <Route
           path="/reports"
           element={
-            <RoleGuard role={role} allowed={['ta', 'admin']} redirectTo="/my-requests">
+            <RoleGuard role={role} allowed={['ta', 'admin', 'ceo']} redirectTo="/my-requests">
               <ReportsPage {...pageProps} />
             </RoleGuard>
           }
@@ -491,7 +499,7 @@ export default function App() {
           }
         />
 
-        {/* /pending-approvals — fallback ในแอพสำหรับอนุมัติคำขอ New HC (เผื่อลิงก์ Slack หาย/หมดอายุ)
+        {/* /pending-approvals — หน้าอนุมัติคำขอ New HC ในแอพ (fallback ถ้าอีเมลหาย + ดูประวัติที่ตัดสินแล้ว)
             อนุญาต: ceo, admin
             redirect: role อื่น → /dashboard */}
         <Route

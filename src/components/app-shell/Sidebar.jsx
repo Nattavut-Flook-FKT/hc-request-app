@@ -42,9 +42,11 @@ const MANAGER_GROUPS = [
   ]},
 ]
 
+// CEO: อนุมัติ New HC + ดูภาพรวม (Reports read-only) — ไม่เห็นบอร์ดปฏิบัติงานของ TA
 const CEO_GROUPS = [
   { label: null, items: [
     { path: '/pending-approvals', label: 'Pending Approvals', icon: CheckSquare },
+    { path: '/reports',           label: 'Reports',           icon: PieChart },
   ]},
 ]
 

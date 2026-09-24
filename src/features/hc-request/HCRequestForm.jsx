@@ -31,6 +31,7 @@ import { db } from '@/libs/firebase'
 import { generateHCID } from '@/features/hc-request/hcId'
 import { reserveSubmission, CLEARED } from '@/features/hc-request/submissionKey'
 import { sendToWebhook, sendCeoApprovalRequest, reportClientError } from '@/libs/webhook'
+import { sha256Hex } from '@/utils/sha256'
 import { logAudit } from '@/features/audit-log/auditLog'
 import { uploadJDFile, getJDSignedUrl, validateJDFile } from '@/libs/supabase'
 import { Loader2, CheckCircle, AlertTriangle, ChevronDown, X, Paperclip, FileText, ExternalLink } from 'lucide-react'
@@ -291,9 +292,6 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
   const [grantedDepts, setGrantedDepts] = useState([])         // แผนกที่ Admin grant ให้ manager คนนี้ (settings/deptManagers) — ถ้ามี จะจำกัด Division/แผนกที่เลือกได้
   const [grantedDivisions, setGrantedDivisions] = useState([]) // division ที่ Admin grant ทั้งสาย (settings/divisionManagers) — Head of Division เห็นทุกแผนกในนั้น
   const [grantedSections, setGrantedSections] = useState([])   // section ที่ grant มาแบบเจาะคลัง (เช่น grant 'Distribution Center-LKB' → 'LKB') — ว่าง = ไม่จำกัด
-  // Beta: รายชื่อ email ที่ต้องผ่าน CEO approve ก่อน (settings/ceoApprovalBeta) — จำกัดเฉพาะกลุ่มทดสอบ
-  // ไม่กระทบ Manager คนอื่น ที่ยังได้ status 'Open' ทันทีเหมือนเดิม
-  const [ceoApprovalBetaEmails, setCeoApprovalBetaEmails] = useState([])
   const [allDepts, setAllDepts] = useState(DEPARTMENTS)       // รายชื่อแผนกทั้งหมด (อัพเดตจาก Sheets)
   const [customPositions, setCustomPositions] = useState([])  // ตำแหน่งที่เพิ่มเองจาก Firestore 'custom_positions'
   const [customDepts, setCustomDepts] = useState([])          // แผนกที่เพิ่มเองผ่านหน้า Custom Positions (ไม่อยู่ใน orgStructure.js)
@@ -351,13 +349,8 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       fetchSheetsData(),
       getDoc(doc(db, 'settings', 'deptManagers')),
       getDoc(doc(db, 'settings', 'divisionManagers')),
-      getDoc(doc(db, 'settings', 'ceoApprovalBeta')),
     ])
-      .then(([{ managers, positions: pos, employees: emp }, deptManagersSnap, divisionManagersSnap, ceoApprovalBetaSnap]) => {
-        // Beta group สำหรับ CEO approval gate — allow-list เดียว จัดการผ่าน Admin Tools
-        setCeoApprovalBetaEmails(
-          ceoApprovalBetaSnap.exists() ? (ceoApprovalBetaSnap.data().testEmails || []).map(e => e.toLowerCase().trim()) : []
-        )
+      .then(([{ managers, positions: pos, employees: emp }, deptManagersSnap, divisionManagersSnap]) => {
         // อัพเดต positions map (department → string[]) จาก Sheets
         if (pos && typeof pos === 'object') {
           setPositionsByDept(pos)
@@ -640,24 +633,12 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       hcId = submissionRef.current.hcId || await generateHCID()
       submissionRef.current.hcId = hcId
 
-      // Beta: New HC ที่ยื่นโดยใครก็ตามในกลุ่มทดสอบ ต้องรอ CEO approve ก่อน — ไม่ยกเว้น role
-      // (แม้ admin ยื่นเอง ถ้า email อยู่ใน allow-list ก็ต้องผ่านการอนุมัติเหมือนกัน)
-      // Replacement ไม่เข้าเงื่อนไขนี้เลย ไม่ว่าใครยื่น
-      // คนอื่นที่ไม่อยู่ใน allow-list ได้ status 'Open' ทันทีเหมือนเดิมทุกอย่าง
-      //
-      // [ปิดชั่วคราว] CEO Approval flow ถูกปิด — ทุก request เด้งเข้า TA ทันที (status Open)
-      // เปิดกลับ: ลบ 2 บรรทัดล่าง แล้ว uncomment บล็อกที่ comment ไว้ด้านล่าง
-      // ponytail: kill-switch บรรทัดเดียว โค้ด approve ที่เหลือ (หน้า /approve, GAS, rules) นอนเงียบไว้
-      const needsCeoApproval = false
-      const approvalToken = null
-      // let currentBetaEmails = ceoApprovalBetaEmails
-      // if (form.requestType === 'New HC') {
-      //   const freshSnap = await getDoc(doc(db, 'settings', 'ceoApprovalBeta'))
-      //   currentBetaEmails = freshSnap.exists() ? (freshSnap.data().testEmails || []).map(e => e.toLowerCase().trim()) : []
-      // }
-      // const needsCeoApproval = form.requestType === 'New HC'
-      //   && currentBetaEmails.includes(user.email.toLowerCase())
-      // const approvalToken = needsCeoApproval ? crypto.randomUUID() : null
+      // New HC ทุกใบต้องรอ CEO อนุมัติก่อน (status PendingApproval) ไม่ว่าใครยื่น — ยังไม่แจ้ง TA / ไม่ลง Sheets
+      // จนกว่า CEO จะกดที่ลิงก์ในอีเมล (/approve/:id/:token ไม่ต้อง login) หรือ CEO/Admin กดในแอพ (/pending-approvals)
+      // Replacement เข้า TA ทันที (Open) เหมือนเดิม
+      // token ดิบไปกับลิงก์ในอีเมลเท่านั้น · doc เก็บแค่ sha256 — คนที่อ่าน doc ได้ (public get) เอาไปอนุมัติไม่ได้
+      const needsCeoApproval = form.requestType === 'New HC'
+      const approvalToken = needsCeoApproval ? crypto.randomUUID() : null
 
       // สร้าง payload จาก form state + metadata ของ user
       const payload = {
@@ -668,7 +649,7 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
         status: needsCeoApproval ? 'PendingApproval' : 'Open',
         hcId,                                 // HCID ที่ generate: REQ-YYYY-NNN
         createdAt: serverTimestamp(),          // ให้ Firestore ใส่ timestamp server
-        ...(approvalToken ? { approvalToken } : {}),
+        ...(approvalToken ? { approvalTokenHash: await sha256Hex(approvalToken) } : {}),
       }
 
       // ── Step 2: สร้าง Firestore document ──────────────────────────────────
@@ -746,7 +727,9 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
       // maintenance: true → GAS จะ skip การส่งแจ้งเตือน
       // workDaysPerWeek และ shift ไม่ส่งไป Sheets — เก็บใน Firestore อย่างเดียว
       if (needsCeoApproval) {
-        sendCeoApprovalRequest(docRef.id, approvalToken, payload)
+        // ponytail: local dev คุย GAS prod ตัวเดียวกัน — ไม่ส่งอีเมล CEO จากเครื่อง dev · log ลิงก์ไว้ทดสอบหน้า /approve แทน
+        if (import.meta.env.DEV) console.info('[dev] approve link:', `${location.origin}/approve/${docRef.id}/${approvalToken}`)
+        else sendCeoApprovalRequest(docRef.id, approvalToken, payload)
       } else {
         const { workDaysPerWeek: _w, shift: _s, ...webhookPayload } = payload
         await sendToWebhook({ ...webhookPayload, id: docRef.id, createdAt: new Date().toISOString(), maintenance: maintenanceMode })

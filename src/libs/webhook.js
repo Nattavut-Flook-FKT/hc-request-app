@@ -97,10 +97,10 @@ export async function sendPendingApprovalAlert(email, name) {
 }
 
 /**
- * sendCeoApprovalRequest — แจ้ง CEO ให้ approve/reject คำขอ New HC (beta) ผ่าน Slack
- * ไม่แตะ Sheets เลย (คำขอยังไม่ sync จนกว่าจะ approve) — ส่งแค่ลิงก์ไปหน้า /approve/{id}/{token}
+ * sendCeoApprovalRequest — ส่งอีเมล CEO (ผ่าน GAS) ว่ามีคำขอ New HC รออนุมัติ พร้อมลิงก์ /approve/{id}/{token}
+ * ไม่แตะ Sheets เลย (คำขอยังไม่ sync จนกว่าจะ approve) · ไม่ยิง Slack — ทีมตกลงใช้อีเมลอย่างเดียว
  * @param {string} docId  Firestore doc id
- * @param {string} token  approvalToken สุ่มที่สร้างไว้ตอน submit (one-time, ตรวจใน Firestore rule)
+ * @param {string} token  approval token ดิบ (doc เก็บแค่ sha256 — ตรวจใน firestore.rules ตอน CEO กดจากลิงก์)
  * @param {object} data   payload ของคำขอ (position/department/headcount/requesterName/reason)
  */
 export async function sendCeoApprovalRequest(docId, token, data) {
@@ -196,7 +196,8 @@ export async function syncBatchToSheets(requests) {
   }
 
   const rows = requests
-    .filter(r => r.position)
+    // ใบที่ยังรอ/ไม่ผ่าน CEO ไม่มีใน Sheets (ลง Sheets ครั้งแรกตอน approve) — Sync all ต้องไม่ดันลงไป
+    .filter(r => r.position && !['PendingApproval', 'RejectedByCEO'].includes(r.status))
     .map(r => ({
       hcId:            r.hcId || r.id || '',
       openDate:        getIso(r.createdAt),

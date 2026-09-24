@@ -21,6 +21,12 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role in ['ta', 'admin'];
     }
 
+    // ตรวจ role == 'ceo' หรือ 'admin' — คนที่อนุมัติคำขอ New HC ได้ (admin = fallback ถ้ายังไม่มีบัญชี CEO)
+    function isCeo() {
+      return isFreshket() &&
+        get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role in ['ceo', 'admin'];
+    }
+
     // ── Users collection ───────────────────────────────────────────────────────
     // อ่านได้ทุก freshket user
     // create: เฉพาะ admin หรือ self-registration (user สร้าง doc ตัวเองครั้งแรกด้วย
@@ -38,20 +44,26 @@ service cloud.firestore {
     // update: freshket user ทุกคน (TA/Manager แก้ status) หรือ unauthenticated ที่มี
     //   approvalToken ตรง (CEO approve/reject ผ่านลิงก์ Slack — beta, ดู PendingApproval)
     // get (doc เดียว): freshket user ทุกคน หรือ unauthenticated เฉพาะ doc ที่ PendingApproval
-    //   → หน้า /approve/:id/:token โชว์สรุปคำขอได้โดยไม่ต้อง login (ต้องรู้ doc id 20-char random)
-    // list (query): freshket เท่านั้น — สำคัญ: กันคนนอกรัน query where status==PendingApproval
-    //   แล้ว enumerate คำขอ pending ทั้งหมด (ถ้าใช้ allow read รวมกันจะรั่วออกอินเทอร์เน็ต)
+    //   → หน้า /approve/:id/:token (ลิงก์ในอีเมล CEO) โชว์สรุปคำขอได้โดยไม่ต้อง login
+    //   doc เก็บแค่ approvalTokenHash (sha256) — คนที่รู้ doc id อ่านสรุปได้แต่เอาไปอนุมัติไม่ได้
+    // list (query): freshket เท่านั้น — กันคนนอกรัน query enumerate คำขอ pending ทั้งหมด
+    // update: freshket ทั่วไปแก้ได้ ยกเว้น doc ที่ยังรอ CEO (PendingApproval) → ได้แค่ 2 ทาง
+    //   (1) ceo/admin ในแอพ  (2) token จากลิงก์อีเมลที่ sha256 ตรงกับ hash บน doc — จำกัด field ที่แก้ได้
+    //   + สถานะปลายทางแค่ Open/RejectedByCEO · ลิงก์เดิมกดซ้ำ fail เองเพราะสถานะไม่ใช่ PendingApproval แล้ว
+    //   (token ดิบจะถูกเขียนลง doc ตอนตัดสิน — ไม่เป็นไร ลิงก์ตายแล้ว)
     // delete: admin เท่านั้น (ป้องกันการลบ record โดยไม่ได้รับอนุญาต)
     match /hc_requests/{docId} {
       allow get:  if isFreshket() || resource.data.status == 'PendingApproval';
       allow list: if isFreshket();
       allow create: if isFreshket();
-      allow update: if isFreshket() || (
+      allow update: if (isFreshket() && (resource.data.status != 'PendingApproval' || isCeo())) || (
         resource.data.status == 'PendingApproval'
-        && 'approvalToken' in resource.data
-        && request.resource.data.approvalToken == resource.data.approvalToken
-        && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['status', 'approvalToken', 'approvedAt', 'rejectReason', 'rejectedAt'])
+        && 'approvalTokenHash' in resource.data
+        && request.resource.data.approvalToken is string
+        && hashing.sha256(request.resource.data.approvalToken).toHexString().lower() == resource.data.approvalTokenHash
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             'status', 'approvalToken', 'approvedAt', 'approvedBy', 'approvedByName',
+             'rejectReason', 'rejectedAt', 'rejectedBy', 'rejectedByName', 'statusHistory'])
         && request.resource.data.status in ['Open', 'RejectedByCEO']
       );
       allow delete: if isAdmin();
