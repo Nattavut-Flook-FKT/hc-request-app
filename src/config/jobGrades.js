@@ -18,12 +18,12 @@ export const HQ_JG_LEVELS = [
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 // คืน label เต็มของ JG เช่น 'JG7 — Senior Supervisor / Senior Specialist'
-// ลองหาจาก HQ ก่อน ถ้าไม่เจอลอง OPERATION ถ้าไม่เจออีกคืนค่าเดิม
-export function getJGLabel(jg) {
+// ระดับต่างกันตาม track (JG9 HQ = Manager / Lead · OPERATION = Manager) → ส่ง orgTrack มาด้วยถ้ารู้
+// ไม่ส่ง = ลอง HQ ก่อนแล้วค่อย OPERATION (พฤติกรรมเดิม) · ไม่เจอเลยคืนค่าเดิม
+export function getJGLabel(jg, orgTrack) {
   if (!jg) return ''
-  const found =
-    HQ_JG_LEVELS.find((l) => l.value === jg) ||
-    OPERATION_JG_LEVELS.find((l) => l.value === jg)
+  const lists = orgTrack === 'OPERATION' ? [OPERATION_JG_LEVELS, HQ_JG_LEVELS] : [HQ_JG_LEVELS, OPERATION_JG_LEVELS]
+  const found = lists[0].find((l) => l.value === jg) || lists[1].find((l) => l.value === jg)
   return found ? found.label : jg
 }
 

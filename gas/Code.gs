@@ -445,7 +445,9 @@ function emailCeoApprovalRequest(id, token, data) {
   if (!CEO_EMAIL) { Logger.log('[ceoApprovalRequest] CEO_EMAIL not set — email skipped for ' + id); return false }
   var link = APP_URL + '/approve/' + id + '/' + token
   var esc = function (s) { return String(s || '').replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] }) }
-  var rows = [['ตำแหน่ง', data.position], ['จำนวน', data.headcount + ' คน'], ['แผนก', data.department], ['ผู้ยื่น', data.requesterName]]
+  var rows = [['ตำแหน่ง', data.position]]
+  if (data.jg) rows.push(['ระดับ', data.jg]) // "JG9 — Manager / Lead" แปลงมาจากฝั่งเว็บแล้ว
+  rows.push(['จำนวน', data.headcount + ' คน'], ['แผนก', data.department], ['ผู้ยื่น', data.requesterName])
   if (data.reason) rows.push(['เหตุผล', data.reason])
   var subject = 'New HC รออนุมัติ: ' + data.position + ' (' + data.department + ')'
   // สี = token จาก 01-colors.md (neutral-900 #26292C · neutral-600 #565E64 · dark-green-600 #008065 · neutral-50 #F8F9FA)
@@ -769,7 +771,7 @@ function doGet_(e) {
   }
 
   // ── CEO APPROVAL REQUEST: อีเมล CEO ว่ามีคำขอ New HC รออนุมัติ ─────
-  // เรียกด้วย ?action=ceoApprovalRequest&id=...&token=...&position=...&department=...
+  // เรียกด้วย ?action=ceoApprovalRequest&id=...&token=...&position=...&jg=...&department=...
   //   &headcount=...&requesterName=...&reason=...&secret=XXX
   // ไม่แตะ Firestore/Sheets เลย — แค่ส่งอีเมลพร้อมลิงก์ /approve/{id}/{token} (token ดิบอยู่ในอีเมลเท่านั้น)
   if (e.parameter.action === 'ceoApprovalRequest') {
@@ -779,6 +781,7 @@ function doGet_(e) {
     if (!caId || !caToken) return responseJson_({ success: false, error: 'missing id or token' })
     var caSent = emailCeoApprovalRequest(caId, caToken, {
       position: e.parameter.position || '',
+      jg: e.parameter.jg || '',
       department: e.parameter.department || '',
       headcount: e.parameter.headcount || '',
       requesterName: e.parameter.requesterName || '',
