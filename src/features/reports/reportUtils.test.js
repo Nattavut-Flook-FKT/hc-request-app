@@ -38,6 +38,13 @@ test('ส่งไม้ต่อ Offering แล้วนาฬิกา TA ห
   assert.equal(computeSLADays(req(30, [['Offering', 20]])), 10)
 })
 
+test('ตั้ง slaStartDate เอง → Offering/Onboarding ยังหยุดนาฬิกา (TA เป็น admin ใช้กันทุกเคส)', () => {
+  // ตั้งวันเริ่ม 30 วันก่อน, Offering วันที่ 20 → 10 วัน ไม่ใช่ 30
+  assert.equal(computeSLADays({ ...req(5, [['Offering', 20]]), slaStartDate: ago(30).toISOString() }), 10)
+  // event ก่อนวันเริ่ม (Offering 40 วันก่อน, ตั้งเริ่ม 30) → ยังหยุดอยู่ = 0 ไม่ติดลบ
+  assert.equal(computeSLADays({ ...req(50, [['Offering', 40]]), slaStartDate: ago(30).toISOString() }), 0)
+})
+
 test('ผู้สมัครหลุดหลัง Onboarding → เริ่มนับรอบใหม่ ไม่เอาเวลารอบเก่ามาบวก', () => {
   // เปิด 60 วัน → Onboarding วันที่ 40 (สะสม 20) → หลุด กลับมา Recruiting วันที่ 10
   assert.equal(computeSLADays(req(60, [['Onboarding', 40], ['Recruiting', 10]])), 10)
