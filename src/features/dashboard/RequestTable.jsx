@@ -151,24 +151,13 @@ function StatusBadge({ status }) {
 // slaStartDate (optional override):
 //   - ถ้า admin แก้ SLA ย้อนหลัง จะเซ็ต slaStartDate แทนการแก้ createdAt
 //   - ใช้ slaStartDate ถ้ามี (ไม่มี year check) — ใช้ createdAt ถ้าไม่มี (2026+ เท่านั้น)
+//   - เปลี่ยนแค่จุดเริ่ม pause/reset ยังทำงาน (TA ทุกคนเป็น admin → override ใช้กันทั่วไป ไม่ใช่เคสพิเศษ)
 function getDaysOpen(req) {
-  // slaStartDate override → admin ตั้งด้วยตัวเอง → นับตรงๆ ไม่มี pause/reset logic
-  if (req.slaStartDate) {
-    const start = new Date(req.slaStartDate)
-    if (isNaN(start)) return null
-    // หาวัน Closed จาก statusHistory หรือ closedAt
-    const closedEntry = [...(req.statusHistory ?? [])]
-      .map(e => ({ status: e.status, t: new Date(e.changedAt) }))
-      .filter(e => !isNaN(e.t) && (e.status === 'Closed' || e.status === 'Cancelled'))
-      .sort((a, b) => b.t - a.t)[0]
-    const end = closedEntry ? closedEntry.t
-      : req.closedAt?.toDate?.() ?? new Date()
-    return Math.max(0, Math.floor((end - start) / (1000 * 60 * 60 * 24)))
+  if (!req.slaStartDate) {
+    // auto mode — ใช้ createdAt (2026+ เท่านั้น)
+    const effectiveStart = req.createdAt?.toDate?.() ?? null
+    if (!effectiveStart || effectiveStart.getFullYear() < 2026) return null
   }
-
-  // auto mode — ใช้ createdAt (2026+ เท่านั้น)
-  const effectiveStart = req.createdAt?.toDate?.() ?? null
-  if (!effectiveStart || effectiveStart.getFullYear() < 2026) return null
 
   // pause/reset logic ใช้ตัวเดียวกับหน้า Reports — เดิมไฟล์นี้ copy ไว้เองแล้ว drift
   // จนตารางกับรายงานให้เลขคนละอันในเคสที่กด On hold

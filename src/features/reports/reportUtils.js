@@ -77,13 +77,16 @@ const SLA_STOP = new Set([
 ])
 
 export function computeSLADays(req) {
+  // slaStartDate = admin/TA ตั้งวันเริ่มนับเอง → เปลี่ยนแค่จุดเริ่ม กฎหยุด/reset ยังใช้เหมือนเดิม
   // New HC ที่ผ่าน CEO: นาฬิกา TA เริ่มที่วันอนุมัติ ไม่ใช่วันยื่น (เวลารอ CEO ไม่ใช่ความช้าของ TA)
-  const createdAt = toDate(req.approvedAt) || toDate(req.createdAt)
+  const createdAt = toDate(req.slaStartDate) || toDate(req.approvedAt) || toDate(req.createdAt)
   if (!createdAt) return ''
+  // event ก่อนวันเริ่ม → หนีบไว้ที่วันเริ่ม: ไม่นับเวลาก่อนหน้า แต่สถานะ ณ วันเริ่มยังถูกต้อง
   const history = [...(req.statusHistory ?? [])]
     .map(e => ({ status: e.status, t: toDate(e.changedAt) }))
     .filter(e => e.t)
     .sort((a, b) => a.t - b.t)
+    .map(e => (e.t < createdAt ? { ...e, t: createdAt } : e))
 
   let acc = 0, start = createdAt, lastOnboarding = false
   for (const { status, t } of history) {
