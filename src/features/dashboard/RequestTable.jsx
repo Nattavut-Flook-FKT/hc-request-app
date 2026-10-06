@@ -1160,8 +1160,8 @@ export default function RequestTable({
         })}
       </div>
 
-      {/* Chip Filters */}
-      {showFilters && (() => {
+      {/* Chip Filters — โชว์เมื่อกดปุ่ม Filters หรือมี filter ค้างอยู่ (เช่น เปิดจากลิงก์) ให้เห็นและล้างได้ */}
+      {showFilters && (showFilterBar || hasAdvancedFilters) && (() => {
         // Multi-select ตาม DS 09-dropdown §7: panel ใช้ checkbox (08-checkbox §3) · เลือกแล้วมีผลทันที ไม่มีปุ่ม Apply
         // [PROPOSED — not in spec yet] trigger ยังเป็น chip ทรง pill เดิม (ไม่ใช่ trigger โชว์ chip ข้างใน) แสดง ค่าแรก +N
         function ChipSelect({ id, label, values, onChange, options, labelOf = (v) => v }) {
