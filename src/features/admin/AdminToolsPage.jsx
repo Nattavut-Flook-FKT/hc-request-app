@@ -27,6 +27,7 @@ import { Clock, Tag, FileText, Trash2, DatabaseZap, Settings2, AlertTriangle, Re
 // PIN อ่านจาก env เท่านั้น — ไม่มี fallback ใน source (ถ้า env ไม่ตั้ง = ล็อกตาย ปลดไม่ได้)
 const ADMIN_PIN = import.meta.env.VITE_ADMIN_TOOLS_PIN
 import { listJDFiles, deleteJDFile } from '@/libs/supabase'
+import { migrateOrg, migrateGrants } from '@/features/admin/orgMigration'
 import { syncFromSheets, syncBatchToSheets, syncAllToSheets } from '@/libs/webhook'
 import Layout from '@/components/app-shell/Layout'
 import { grantEmails } from '@/utils/grants'
@@ -89,6 +90,10 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
   // ── Fix Department Names state ────────────────────────────────────────────
   const [fixDeptNamesState,  setFixDeptNamesState]  = useState('idle')
   const [fixDeptNamesResult, setFixDeptNamesResult] = useState(null)
+
+  // ── Migrate Org Structure state ───────────────────────────────────────────
+  const [orgMigState,  setOrgMigState]  = useState('idle')
+  const [orgMigResult, setOrgMigResult] = useState(null)
 
   // ── Reassign Imported Requests state ──────────────────────────────────────
   const [reassignState,  setReassignState]  = useState('idle') // 'idle'|'loading'|'ready'|'saving'|'error'
@@ -248,6 +253,48 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
       setFixEmailNameState('error')
     }
     setTimeout(() => { setFixEmailNameState('idle'); setFixEmailNameResult(null) }, 8000)
+  }
+
+  /**
+   * migrateOrgStructure — ย้ายข้อมูลเก่าเข้าโครงสร้าง Division ใหม่ (Support Function แตก · Operation → Operations)
+   * แตะ hc_requests / custom_positions / jd_library + grant ผู้จัดการใน settings — รันซ้ำได้ (doc ที่ย้ายแล้วจะข้าม)
+   * ponytail: hc_logs (audit log) ไม่ย้าย — เป็นประวัติ ณ เวลานั้น
+   */
+  async function migrateOrgStructure() {
+    if (orgMigState === 'running') return
+    if (!window.confirm('ย้ายข้อมูลเดิมเข้าโครงสร้าง Division ใหม่?\nแก้เคส, Custom Positions, JD Library และสิทธิ์ผู้จัดการ — ย้อนกลับเองไม่ได้')) return
+    setOrgMigState('running')
+    setOrgMigResult(null)
+    try {
+      let updated = 0
+      for (const col of ['hc_requests', 'custom_positions', 'jd_library']) {
+        const snap = await getDocs(collection(db, col))
+        const toUpdate = snap.docs
+          .map(d => ({ ref: d.ref, updates: migrateOrg(d.data()) }))
+          .filter(({ updates }) => Object.keys(updates).length > 0)
+        for (let i = 0; i < toUpdate.length; i += 400) {
+          const batch = writeBatch(db)
+          toUpdate.slice(i, i + 400).forEach(({ ref, updates }) => batch.update(ref, updates))
+          await batch.commit()
+        }
+        updated += toUpdate.length
+      }
+
+      // grant: เขียนทับทั้ง doc (ไม่ merge) เพื่อลบ key ชื่อเก่าทิ้ง — key ที่ไม่เกี่ยวถูกส่งต่อครบใน migrateGrants
+      const deptRef = doc(db, 'settings', 'deptManagers')
+      const divRef  = doc(db, 'settings', 'divisionManagers')
+      const [deptSnap, divSnap] = await Promise.all([getDoc(deptRef), getDoc(divRef)])
+      const grants = migrateGrants(deptSnap.data() ?? {}, divSnap.data() ?? {})
+      await Promise.all([setDoc(deptRef, grants.deptManagers), setDoc(divRef, grants.divisionManagers)])
+
+      setOrgMigResult({ updated })
+      setOrgMigState('done')
+    } catch (err) {
+      console.error('[migrateOrgStructure]', err)
+      setOrgMigResult({ error: err.message })
+      setOrgMigState('error')
+    }
+    setTimeout(() => { setOrgMigState('idle'); setOrgMigResult(null) }, 10000)
   }
 
   /**
@@ -934,6 +981,45 @@ export default function AdminToolsPage({ user, role, isDarkMode, toggleDarkMode,
                 <><AlertCircle size={13} strokeWidth={1} absoluteStrokeWidth/> {fixDeptNamesResult?.error || 'Error'}</>
               ) : (
                 <><Tag size={13} strokeWidth={1} absoluteStrokeWidth/> Fix Now</>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* ── Migrate Org Structure card ─────────────────────────────────────── */}
+        <div className="mb-2 rounded-2xl border border-teal-100 bg-teal-50 p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-teal-700"><DatabaseZap size={20} strokeWidth={1} absoluteStrokeWidth /></span>
+              <div>
+                <p className="text-sm font-bold text-teal-900">ย้ายโครงสร้าง Division ใหม่</p>
+                <p className="mt-0.5 text-xs text-neutral-500">
+                  Support Function → Customer Success / People Experience / Finance & Accounting / AI Transformation & Strategy · Operation → Operations
+                  — แก้เคส, Custom Positions, JD Library และสิทธิ์ผู้จัดการ · รันเสร็จแล้วกด "App → Google Sheets" (ทั้งหมด) ต่อทันที — ห้ามกด "Sync จาก Google Sheets" ก่อน ไม่งั้นชื่อเก่าจะไหลกลับมา
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={migrateOrgStructure}
+              disabled={orgMigState === 'running'}
+              className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border px-4 py-2 text-xs font-bold transition-colors
+                ${orgMigState === 'running'
+                  ? 'cursor-wait border-neutral-100 bg-neutral-50 text-neutral-400'
+                  : orgMigState === 'done'
+                    ? 'border-teal-100 bg-teal-100 text-teal-900'
+                    : orgMigState === 'error'
+                      ? 'border-red-100 bg-red-50 text-red-600'
+                      : 'border-teal-100 bg-white text-teal-700 hover:bg-teal-100'
+                }`}
+            >
+              {orgMigState === 'running' ? (
+                <><Settings2 size={13} strokeWidth={1} absoluteStrokeWidth className="animate-spin"/> กำลังย้าย...</>
+              ) : orgMigState === 'done' ? (
+                <><CheckCircle2 size={13} strokeWidth={1} absoluteStrokeWidth/> ย้ายแล้ว {orgMigResult?.updated} docs + สิทธิ์ผู้จัดการ</>
+              ) : orgMigState === 'error' ? (
+                <><AlertCircle size={13} strokeWidth={1} absoluteStrokeWidth/> {orgMigResult?.error || 'Error'}</>
+              ) : (
+                <><DatabaseZap size={13} strokeWidth={1} absoluteStrokeWidth/> Migrate</>
               )}
             </button>
           </div>

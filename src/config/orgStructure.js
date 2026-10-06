@@ -36,25 +36,25 @@ export const ORG_STRUCTURE = {
       'Merchandising Coordinator': [],
     },
   },
-  'Support Function': {
-    'Strategy': {},
-    'Finance & Accounting': {
-      'Collection and Credit Control': [],
-      'Account Receivable': [],
-      'Treasury': [],
-      'Account Payable': [],
-      'General Ledger': [],
-    },
-    'People Experience': {
-      'Compensation & Benefits': [],
-      'Talent Acquisition': [],
-      'People Business Partner': [],
-      'Organization & Development': [],
-      'People Information Systems & IT': [],
-      'Safety': [],
-    },
+  // Support Function เดิมแตกออกเป็น Division ของตัวเอง (2026-10) — Section เดิมของ PX / F&A ขึ้นมาเป็นแผนก
+  // ข้อมูลเก่าย้ายด้วยปุ่ม "ย้ายโครงสร้าง Division" ใน Admin Tools (src/features/admin/orgMigration.js)
+  'Customer Success': {
     'Customer Success': {},
-    'Innovation': {},
+  },
+  'People Experience': {
+    'Compensation & Benefits': {},
+    'Talent Acquisition': {},
+    'People Business Partner': {},
+    'Organization & Development': {},
+    'People Information Systems & IT': {},
+    'Safety': {},
+  },
+  'Finance & Accounting': {
+    'Collection and Credit Control': {},
+    'Account Receivable': {},
+    'Treasury': {},
+    'Account Payable': {},
+    'General Ledger': {},
   },
   'Technology Team': {
     'Software Development': {
@@ -73,7 +73,11 @@ export const ORG_STRUCTURE = {
       'Product Design': [],
     },
   },
-  'Operation': {
+  'AI Transformation & Strategy': {
+    'Strategy': {},
+    'Innovation': {},
+  },
+  'Operations': {
     'Operations Support': {
       'Operations Excellence': [],
       'Operations Engineer': [],
