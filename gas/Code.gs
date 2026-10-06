@@ -1775,11 +1775,11 @@ function syncBatchHandler_(ss, rows) {
     // ไม่ต้อง setDataValidation(null) — GAS เขียนค่าได้โดยไม่สนใจ validation rules
     range.setValues(allRowData)
 
-    // คัดลอก format + Chip-style validation จาก row 2 ไปยัง row ใหม่
-    // เพื่อให้ row ใหม่ได้ Chip display style เหมือนกับ row ที่มีอยู่แล้ว
-    var templateLastRow = ctx.sheet.getLastRow()
-    if (templateLastRow >= 2) {
-      var templateRange = ctx.sheet.getRange(2, 1, 1, HEADERS.length)
+    // คัดลอก format + Chip-style validation จากแถวข้อมูลล่าสุด (เหนือแถวใหม่) ไปยัง row ใหม่
+    // เดิมใช้ row 2 ตายตัว → ถ้า row 2 เสีย chip (เช่น setStatusSafe_ รีเซ็ตเป็น dropdown ธรรมดา)
+    // แถวใหม่ทุกแถวหลังจากนั้นจะไม่มี chip ตาม · แถวล่าสุดสะท้อนหน้าตาปัจจุบันของชีตมากกว่า
+    if (lastDataRow >= 2) {
+      var templateRange = ctx.sheet.getRange(lastDataRow, 1, 1, HEADERS.length)
       templateRange.copyTo(range, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false)
       templateRange.copyTo(range, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false)
       // หลัง copyTo ให้ setValues อีกครั้งเพราะ PASTE_FORMAT อาจล้างค่า
