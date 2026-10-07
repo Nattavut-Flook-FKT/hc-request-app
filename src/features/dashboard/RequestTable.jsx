@@ -78,7 +78,8 @@
  * @param {string|null}   [props.focusMonth]   - กรองตามเดือนที่เลือกจาก MonthlyPipeline
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import { useEffect, useState, useMemo, useCallback, Fragment } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef, Fragment } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { collection, onSnapshot, orderBy, query, doc, updateDoc, addDoc, getDocs, where, deleteDoc, serverTimestamp, arrayUnion, arrayRemove, limit, Timestamp } from 'firebase/firestore'
 import { db } from '@/libs/firebase'
 import { shortName, buildHistoryEntry } from '@/utils/statusHistory'
@@ -87,10 +88,10 @@ import { generateHCID } from '@/features/hc-request/hcId'
 import { sendStatusUpdate, sendToWebhook, sendDeleteToSheets, updateOpenDateInSheets, updateStartDateInSheets, reportClientError } from '@/libs/webhook'
 import { getJGLabel } from '@/config/jobGrades'
 import { slaLimit } from '@/features/dashboard/sla'
-import { computeSLADays } from '@/features/reports/reportUtils'
+import { computeSLADays, toDate } from '@/features/reports/reportUtils'
 import { isEnglishName, generateFreshketEmail } from '@/utils/email'
 import { logAudit } from '@/features/audit-log/auditLog'
-import { Loader2, UserCheck, XCircle, ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, X, FileText, Search, ChevronRight, Users, Calendar, AlignLeft, ClipboardList, Pencil, Trash2, Upload, File } from 'lucide-react'
+import { Loader2, Check, UserCheck, XCircle, ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, X, FileText, Search, ChevronRight, Users, Calendar, AlignLeft, ClipboardList, Pencil, Trash2, Upload, File } from 'lucide-react'
 import { getJDSignedUrl, deleteJDFile, uploadCVFile, getCVSignedUrl, deleteCVFile } from '@/libs/supabase'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 import EditCaseModal from '@/features/dashboard/EditCaseModal'
@@ -167,15 +168,49 @@ function getDaysOpen(req) {
 
 // แสดงป้าย SLA: dot สีตามสถานะ — pause / เกิน limit / เกินครึ่ง limit / ปกติ
 // limit ต่อ request มาจาก slaLimit(): Tech หรือ JG9+ = 45 วัน, ต่ำกว่า = 30 วัน
-function SLABadge({ req }) {
+// สองชุดนี้ต้องตรงกับ SLA_STOP ใน reportUtils — ไม่งั้นเคสที่นาฬิกาหยุดแล้ว
+// จะยังขึ้นป้ายแดง "เกิน SLA" ทั้งที่ไม่มีใครต้องทำอะไรต่อ
+const SLA_DONE   = ['Closed', 'Cancelled', 'NoShow', 'Rejected', 'InternalTransfer', 'RejectedByCEO']
+const SLA_PAUSED = ['Offering', 'Onboarding', 'OnHold']
+const SLA_LABELS = { over: 'เกิน SLA', near: 'ใกล้เกิน', ok: 'ปกติ', paused: 'หยุดนับ' }
+
+/** สถานะ SLA ของเคส — ใช้ทั้งป้ายในตารางและ filter ให้ตรงกันเสมอ */
+function slaState(req) {
   const days = getDaysOpen(req)
   if (days === null) return null
-  // สองชุดนี้ต้องตรงกับ SLA_STOP ใน reportUtils — ไม่งั้นเคสที่นาฬิกาหยุดแล้ว
-  // จะยังขึ้นป้ายแดง "เกิน SLA" ทั้งที่ไม่มีใครต้องทำอะไรต่อ
-  const done   = ['Closed', 'Cancelled', 'NoShow', 'Rejected', 'InternalTransfer', 'RejectedByCEO'].includes(req.status)
-  const paused = ['Offering', 'Onboarding', 'OnHold'].includes(req.status)
-  if (done) return <span className="text-[11px] font-bold text-neutral-400 tabular-nums">{days}d</span>
-  if (paused) return (
+  if (SLA_DONE.includes(req.status)) return 'done'
+  if (SLA_PAUSED.includes(req.status)) return 'paused'
+  const limit = slaLimit(req)
+  return days > limit ? 'over' : days > limit / 2 ? 'near' : 'ok'
+}
+
+// ─── Filter ที่เลือกได้หลายค่า: key ใน URL → ค่าของเคสที่เอาไปเทียบ ───
+const FILTER_FIELDS = {
+  year: (r) => String(r.createdAt?.toDate?.()?.getFullYear() ?? ''),
+  emp:  (r) => r.employmentType,
+  pay:  (r) => r.payrollType,
+  job:  (r) => r.requestType,
+  rank: (r) => r.jg,
+  dept: (r) => r.department,
+  bu:   (r) => r.businessUnit,
+  ta:   (r) => r.assignedToName,
+  sla:  slaState,
+}
+const FILTER_KEYS = Object.keys(FILTER_FIELDS)
+
+// ─── ช่วงวันที่กรองได้หลายฟิลด์ (default = วันยื่น) ───
+const DATE_FIELDS = {
+  created:  { label: 'วันยื่น',       get: (r) => r.createdAt?.toDate?.() },
+  offering: { label: 'วัน Offering', get: (r) => toDate(r.offeringDate) },
+  start:    { label: 'วันเริ่มงาน',  get: (r) => toDate(r.startDate) },
+}
+
+function SLABadge({ req }) {
+  const days = getDaysOpen(req)
+  const state = slaState(req)
+  if (state === null) return null
+  if (state === 'done') return <span className="text-[11px] font-bold text-neutral-400 tabular-nums">{days}d</span>
+  if (state === 'paused') return (
     <span className="inline-flex items-center gap-1 rounded-lg border border-neutral-100 bg-neutral-50 px-1.5 py-0.5 text-[11px] font-bold text-neutral-500">
       <span className="h-1.5 w-1.5 rounded-full bg-neutral-300" /> {days}d
     </span>
@@ -213,19 +248,32 @@ export default function RequestTable({
   const [expandedId, setExpandedId] = useState(null)
   const [allTAs, setAllTAs] = useState([])
   const [reassigningId, setReassigningId] = useState(null)
-  const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [activeTab, setActiveTab] = useState('ทั้งหมด')
-  const [filterEmpType,  setFilterEmpType]  = useState('')
-  const [filterPayroll,  setFilterPayroll]  = useState('')
-  const [filterJobType,  setFilterJobType]  = useState('')
-  const [filterRank,     setFilterRank]     = useState('')
-  const [filterDept,     setFilterDept]     = useState('')
-  const [filterBU,       setFilterBU]       = useState('')
-  const [filterAssigned, setFilterAssigned] = useState('')
-  const [filterYear,     setFilterYear]     = useState('')
-  const [filterDateFrom, setFilterDateFrom] = useState('')
-  const [filterDateTo,   setFilterDateTo]   = useState('')
+  // ─── Filter ทั้งหมดเก็บใน URL — รีเฟรช/สลับหน้า/ส่งลิงก์ แล้วได้ชุดเดิม
+  // key ซ้ำได้ = เลือกหลายค่า เช่น ?dept=Ops&dept=Sales
+  const [params, setParams] = useSearchParams()
+  const paramsKey = params.toString()
+  const filters = useMemo(() => {
+    const p = new URLSearchParams(paramsKey)
+    return Object.fromEntries(FILTER_KEYS.map((k) => [k, p.getAll(k)]))
+  }, [paramsKey])
+  // แท็บที่ไม่รู้จัก (ลิงก์เก่า เช่น ?tab=กำลังหา ที่เอาออกแล้ว) → กลับไป 'ทั้งหมด' แทนตารางว่าง
+  const activeTab       = [...STATUS_TABS, ...CEO_APPROVAL_STATUS_TABS, 'ประวัติ'].includes(params.get('tab')) ? params.get('tab') : 'ทั้งหมด'
+  const debouncedSearch = params.get('q') || ''
+  const dateField       = DATE_FIELDS[params.get('dfield')] ? params.get('dfield') : 'created'
+  const filterDateFrom  = params.get('from') || ''
+  const filterDateTo    = params.get('to') || ''
+  // อ่านจาก window.location (ไม่ใช่ params ของ render นี้) — กดหลาย filter ติดกันหรือ debounce ค้น
+  // จะได้ไม่เขียนทับกันด้วยค่าเก่า · BrowserRouter อัปเดต URL แบบ sync จึงอ่านซ้ำได้ทันที
+  function updateParams(mutate) {
+    const p = new URLSearchParams(window.location.search)
+    mutate(p)
+    setParams(p, { replace: true })
+  }
+  function setParam(key, value) {
+    updateParams((p) => { p.delete(key); [].concat(value).filter(Boolean).forEach((v) => p.append(key, v)) })
+  }
+  const setActiveTab = (tab) => setParam('tab', tab === 'ทั้งหมด' ? '' : tab)
+  const [search, setSearch] = useState(debouncedSearch)
   const [showFilterBar,  setShowFilterBar]  = useState(false)
   const [openChip,       setOpenChip]       = useState(null)
   const [sortField, setSortField] = useState('hcId')
@@ -257,14 +305,19 @@ export default function RequestTable({
 
   // ─── Debounce search 300ms ─────────────────────────────────────────────────
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 300)
+    const t = setTimeout(() => setParam('q', search), 300)
     return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setParam อ่าน URL ล่าสุดเองทุกครั้ง ไม่ stale
   }, [search])
 
   // ─── Sync filterAssigned เมื่อ focusTA เปลี่ยน (จาก TAWorkloadPanel) ───
+  // ข้ามรอบแรก — ไม่งั้นเปิดหน้ามาแล้ว focusTA=null ล้าง ?ta= ที่มากับลิงก์ทิ้ง
+  const focusTAMounted = useRef(false)
   useEffect(() => {
-    setFilterAssigned(focusTA ?? '')
+    if (!focusTAMounted.current) { focusTAMounted.current = true; return }
+    setParam('ta', focusTA ?? '')
     setPage(1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setParam อ่าน URL ล่าสุดเองทุกครั้ง ไม่ stale
   }, [focusTA])
 
   // ─── Realtime listener: ดึง hc_requests จาก Firestore แบบ realtime ───
@@ -909,12 +962,15 @@ export default function RequestTable({
         ? base.filter(r => Boolean(r.assignedTo) || Boolean(r.assignedToName))
         : base.filter(r => getAssignedEmail(r, allTAs) === user.email?.toLowerCase() || (r.assignedToName && (r.assignedToName === user.displayName || r.assignedToName === shortName(user.displayName))))
     }
-    if (filterYear) base = base.filter(r => r.createdAt?.toDate?.()?.getFullYear() === Number(filterYear))
+    if (filters.year.length) base = base.filter(r => filters.year.includes(FILTER_FIELDS.year(r)))
 
-    const counts = { ทั้งหมด: base.length, ประวัติ: base.filter(r => HISTORY_TAB_STATUSES.includes(r.status)).length }
+    const counts = {
+      ทั้งหมด: base.length,
+      ประวัติ: base.filter(r => HISTORY_TAB_STATUSES.includes(r.status)).length,
+    }
     ALL_STATUSES.forEach(s => { counts[s] = base.filter(r => r.status === s).length })
     return counts
-  }, [requests, filterYear, filterMine, filterMyCases, user.email, user.displayName, role, department, allTAs])
+  }, [requests, filters.year, filterMine, filterMyCases, user.email, user.displayName, role, department, allTAs])
 
   // ─── กรองและเรียงข้อมูลสำหรับแสดงในตาราง ───
   // Visibility: manager เห็นเฉพาะของตัวเอง + แผนก, ta/admin เห็นทั้งหมด
@@ -937,16 +993,13 @@ export default function RequestTable({
     }
     if (activeTab === 'ประวัติ') list = list.filter((r) => HISTORY_TAB_STATUSES.includes(r.status))
     else if (activeTab !== 'ทั้งหมด') list = list.filter((r) => r.status === activeTab)
-    if (filterYear)     list = list.filter((r) => r.createdAt?.toDate?.()?.getFullYear() === Number(filterYear))
-    if (filterEmpType)  list = list.filter((r) => r.employmentType === filterEmpType)
-    if (filterPayroll)  list = list.filter((r) => r.payrollType === filterPayroll)
-    if (filterJobType)  list = list.filter((r) => r.requestType === filterJobType)
-    if (filterRank)     list = list.filter((r) => r.jg === filterRank)
-    if (filterDept)     list = list.filter((r) => r.department === filterDept)
-    if (filterBU)       list = list.filter((r) => r.businessUnit === filterBU)
-    if (filterAssigned) list = list.filter((r) => r.assignedToName === filterAssigned)
-    if (filterDateFrom) list = list.filter((r) => r.createdAt?.toDate?.() >= new Date(filterDateFrom))
-    if (filterDateTo) { const to = new Date(filterDateTo); to.setHours(23, 59, 59); list = list.filter((r) => r.createdAt?.toDate?.() <= to) }
+    for (const [key, get] of Object.entries(FILTER_FIELDS)) {
+      if (filters[key].length) list = list.filter((r) => filters[key].includes(get(r)))
+    }
+    // เคสที่ยังไม่มีวันในฟิลด์ที่เลือก (เช่น ยังไม่ถึง Offering) จะไม่ผ่าน filter ช่วงวันที่
+    const getDate = DATE_FIELDS[dateField].get
+    if (filterDateFrom) list = list.filter((r) => getDate(r) >= new Date(filterDateFrom))
+    if (filterDateTo) { const to = new Date(filterDateTo); to.setHours(23, 59, 59); list = list.filter((r) => getDate(r) <= to) }
     if (focusMonth) {
       list = list.filter(r => {
         const d = r.createdAt?.toDate?.()
@@ -991,15 +1044,19 @@ export default function RequestTable({
       return 0
     })
     return list
-  }, [requests, filterMine, filterMyCases, activeTab, filterYear, filterEmpType, filterPayroll, filterJobType, filterRank, filterDept, filterBU, filterAssigned, filterDateFrom, filterDateTo, debouncedSearch, focusMonth, sortField, sortDir, user.email, user.displayName, role, department, allTAs])
+  }, [requests, filterMine, filterMyCases, activeTab, filters, dateField, filterDateFrom, filterDateTo, debouncedSearch, focusMonth, sortField, sortDir, user.email, user.displayName, role, department, allTAs])
 
-  const hasChipFilters     = filterYear || filterEmpType || filterPayroll || filterJobType || filterRank || filterDept || filterBU || filterAssigned
-  const hasAdvancedFilters = hasChipFilters || filterDateFrom || filterDateTo
+  // นับเป็นกลุ่ม (Department 3 ค่า = 1) — ช่วงวันที่นับเป็น 1
+  const activeFilterCount  = FILTER_KEYS.filter((k) => filters[k].length).length + (filterDateFrom || filterDateTo ? 1 : 0)
+  const hasAdvancedFilters = activeFilterCount > 0
 
-  function clearChips()    { setFilterYear(''); setFilterEmpType(''); setFilterPayroll(''); setFilterJobType(''); setFilterRank(''); setFilterDept(''); setFilterBU(''); setFilterAssigned('') }
-  function clearAdvanced() { clearChips(); setFilterDateFrom(''); setFilterDateTo('') }
+  function clearAdvanced(alsoTabAndSearch = false) {
+    const keys = [...FILTER_KEYS, 'dfield', 'from', 'to', ...(alsoTabAndSearch ? ['tab', 'q'] : [])]
+    updateParams((p) => keys.forEach((k) => p.delete(k)))
+    if (alsoTabAndSearch) setSearch('')
+  }
 
-  useEffect(() => { setPage(1) }, [activeTab, filterYear, filterEmpType, filterPayroll, filterJobType, filterRank, filterDept, filterBU, filterAssigned, filterDateFrom, filterDateTo, debouncedSearch, focusMonth, filterMine, filterMyCases])
+  useEffect(() => { setPage(1) }, [paramsKey, focusMonth, filterMine, filterMyCases])
 
   // ปิด chip dropdown เมื่อคลิกนอก
   useEffect(() => {
@@ -1053,13 +1110,13 @@ export default function RequestTable({
             Filters
             {hasAdvancedFilters && (
               <span className="ml-1 rounded-full bg-dark-green-600 px-1.5 py-0.5 text-[11px] font-bold leading-none text-neutral-50">
-                {[filterYear, filterDept, filterAssigned, filterDateFrom, filterDateTo].filter(Boolean).length}
+                {activeFilterCount}
               </span>
             )}
           </button>
         )}
         {hasAdvancedFilters && (
-          <button onClick={clearAdvanced} className="flex items-center gap-1 text-xs font-bold text-neutral-400 transition-colors hover:text-dark-green-700">
+          <button onClick={() => clearAdvanced()} className="flex items-center gap-1 text-xs font-bold text-neutral-400 transition-colors hover:text-dark-green-700">
             <X size={11} strokeWidth={1} absoluteStrokeWidth /> ล้างค่าทิ้ง
           </button>
         )}
@@ -1100,58 +1157,77 @@ export default function RequestTable({
         })}
       </div>
 
-      {/* Chip Filters */}
-      {showFilters && (() => {
-        function ChipSelect({ id, label, value, onChange, options }) {
+      {/* Chip Filters — โชว์เมื่อกดปุ่ม Filters หรือมี filter ค้างอยู่ (เช่น เปิดจากลิงก์) ให้เห็นและล้างได้ */}
+      {showFilters && (showFilterBar || hasAdvancedFilters) && (() => {
+        // Multi-select ตาม DS 09-dropdown §7: panel ใช้ checkbox (08-checkbox §3) · เลือกแล้วมีผลทันที ไม่มีปุ่ม Apply
+        // [PROPOSED — not in spec yet] trigger ยังเป็น chip ทรง pill เดิม (ไม่ใช่ trigger โชว์ chip ข้างใน) แสดง ค่าแรก +N
+        function ChipSelect({ id, label, values, onChange, options, labelOf = (v) => v }) {
+          const toggle = (opt) => onChange(values.includes(opt) ? values.filter((v) => v !== opt) : [...values, opt])
           return (
             <div className="relative" onMouseDown={e => e.stopPropagation()}>
               <button
                 onClick={() => setOpenChip(openChip === id ? null : id)}
                 className={`flex select-none items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-bold transition-colors
-                  ${value
+                  ${values.length
                     ? 'border-dark-green-100 bg-dark-green-50 text-dark-green-900'
                     : 'border-neutral-100 bg-white text-neutral-500 hover:border-dark-green-100 hover:text-dark-green-700'}`}
               >
-                <span>{value || label}</span>
-                {value
-                  ? <X size={10} strokeWidth={1} absoluteStrokeWidth className="cursor-pointer" onClick={e => { e.stopPropagation(); onChange(''); setOpenChip(null) }} />
+                <span>{values.length ? labelOf(values[0]) : label}</span>
+                {values.length > 1 && (
+                  <span className="rounded-full bg-dark-green-600 px-1.5 text-[11px] leading-4 text-neutral-50">+{values.length - 1}</span>
+                )}
+                {values.length
+                  ? <X size={10} strokeWidth={1} absoluteStrokeWidth className="cursor-pointer" onClick={e => { e.stopPropagation(); onChange([]); setOpenChip(null) }} />
                   : <ChevronDown size={10} strokeWidth={1} absoluteStrokeWidth />}
               </button>
               {openChip === id && (
-                <div className="absolute top-full z-40 mt-1.5 max-h-56 min-w-40 overflow-y-auto rounded-xl border border-neutral-100 bg-white py-1 shadow-lg">
-                  {options.map(opt => (
-                    <button key={opt} onMouseDown={() => { onChange(opt); setOpenChip(null) }}
-                      className={`w-full px-3 py-1.5 text-left text-xs font-bold transition-colors
-                        ${value === opt
-                          ? 'bg-dark-green-50 text-dark-green-900'
-                          : 'text-neutral-700 hover:bg-neutral-50'}`}>
-                      {opt}
-                    </button>
-                  ))}
+                <div className="absolute top-full z-40 mt-1.5 max-h-64 min-w-48 overflow-y-auto rounded-xl border border-neutral-100 bg-white py-1 shadow-lg">
+                  {options.map(opt => {
+                    const checked = values.includes(opt)
+                    return (
+                      <button key={opt} onMouseDown={() => toggle(opt)}
+                        className="group flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-neutral-900 transition-colors hover:bg-neutral-50">
+                        <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded transition-colors
+                          ${checked ? 'bg-green-fresh-600 group-hover:bg-green-fresh-700' : 'border border-neutral-100 bg-white group-hover:border-[1.5px] group-hover:border-green-fresh-600'}`}>
+                          {checked && <Check size={12} strokeWidth={2} absoluteStrokeWidth className="text-neutral-50" />}
+                        </span>
+                        {labelOf(opt)}
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </div>
           )
         }
+        const chip = (key, label, options, labelOf) => (
+          <ChipSelect id={key} label={label} values={filters[key]} onChange={(v) => setParam(key, v)} options={options} labelOf={labelOf} />
+        )
+        const dateInputClass = 'rounded-full border border-neutral-100 bg-white px-3 py-1.5 text-[11px] text-neutral-700 focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none'
         return (
           <div className="flex flex-wrap items-center gap-2">
-            <ChipSelect id="year"     label="ปี"             value={filterYear}     onChange={setFilterYear}     options={years} />
+            {chip('year', 'ปี', years)}
+            {/* [PROPOSED — not in spec yet] filter ตามสถานะ SLA — ค่าเดียวกับป้าย SLA ในตาราง */}
+            {chip('sla', 'SLA', Object.keys(SLA_LABELS), (v) => SLA_LABELS[v])}
             <div className="h-4 w-px bg-neutral-100" />
-            <ChipSelect id="empType"  label="Emp. Type"      value={filterEmpType}  onChange={setFilterEmpType}  options={empTypes} />
-            <ChipSelect id="payroll"  label="รอบจ่าย"        value={filterPayroll}  onChange={setFilterPayroll}  options={payrollTypes} />
-            <ChipSelect id="jobType"  label="Job Type"       value={filterJobType}  onChange={setFilterJobType}  options={['New HC','Replace']} />
-            <ChipSelect id="rank"     label="Rank"           value={filterRank}     onChange={setFilterRank}     options={ranks} />
-            <ChipSelect id="dept"     label="Department"     value={filterDept}     onChange={setFilterDept}     options={departments} />
-            <ChipSelect id="bu"       label="Business Unit"  value={filterBU}       onChange={setFilterBU}       options={businessUnits} />
-            <ChipSelect id="ta"       label="PIC / TA"       value={filterAssigned} onChange={setFilterAssigned} options={assignees} />
+            {chip('emp', 'Emp. Type', empTypes)}
+            {chip('pay', 'รอบจ่าย', payrollTypes)}
+            {chip('job', 'Job Type', ['New HC', 'Replace'])}
+            {chip('rank', 'Rank', ranks)}
+            {chip('dept', 'Department', departments)}
+            {chip('bu', 'Business Unit', businessUnits)}
+            {chip('ta', 'PIC / TA', assignees)}
             <div className="mx-1 h-4 w-px bg-neutral-100" />
-            <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} title="วันที่ตั้งแต่"
-              className="rounded-full border border-neutral-100 bg-white px-3 py-1.5 text-[11px] text-neutral-700 focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none" />
+            {/* [PROPOSED — not in spec yet] เลือกฟิลด์วันที่ที่จะกรอง */}
+            <select value={dateField} onChange={e => setParam('dfield', e.target.value === 'created' ? '' : e.target.value)} title="กรองช่วงวันที่ตาม"
+              className={`${dateInputClass} font-bold`}>
+              {Object.entries(DATE_FIELDS).map(([key, { label }]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+            <input type="date" value={filterDateFrom} onChange={e => setParam('from', e.target.value)} title="วันที่ตั้งแต่" className={dateInputClass} />
             <span className="text-xs text-neutral-400">–</span>
-            <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} title="ถึงวันที่"
-              className="rounded-full border border-neutral-100 bg-white px-3 py-1.5 text-[11px] text-neutral-700 focus:border-[1.5px] focus:border-dark-green-600 focus:outline-none" />
+            <input type="date" value={filterDateTo} onChange={e => setParam('to', e.target.value)} title="ถึงวันที่" className={dateInputClass} />
             {hasAdvancedFilters && (
-              <button onClick={clearAdvanced} className="flex items-center gap-1 text-[11px] font-bold text-neutral-400 transition-colors hover:text-red-600">
+              <button onClick={() => clearAdvanced()} className="flex items-center gap-1 text-[11px] font-bold text-neutral-400 transition-colors hover:text-red-600">
                 <X size={11} strokeWidth={1} absoluteStrokeWidth /> ล้างทั้งหมด
               </button>
             )}
@@ -1164,7 +1240,7 @@ export default function RequestTable({
         <div className="rounded-xl border border-dashed border-neutral-100 bg-white py-16 text-center">
           <p className="font-bold text-neutral-400">ไม่พบรายการ</p>
           {(hasAdvancedFilters || search || activeTab !== 'ทั้งหมด') && (
-            <button onClick={() => { clearAdvanced(); setSearch(''); setActiveTab('ทั้งหมด') }} className="mt-2 text-sm font-bold text-dark-green-700 hover:underline">
+            <button onClick={() => clearAdvanced(true)} className="mt-2 text-sm font-bold text-dark-green-700 hover:underline">
               ล้าง filter ทั้งหมด
             </button>
           )}
