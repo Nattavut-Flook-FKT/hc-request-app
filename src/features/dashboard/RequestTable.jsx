@@ -98,13 +98,11 @@ import EditCaseModal from '@/features/dashboard/EditCaseModal'
 
 
 // ─── Tab list และสถานะที่ TA สามารถเปลี่ยนได้ (ยกเว้น Open) ───
-const STATUS_TABS = ['ทั้งหมด', 'กำลังหา', 'Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Rejected', 'NoShow', 'Closed', 'Cancelled', 'OnHold', 'Confidential', 'InternalTransfer']
+const STATUS_TABS = ['ทั้งหมด', 'Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Rejected', 'NoShow', 'Closed', 'Cancelled', 'OnHold', 'Confidential', 'InternalTransfer']
 // PendingApproval/RejectedByCEO (CEO approval gate, beta): TA เปลี่ยนสถานะนี้เองไม่ได้ — โผล่แค่ฝั่ง admin
 // เพื่อ oversight (ต่อท้าย STATUS_TABS แบบมีเงื่อนไข role ตอน render — ดูจุดใช้งาน)
 const CEO_APPROVAL_STATUS_TABS = ['PendingApproval', 'RejectedByCEO']
 const TA_STATUSES = ['Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Closed', 'OnHold', 'Confidential', 'InternalTransfer']
-// แท็บกลุ่ม "กำลังหา" = เคสที่ TA ยังต้องหาคนอยู่ (นาฬิกา SLA เดิน)
-const ACTIVE_GROUP = ['Open', 'Recruiting', 'Interviewing']
 const ALL_STATUSES = ['Open', 'Recruiting', 'Interviewing', 'Offering', 'Onboarding', 'Rejected', 'NoShow', 'Closed', 'Cancelled', 'OnHold', 'Confidential', 'InternalTransfer', ...CEO_APPROVAL_STATUS_TABS]
 
 // สถานะที่ถือว่า "จบแล้ว" — รวมกันเป็น tab เดียวชื่อ "ประวัติ" เฉพาะตอน filterMine (หน้า "คำขอของฉัน")
@@ -258,7 +256,8 @@ export default function RequestTable({
     const p = new URLSearchParams(paramsKey)
     return Object.fromEntries(FILTER_KEYS.map((k) => [k, p.getAll(k)]))
   }, [paramsKey])
-  const activeTab       = params.get('tab') || 'ทั้งหมด'
+  // แท็บที่ไม่รู้จัก (ลิงก์เก่า เช่น ?tab=กำลังหา ที่เอาออกแล้ว) → กลับไป 'ทั้งหมด' แทนตารางว่าง
+  const activeTab       = [...STATUS_TABS, ...CEO_APPROVAL_STATUS_TABS, 'ประวัติ'].includes(params.get('tab')) ? params.get('tab') : 'ทั้งหมด'
   const debouncedSearch = params.get('q') || ''
   const dateField       = DATE_FIELDS[params.get('dfield')] ? params.get('dfield') : 'created'
   const filterDateFrom  = params.get('from') || ''
@@ -967,7 +966,6 @@ export default function RequestTable({
 
     const counts = {
       ทั้งหมด: base.length,
-      กำลังหา: base.filter(r => ACTIVE_GROUP.includes(r.status)).length,
       ประวัติ: base.filter(r => HISTORY_TAB_STATUSES.includes(r.status)).length,
     }
     ALL_STATUSES.forEach(s => { counts[s] = base.filter(r => r.status === s).length })
@@ -994,7 +992,6 @@ export default function RequestTable({
         : list.filter((r) => getAssignedEmail(r, allTAs) === user.email?.toLowerCase() || (r.assignedToName && (r.assignedToName === user.displayName || r.assignedToName === shortName(user.displayName))))
     }
     if (activeTab === 'ประวัติ') list = list.filter((r) => HISTORY_TAB_STATUSES.includes(r.status))
-    else if (activeTab === 'กำลังหา') list = list.filter((r) => ACTIVE_GROUP.includes(r.status))
     else if (activeTab !== 'ทั้งหมด') list = list.filter((r) => r.status === activeTab)
     for (const [key, get] of Object.entries(FILTER_FIELDS)) {
       if (filters[key].length) list = list.filter((r) => filters[key].includes(get(r)))
