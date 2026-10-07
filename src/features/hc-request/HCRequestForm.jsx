@@ -379,7 +379,11 @@ export default function HCRequestForm({ user, role, maintenanceMode = false }) {
         // Auto-fill priority: แผนกที่ grant ตรงๆ ก่อน → ถ้าไม่มีแต่มี division grant ให้เติมแค่ division
         // (ปล่อยแผนกว่างไว้ให้เลือกเอง เพราะ Head of Division ดูแลหลายแผนก) → สุดท้าย fallback ไป Sheets
         const dept = granted[0] || getDepartmentByEmail(managers, user.email)
-        if (dept) {
+        if (DIVISIONS.includes(dept)) {
+          // HR Sheets บางสายเก็บชื่อแผนก = ชื่อ Division (เช่น People Experience) → เติมแค่ Division ให้เลือกแผนกย่อยเอง
+          setForm((prev) => ({ ...prev, division: dept }))
+          setDeptAutoFilled(true)
+        } else if (dept) {
           const cfg = getTrackConfigByDepartment(dept)
           const div = getDivisionByDepartment(dept)   // หา division จาก department
           setForm((prev) => ({ ...prev, department: dept, division: div, orgTrack: cfg.defaultTrack }))

@@ -9,6 +9,19 @@ export const DEPT_MAINDATA_MAP = {
   'Executive Driver':                  ['CEO Office'],
   // Procurement → ตรงกันใน Maindata แล้ว ไม่ต้อง map
 
+  // PX / F&A — Org Chart แตกเป็นแผนกย่อย แต่ Maindata ยังเก็บเป็นแผนกเดียว
+  'Compensation & Benefits':           ['People Experience'],
+  'Talent Acquisition':                ['People Experience'],
+  'People Business Partner':           ['People Experience'],
+  'Organization & Development':        ['People Experience'],
+  'People Information Systems & IT':   ['People Experience'],
+  'Safety':                            ['People Experience'],
+  'Collection and Credit Control':     ['Finance & Accounting'],
+  'Account Receivable':                ['Finance & Accounting'],
+  'Treasury':                          ['Finance & Accounting'],
+  'Account Payable':                   ['Finance & Accounting'],
+  'General Ledger':                    ['Finance & Accounting'],
+
   // Tech รวมกันใน Maindata
   'Software Development':              ['Tech&Product'],
   'Data Team':                         ['Tech&Product'],
